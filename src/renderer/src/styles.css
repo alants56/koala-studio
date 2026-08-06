@@ -1,0 +1,760 @@
+@import "tailwindcss";
+
+:root {
+  color: #202522;
+  background: #f4f6f4;
+  font-family: "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-synthesis: none;
+}
+
+html,
+body,
+#root {
+  min-width: 1080px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+body {
+  background: #f4f6f4;
+}
+
+button,
+textarea,
+input {
+  font: inherit;
+}
+
+::selection {
+  color: #fff;
+  background: #1d7a63;
+}
+
+.koala-shell {
+  min-height: 100vh;
+  background: #f4f6f4;
+}
+
+.koala-sider {
+  background: #f8faf8 !important;
+  border-inline-end: 1px solid #dfe5e1;
+}
+
+.koala-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  padding-top: 24px;
+}
+
+.koala-brand {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  padding: 0 18px;
+  color: #202522;
+}
+
+.koala-brand-mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #fff;
+  background: #1d7a63;
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgb(29 122 99 / 20%);
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
+.koala-brand-copy {
+  display: flex;
+  min-width: 0;
+  margin-left: 10px;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.koala-brand-name {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.koala-brand-caption {
+  margin-top: 3px;
+  color: #77817b;
+  font-size: 11px;
+}
+
+.koala-nav {
+  padding: 20px 10px 8px;
+}
+
+.koala-nav.ant-menu-inline {
+  border-inline-end: 0;
+}
+
+.koala-nav .ant-menu-item {
+  height: 42px;
+  margin-block: 3px;
+  margin-inline: 0;
+  width: 100%;
+  border-radius: 8px;
+  font-weight: 560;
+}
+
+.koala-nav .ant-menu-item .anticon {
+  font-size: 17px;
+}
+
+.koala-sider-foot {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding: 16px 18px 18px;
+  color: #8a938e;
+  font-size: 11px;
+}
+
+.koala-content-wrap {
+  min-width: 0;
+  padding: 18px;
+}
+
+.koala-content {
+  height: calc(100vh - 36px);
+  min-height: 620px;
+  overflow: auto;
+  background: #fff !important;
+  border: 1px solid #e2e7e3;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgb(32 37 34 / 4%);
+}
+
+.page-frame {
+  margin: 0 auto;
+  max-width: 1480px;
+}
+
+.page-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 36px;
+}
+
+.page-title {
+  margin: 0 !important;
+  color: #202522 !important;
+  font-size: 28px !important;
+  font-weight: 720 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.15 !important;
+}
+
+.page-subtitle {
+  display: block;
+  margin-top: 7px;
+  color: #77817b !important;
+  font-size: 13px;
+}
+
+.page-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.project-grid .ant-col {
+  display: flex;
+}
+
+.project-card {
+  width: 100%;
+  min-height: 212px;
+  overflow: hidden;
+  border: 1px solid #e2e7e3 !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.project-card:hover {
+  border-color: #a8c9bc !important;
+  box-shadow: 0 12px 24px rgb(31 92 72 / 9%) !important;
+  transform: translateY(-2px);
+}
+
+.project-card:active {
+  transform: translateY(-1px);
+}
+
+.project-card .ant-card-body {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  padding: 20px !important;
+}
+
+.project-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.project-card-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.project-card-avatar {
+  border-radius: 9px !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%);
+  font-weight: 700;
+}
+
+.project-card-title {
+  display: block;
+  color: #202522 !important;
+  font-size: 15px;
+  font-weight: 670;
+}
+
+.project-card-date,
+.project-card-path {
+  color: #7a837e !important;
+  font-size: 12px;
+}
+
+.project-card-date {
+  display: block;
+  margin-top: 5px;
+}
+
+.project-card-more {
+  color: #6f7973 !important;
+}
+
+.project-card-description {
+  margin: 20px 0 16px !important;
+  color: #59625d !important;
+  font-size: 13px;
+  line-height: 1.65 !important;
+}
+
+.project-card-meta {
+  margin-top: auto;
+}
+
+.project-tag {
+  margin-inline-end: 0 !important;
+  border: 1px solid #d7e7df !important;
+  border-radius: 5px !important;
+  color: #27795f !important;
+  background: #f0f8f4 !important;
+  font-size: 11px;
+}
+
+.empty-state {
+  padding: 52px 0 32px;
+}
+
+.koala-content .ant-btn-primary {
+  border-color: #1d7a63;
+  background: #1d7a63;
+  box-shadow: none;
+  font-weight: 600;
+}
+
+.koala-content .ant-btn-primary:not(:disabled):hover {
+  border-color: #17644f;
+  background: #17644f;
+}
+
+.koala-content .ant-btn:active {
+  transform: translateY(1px);
+}
+
+.koala-content .ant-input,
+.koala-content .ant-select-selector {
+  border-color: #dce4df !important;
+  box-shadow: none !important;
+}
+
+.koala-content .ant-input:hover,
+.koala-content .ant-select-selector:hover {
+  border-color: #8db7a7 !important;
+}
+
+.koala-content .ant-input:focus,
+.koala-content .ant-input-focused,
+.koala-content .ant-select-focused .ant-select-selector {
+  border-color: #1d7a63 !important;
+  box-shadow: 0 0 0 3px rgb(29 122 99 / 12%) !important;
+}
+
+.chat-shell {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.chat-header {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #e6ebe7;
+  padding: 16px;
+}
+
+.chat-project-title {
+  color: #202522 !important;
+  font-size: 18px !important;
+  font-weight: 680 !important;
+}
+
+.chat-project-path {
+  display: block;
+  max-width: 680px;
+  overflow: hidden;
+  color: #7a837e !important;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-status {
+  display: inline-flex;
+  height: 23px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid #e1e8e4;
+  border-radius: 5px;
+  color: #6b756f;
+  font-size: 11px;
+}
+
+.chat-status[role="button"] {
+  cursor: pointer;
+}
+
+.chat-status[role="button"]:focus-visible {
+  outline: 2px solid #1d7a63;
+  outline-offset: 2px;
+}
+
+.chat-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.chat-thread {
+  width: min(920px, 100%);
+  margin: 0 auto;
+  padding: 28px 20px !important;
+  scrollbar-gutter: stable;
+}
+
+.chat-thread .ant-bubble {
+  margin-bottom: 3px;
+}
+
+.chat-thread .ant-bubble-content {
+  line-height: 1.7;
+}
+
+.chat-markdown {
+  min-width: 0;
+}
+
+.chat-markdown h1,
+.chat-markdown h2,
+.chat-markdown h3,
+.chat-markdown h4,
+.chat-markdown h5,
+.chat-markdown h6 {
+  color: inherit;
+  line-height: 1.35;
+}
+
+.chat-markdown pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.chat-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.chat-markdown .katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.2em 0;
+}
+
+.chat-markdown-inverse {
+  --text-color: #fff;
+}
+
+.chat-markdown-inverse a {
+  color: #d9f99d;
+}
+
+.chat-composer-wrap {
+  width: min(920px, 100%);
+  margin: 0 auto;
+  padding: 0 20px 18px;
+}
+
+.chat-composer-wrap .ant-sender {
+  border: 1px solid #dce4df;
+  border-radius: 10px;
+  background: #fcfdfc;
+  box-shadow: 0 8px 20px rgb(32 37 34 / 4%);
+}
+
+.chat-composer-wrap .ant-sender:focus-within {
+  border-color: #1d7a63;
+  box-shadow: 0 0 0 3px rgb(29 122 99 / 10%);
+}
+
+.chat-composer-footer {
+  color: #8a938e;
+}
+
+.chat-history-drawer .ant-drawer-header {
+  min-height: 68px;
+  padding: 18px 20px 16px;
+  border-bottom: 1px solid #e6ebe7;
+}
+
+.chat-history-drawer .ant-drawer-body {
+  padding: 12px;
+  background: #fbfcfb;
+}
+
+.chat-history-drawer-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: #202522;
+  font-size: 16px;
+  font-weight: 680;
+}
+
+.chat-history-count {
+  color: #7a837e;
+  font-size: 12px;
+  font-weight: 560;
+}
+
+.chat-history-list.ant-conversations {
+  gap: 4px;
+  max-height: calc(100vh - 94px);
+  padding: 0;
+}
+
+.chat-history-list.ant-conversations .ant-conversations-item {
+  height: auto;
+  min-height: 68px;
+  gap: 10px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.chat-history-list.ant-conversations .ant-conversations-item:hover {
+  background: #f1f6f3;
+}
+
+.chat-history-list.ant-conversations .ant-conversations-item-active {
+  border-color: #cae2d6;
+  background: #e8f4ee;
+  box-shadow: inset 2px 0 0 #1d7a63;
+}
+
+.chat-history-list.ant-conversations .ant-conversations-icon {
+  align-self: flex-start;
+  margin: 15px 0 0 12px;
+  color: #8a938e;
+  font-size: 15px;
+}
+
+.chat-history-list.ant-conversations .ant-conversations-item-active .ant-conversations-icon {
+  color: #1d7a63;
+}
+
+.chat-history-list.ant-conversations .ant-conversations-label {
+  min-width: 0;
+  white-space: normal;
+}
+
+.chat-history-session {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 12px 11px 0;
+}
+
+.chat-history-session-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-history-session-title {
+  overflow: hidden;
+  color: #313834;
+  font-size: 13px;
+  font-weight: 630;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-history-session-current {
+  flex: 0 0 auto;
+  color: #17644f;
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.chat-history-session-time {
+  color: #7a837e;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.chat-history-empty {
+  padding: 68px 0;
+}
+
+.chat-history-skeleton {
+  padding: 10px 8px;
+}
+
+.workbench-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 32px;
+  padding: 8px 0 38px;
+}
+
+.workbench-lede {
+  max-width: 620px;
+  margin: 16px 0 0 !important;
+  color: #68726c !important;
+  font-size: 15px;
+  line-height: 1.75 !important;
+}
+
+.workbench-aside {
+  align-self: end;
+  border-left: 2px solid #1d7a63;
+  padding: 4px 0 4px 18px;
+}
+
+.workbench-aside-label {
+  display: block;
+  color: #7a837e;
+  font-size: 12px;
+}
+
+.workbench-aside-value {
+  display: block;
+  margin-top: 4px;
+  color: #202522;
+  font-size: 24px;
+  font-weight: 690;
+}
+
+.workbench-section-title {
+  margin: 0 0 16px !important;
+  color: #202522 !important;
+  font-size: 16px !important;
+  font-weight: 660 !important;
+}
+
+.recent-projects {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.recent-project {
+  display: flex;
+  min-height: 116px;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid #e2e7e3;
+  border-radius: 10px;
+  padding: 16px;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.recent-project:hover {
+  border-color: #a8c9bc;
+  box-shadow: 0 10px 20px rgb(31 92 72 / 8%);
+  transform: translateY(-2px);
+}
+
+.recent-project:active {
+  transform: translateY(-1px);
+}
+
+.recent-project-name {
+  color: #202522;
+  font-weight: 650;
+}
+
+.recent-project-detail {
+  margin-top: 8px;
+  color: #7a837e;
+  font-size: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root,
+  body,
+  .koala-shell {
+    color: #e7ece8;
+    background: #171a18;
+  }
+
+  .koala-sider {
+    background: #1d211f !important;
+    border-color: #303832;
+  }
+
+  .koala-nav.ant-menu {
+    background: #1d211f;
+  }
+
+  .koala-brand,
+  .koala-brand-name,
+  .page-title,
+  .project-card-title,
+  .chat-project-title,
+  .workbench-aside-value,
+  .workbench-section-title,
+  .recent-project-name {
+    color: #e7ece8 !important;
+  }
+
+  .koala-brand-caption,
+  .page-subtitle,
+  .project-card-date,
+  .project-card-path,
+  .chat-project-path,
+  .workbench-aside-label,
+  .recent-project-detail {
+    color: #9da8a1 !important;
+  }
+
+  .koala-content {
+    border-color: #303832;
+    background: #202522 !important;
+    box-shadow: none;
+  }
+
+  .project-card,
+  .recent-project {
+    border-color: #343d37 !important;
+    background: #242a26 !important;
+  }
+
+  .project-card-description,
+  .workbench-lede {
+    color: #b2bbb5 !important;
+  }
+
+  .project-tag {
+    border-color: #355d4d !important;
+    color: #94d6bd !important;
+    background: #21362d !important;
+  }
+
+  .chat-header {
+    border-color: #343d37;
+  }
+
+  .chat-status {
+    border-color: #3a443e;
+    color: #afb8b2;
+  }
+
+  .chat-composer-wrap .ant-sender {
+    border-color: #3a443e;
+    background: #242a26;
+    box-shadow: none;
+  }
+
+  .chat-history-drawer .ant-drawer-header {
+    border-color: #343d37;
+  }
+
+  .chat-history-drawer .ant-drawer-body {
+    background: #202522;
+  }
+
+  .chat-history-drawer-title,
+  .chat-history-session-title {
+    color: #e7ece8;
+  }
+
+  .chat-history-count,
+  .chat-history-session-time {
+    color: #9da8a1;
+  }
+
+  .chat-history-list.ant-conversations .ant-conversations-item:hover {
+    background: #26322c;
+  }
+
+  .chat-history-list.ant-conversations .ant-conversations-item-active {
+    border-color: #355d4d;
+    background: #263c32;
+  }
+
+  .chat-history-list.ant-conversations .ant-conversations-icon {
+    color: #9da8a1;
+  }
+
+  .chat-history-list.ant-conversations .ant-conversations-item-active .ant-conversations-icon,
+  .chat-history-session-current {
+    color: #94d6bd;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
