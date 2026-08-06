@@ -71,3 +71,10 @@ src/renderer/src/
 
 路径别名：`@/*` → `src/renderer/src/*`，`@shared/*` → `src/shared/*`（已在
 `tsconfig.web.json` 与 `electron.vite.config.ts` 中配置）。
+
+## License
+
+本项目采用 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/deed.zh-hans)
+（署名—非商业性使用）许可协议。
+
+Copyright © 刘傲的AI实践

@@ -2,6 +2,8 @@
   "name": "koala-studio",
   "version": "0.1.0",
   "description": "A desktop workspace for collaborating with Claude through ACP.",
+  "author": "刘傲的AI实践",
+  "license": "CC BY-NC 4.0",
   "main": "./out/main/index.js",
   "private": true,
   "scripts": {
