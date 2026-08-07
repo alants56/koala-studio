@@ -3,7 +3,6 @@ import { join } from 'node:path'
 import type { CreateProjectInput, UpdateProjectInput } from '../shared/projects'
 import { AcpBridge } from './services/acp-bridge'
 import {
-  getClaudeUsage,
   listClaudeResources,
   readClaudeSkill,
   removeClaudeMcp,
@@ -85,7 +84,6 @@ app.whenReady().then(() => {
   ipcMain.handle('projects:pick-directory', () => pickDirectory())
 
   ipcMain.handle('claude:list', () => listClaudeResources())
-  ipcMain.handle('claude:usage', () => getClaudeUsage())
   ipcMain.handle('claude:read-skill', (_event, id: string) => readClaudeSkill(id))
   ipcMain.handle('claude:save-skill', (_event, input) => saveClaudeSkill(input))
   ipcMain.handle('claude:remove-skill', (_event, id: string) => removeClaudeSkill(id))

@@ -35,7 +35,6 @@ const projects: ProjectsApi = {
 
 const claude: ClaudeApi = {
   list: () => ipcRenderer.invoke('claude:list'),
-  usage: () => ipcRenderer.invoke('claude:usage'),
   readSkill: (id) => ipcRenderer.invoke('claude:read-skill', id),
   saveSkill: (input) => ipcRenderer.invoke('claude:save-skill', input),
   removeSkill: (id) => ipcRenderer.invoke('claude:remove-skill', id),

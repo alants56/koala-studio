@@ -96,7 +96,8 @@ export class AcpBridge extends EventEmitter {
 
   /** 通过 ACP session/list 查询 Claude Code 在该目录下的会话记录。 */
   async listSessions(cwd: string): Promise<AcpSessionInfo[]> {
-    if (!this.connection) return []
+    const state = await this.connect(cwd)
+    if ((state.status !== 'ready' && state.status !== 'working') || !this.connection) return []
     const response = await this.connection.agent.request(acp.methods.agent.session.list, { cwd })
     return (response.sessions ?? []).map((session) => ({
       sessionId: session.sessionId,

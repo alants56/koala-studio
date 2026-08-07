@@ -30,10 +30,12 @@ const AgentContext = createContext<AgentContextValue | null>(null)
 interface AgentProviderProps {
   /** ACP 会话的工作目录，通常是所选项目的路径。 */
   cwd: string
+  /** 从工作台等入口直接打开的历史会话。 */
+  initialSessionId?: string
   children: ReactNode
 }
 
-export function AgentProvider({ cwd, children }: AgentProviderProps): ReactElement {
+export function AgentProvider({ cwd, initialSessionId, children }: AgentProviderProps): ReactElement {
   // 进入页面即视为「连接中」，避免首帧先闪现「未连接」
   const [state, setState] = useState<AgentState>({ status: 'connecting', detail: '正在连接 Claude ACP…' })
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES)
@@ -48,6 +50,18 @@ export function AgentProvider({ cwd, children }: AgentProviderProps): ReactEleme
     setMessages(INITIAL_MESSAGES)
   }, [cwd])
 
+  const openInitialSession = useCallback(async () => {
+    if (!initialSessionId) {
+      await ensureSession()
+      return
+    }
+
+    assertAcpApi()
+    const loaded = await acp.loadSession(initialSessionId, cwd)
+    setSessionId(loaded.sessionId)
+    setMessages(loaded.messages.length > 0 ? loaded.messages : INITIAL_MESSAGES)
+  }, [cwd, ensureSession, initialSessionId])
+
   const connect = useCallback(async () => {
     if (connectingRef.current) return
     connectingRef.current = true
@@ -58,7 +72,7 @@ export function AgentProvider({ cwd, children }: AgentProviderProps): ReactEleme
       const next = await acp.connect(cwd)
       if (next.status === 'ready') {
         setState({ status: 'connecting', detail: '正在加载历史对话…' })
-        await ensureSession()
+        await openInitialSession()
         // 让加载动画至少展示 MIN_CONNECTING_MS，连接过程中 ACP 连接仍在进行
         const elapsed = Date.now() - startedAt
         if (elapsed < MIN_CONNECTING_MS) {
@@ -74,7 +88,7 @@ export function AgentProvider({ cwd, children }: AgentProviderProps): ReactEleme
     } finally {
       connectingRef.current = false
     }
-  }, [cwd, ensureSession])
+  }, [cwd, openInitialSession])
 
   const send = useCallback(async (text: string) => {
     await acp.prompt({ text, cwd })

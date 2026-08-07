@@ -10,7 +10,6 @@ import type {
   ClaudePluginAction,
   ClaudeResources,
   ClaudeSkill,
-  ClaudeUsage,
   SaveClaudeMcpInput,
   SaveClaudeSkillInput
 } from '../../shared/claude'
@@ -21,7 +20,6 @@ const skillsPath = join(claudeHome, 'skills')
 const pluginsPath = join(claudeHome, 'plugins')
 const settingsPath = join(claudeHome, 'settings.json')
 const claudeConfigPath = join(homedir(), '.claude.json')
-const projectsPath = join(claudeHome, 'projects')
 
 type JsonObject = Record<string, unknown>
 
@@ -32,10 +30,6 @@ interface InstalledPluginRecord {
   version?: string
   installedAt?: string
   lastUpdated?: string
-}
-
-function asNumber(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
 function isObject(value: unknown): value is JsonObject {
@@ -150,177 +144,6 @@ function mcpsFromConfig(config: JsonObject): ClaudeMcp[] {
 export async function listClaudeResources(): Promise<ClaudeResources> {
   const [skills, plugins, config] = await Promise.all([listSkills(), listPlugins(), readJson(claudeConfigPath)])
   return { skills, plugins, mcps: mcpsFromConfig(config) }
-}
-
-interface TranscriptMessage {
-  type?: unknown
-  uuid?: unknown
-  sessionId?: unknown
-  timestamp?: unknown
-  message?: {
-    id?: unknown
-    role?: unknown
-    model?: unknown
-    content?: unknown
-    usage?: {
-      input_tokens?: unknown
-      output_tokens?: unknown
-      cache_read_input_tokens?: unknown
-      cache_creation_input_tokens?: unknown
-    }
-  }
-}
-
-interface UsageMessage {
-  id: string
-  sessionId: string
-  date: string
-  timestamp: string
-  role: 'user' | 'assistant'
-  model?: string
-  inputTokens: number
-  outputTokens: number
-  cacheReadTokens: number
-  cacheWriteTokens: number
-  toolCalls: number
-}
-
-async function findTranscriptFiles(directory: string): Promise<string[]> {
-  let entries: import('node:fs').Dirent[]
-  try {
-    entries = await fs.readdir(directory, { withFileTypes: true })
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
-    throw error
-  }
-  const children = await Promise.all(entries.map(async (entry) => {
-    const path = join(directory, entry.name)
-    if (entry.isDirectory()) return findTranscriptFiles(path)
-    return entry.isFile() && entry.name.endsWith('.jsonl') ? [path] : []
-  }))
-  return children.flat()
-}
-
-function countToolCalls(content: unknown): number {
-  if (!Array.isArray(content)) return 0
-  return content.filter((item) => isObject(item) && item.type === 'tool_use').length
-}
-
-function localDateKey(timestamp: string): string | undefined {
-  const date = new Date(timestamp)
-  if (Number.isNaN(date.getTime())) return undefined
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function messageFromTranscript(value: unknown): UsageMessage | undefined {
-  if (!isObject(value)) return undefined
-  const line = value as TranscriptMessage
-  if ((line.type !== 'user' && line.type !== 'assistant') || !isObject(line.message)) return undefined
-  if (typeof line.sessionId !== 'string' || typeof line.timestamp !== 'string') return undefined
-  const date = localDateKey(line.timestamp)
-  if (!date) return undefined
-  const role = line.type
-  const messageId = role === 'assistant' ? line.message.id : line.uuid
-  if (typeof messageId !== 'string') return undefined
-  const usage = isObject(line.message.usage) ? line.message.usage : {}
-  return {
-    id: `${line.sessionId}:${role}:${messageId}`,
-    sessionId: line.sessionId,
-    date,
-    timestamp: line.timestamp,
-    role,
-    model: typeof line.message.model === 'string' ? line.message.model : undefined,
-    inputTokens: asNumber(usage.input_tokens),
-    outputTokens: asNumber(usage.output_tokens),
-    cacheReadTokens: asNumber(usage.cache_read_input_tokens),
-    cacheWriteTokens: asNumber(usage.cache_creation_input_tokens),
-    toolCalls: countToolCalls(line.message.content)
-  }
-}
-
-/**
- * 直接汇总 Claude Code 的会话日志，而不是依赖更新不及时的 stats-cache.json。
- * 同一个 assistant 消息在流式输出中会记录多次，Map 会保留最后一条完整记录。
- */
-export async function getClaudeUsage(): Promise<ClaudeUsage> {
-  const files = await findTranscriptFiles(projectsPath)
-  const logs = await Promise.all(files.map(async (path) => {
-    try {
-      return await fs.readFile(path, 'utf8')
-    } catch {
-      return ''
-    }
-  }))
-  const messages = new Map<string, UsageMessage>()
-
-  for (const log of logs) {
-    for (const line of log.split('\n')) {
-      if (!line.trim()) continue
-      try {
-        const message = messageFromTranscript(JSON.parse(line) as unknown)
-        if (message) messages.set(message.id, message)
-      } catch {
-        // Claude Code may still be appending a final partial JSON line; it is safe to skip.
-      }
-    }
-  }
-
-  const daily = new Map<string, { messageCount: number; sessions: Set<string>; toolCallCount: number }>()
-  const models = new Map<string, { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }>()
-  const sessions = new Map<string, { first: string; last: string; messageCount: number }>()
-
-  for (const message of messages.values()) {
-    const day = daily.get(message.date) ?? { messageCount: 0, sessions: new Set<string>(), toolCallCount: 0 }
-    day.messageCount += 1
-    day.sessions.add(message.sessionId)
-    day.toolCallCount += message.toolCalls
-    daily.set(message.date, day)
-
-    const session = sessions.get(message.sessionId) ?? { first: message.timestamp, last: message.timestamp, messageCount: 0 }
-    session.first = session.first < message.timestamp ? session.first : message.timestamp
-    session.last = session.last > message.timestamp ? session.last : message.timestamp
-    session.messageCount += 1
-    sessions.set(message.sessionId, session)
-
-    if (message.role === 'assistant' && message.model) {
-      const model = models.get(message.model) ?? { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }
-      model.inputTokens += message.inputTokens
-      model.outputTokens += message.outputTokens
-      model.cacheReadTokens += message.cacheReadTokens
-      model.cacheWriteTokens += message.cacheWriteTokens
-      models.set(message.model, model)
-    }
-  }
-
-  const sortedDates = [...daily.keys()].sort()
-  const longest = [...sessions.values()].reduce((current, session) => {
-    const duration = Math.max(new Date(session.last).getTime() - new Date(session.first).getTime(), 0)
-    return duration > current.duration ? { duration, messageCount: session.messageCount } : current
-  }, { duration: 0, messageCount: 0 })
-
-  return {
-    refreshedAt: new Date().toISOString(),
-    lastComputedDate: sortedDates.at(-1) ?? '',
-    firstSessionDate: sortedDates[0] ?? '',
-    totalSessions: sessions.size,
-    totalMessages: messages.size,
-    totalToolCalls: [...daily.values()].reduce((total, day) => total + day.toolCallCount, 0),
-    activeDays: daily.size,
-    longestSessionDuration: longest.duration,
-    longestSessionMessages: longest.messageCount,
-    dailyActivity: sortedDates.map((date) => {
-      const day = daily.get(date)!
-      return { date, messageCount: day.messageCount, sessionCount: day.sessions.size, toolCallCount: day.toolCallCount }
-    }),
-    models: [...models.entries()].map(([name, value]) => ({
-      name,
-      ...value,
-      totalTokens: value.inputTokens + value.outputTokens + value.cacheReadTokens + value.cacheWriteTokens
-    })).sort((a, b) => b.totalTokens - a.totalTokens)
-  }
 }
 
 export async function readClaudeSkill(id: string): Promise<string> {

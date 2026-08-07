@@ -36,37 +36,6 @@ export interface ClaudeResources {
   mcps: ClaudeMcp[]
 }
 
-export interface ClaudeDailyActivity {
-  date: string
-  messageCount: number
-  sessionCount: number
-  toolCallCount: number
-}
-
-export interface ClaudeModelUsage {
-  name: string
-  inputTokens: number
-  outputTokens: number
-  cacheReadTokens: number
-  cacheWriteTokens: number
-  totalTokens: number
-}
-
-/** Claude Code 维护在 ~/.claude/stats-cache.json 中的本地统计摘要。 */
-export interface ClaudeUsage {
-  refreshedAt: string
-  lastComputedDate: string
-  firstSessionDate: string
-  totalSessions: number
-  totalMessages: number
-  totalToolCalls: number
-  activeDays: number
-  longestSessionDuration: number
-  longestSessionMessages: number
-  dailyActivity: ClaudeDailyActivity[]
-  models: ClaudeModelUsage[]
-}
-
 export interface SaveClaudeSkillInput {
   id?: string
   name: string
@@ -85,7 +54,6 @@ export type ClaudePluginAction = 'enable' | 'disable' | 'update' | 'uninstall'
 
 export interface ClaudeApi {
   list: () => Promise<ClaudeResources>
-  usage: () => Promise<ClaudeUsage>
   readSkill: (id: string) => Promise<string>
   saveSkill: (input: SaveClaudeSkillInput) => Promise<void>
   removeSkill: (id: string) => Promise<void>

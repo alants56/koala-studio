@@ -1,275 +1,403 @@
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactElement } from 'react'
-import { CheckOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
-import type { ClaudeDailyActivity, ClaudeUsage } from '@shared/claude'
+import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react'
+import { CalendarOutlined, CheckOutlined, DeleteOutlined, EditOutlined, FlagFilled, FlagOutlined, LeftOutlined, MessageOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons'
+import { Modal } from 'antd'
+import { useNavigate } from 'react-router-dom'
+import type { AcpSessionInfo } from '@shared/acp'
+import { useProjects } from '@/state/ProjectsContext'
+import { WORKSPACE_PATH } from '@/utils/constants'
 
-type FrogPeriod = 'daily' | 'weekly'
-
-interface FrogTask {
+interface ScheduleItem {
   id: string
-  label: string
+  date: string
+  time: string
+  title: string
+}
+
+interface TodoItem {
+  id: string
+  title: string
   done: boolean
+  important: boolean
+  projectId?: string
+  sessionId?: string
+  sessionTitle?: string
 }
 
-interface FrogListProps {
-  period: FrogPeriod
-  tasks: FrogTask[]
-  onAdd: (period: FrogPeriod, label: string) => void
-  onToggle: (period: FrogPeriod, id: string) => void
-  onDelete: (period: FrogPeriod, id: string) => void
+interface WorkspaceData {
+  schedule: ScheduleItem[]
+  todos: TodoItem[]
 }
 
-const FROG_STORAGE_KEY = 'koala-studio:frog-tasks'
-
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat('zh-CN', { notation: value > 9999 ? 'compact' : 'standard', maximumFractionDigits: 1 }).format(value)
-}
-
-function formatTokens(value: number): string {
-  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}b`
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}m`
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`
-  return String(value)
-}
-
-function formatDuration(milliseconds: number): string {
-  if (!milliseconds) return '暂无记录'
-  const minutes = Math.floor(milliseconds / 60_000)
-  const days = Math.floor(minutes / 1440)
-  const hours = Math.floor((minutes % 1440) / 60)
-  const restMinutes = minutes % 60
-  return [days && `${days} 天`, hours && `${hours} 小时`, restMinutes && `${restMinutes} 分`].filter(Boolean).join(' ') || '不足 1 分钟'
-}
-
-function formatRefreshTime(iso: string): string {
-  if (!iso) return ''
-  return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(iso))
-}
+const WORKSPACE_STORAGE_KEY = 'koala-studio:workspace-v3'
+const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
 
 function localDateKey(date: Date): string {
-  const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-  return shifted.toISOString().slice(0, 10)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
-function startOfWeek(date: Date): Date {
-  const value = new Date(date)
-  const day = value.getDay() || 7
-  value.setDate(value.getDate() - day + 1)
-  value.setHours(0, 0, 0, 0)
-  return value
+function calendarDays(month: Date): Date[] {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1)
+  const mondayOffset = (first.getDay() + 6) % 7
+  const start = new Date(first)
+  start.setDate(first.getDate() - mondayOffset)
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start)
+    date.setDate(start.getDate() + index)
+    return date
+  })
 }
 
-function usageLevel(activity: ClaudeDailyActivity | undefined, maximum: number): number {
-  if (!activity?.messageCount || !maximum) return 0
-  const ratio = activity.messageCount / maximum
-  if (ratio > 0.72) return 4
-  if (ratio > 0.42) return 3
-  if (ratio > 0.16) return 2
-  return 1
+function displayDate(dateKey: string): string {
+  const date = new Date(`${dateKey}T12:00:00`)
+  return new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(date)
 }
 
-function FrogList({ period, tasks, onAdd, onToggle, onDelete }: FrogListProps): ReactElement {
-  const [value, setValue] = useState('')
-  const isDaily = period === 'daily'
-  const pending = Math.max(3 - tasks.length, 0)
-
-  const submit = (): void => {
-    const label = value.trim()
-    if (!label || !pending) return
-    onAdd(period, label)
-    setValue('')
-  }
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
-    if (event.key === 'Enter') submit()
-  }
-
-  return (
-    <section className={`frog-list frog-list-${period}`} aria-labelledby={`${period}-frogs-title`}>
-      <div className="frog-list-heading">
-        <div>
-          <span className="workbench-kicker">{isDaily ? 'TODAY' : 'THIS WEEK'}</span>
-          <h2 id={`${period}-frogs-title`}>{isDaily ? '今天最重要的三只青蛙' : '本周最重要的三只青蛙'}</h2>
-        </div>
-        <span className="frog-progress">{tasks.filter((task) => task.done).length}/3</span>
-      </div>
-
-      <ol className="frog-task-list">
-        {[0, 1, 2].map((index) => {
-          const task = tasks[index]
-          return task ? (
-            <li className={`frog-task ${task.done ? 'frog-task-done' : ''}`} key={task.id}>
-              <button className="frog-check" type="button" onClick={() => onToggle(period, task.id)} aria-label={task.done ? `标记「${task.label}」未完成` : `完成「${task.label}」`}>
-                {task.done && <CheckOutlined />}
-              </button>
-              <span className="frog-order">0{index + 1}</span>
-              <span className="frog-task-label">{task.label}</span>
-              <button className="frog-delete" type="button" onClick={() => onDelete(period, task.id)} aria-label={`删除「${task.label}」`} title="删除">
-                <DeleteOutlined />
-              </button>
-            </li>
-          ) : (
-            <li className="frog-task frog-task-empty" key={`${period}-empty-${index}`}>
-              <span className="frog-order">0{index + 1}</span>
-              <span>留给真正重要的事</span>
-            </li>
-          )
-        })}
-      </ol>
-
-      {pending > 0 && (
-        <div className="frog-add-row">
-          <input value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={handleKeyDown} placeholder="写下这一只青蛙" aria-label={isDaily ? '添加今天的重要任务' : '添加本周的重要任务'} maxLength={80} />
-          <button className="frog-add" type="button" onClick={submit} disabled={!value.trim()} aria-label="添加任务" title="添加任务">
-            <PlusOutlined />
-          </button>
-        </div>
-      )}
-    </section>
-  )
-}
-
-/** 工作台：Claude Code 本地统计与三只青蛙待办。 */
+/** 工作台：紧凑日程、项目关联待办与工作状态。 */
 export function WorkbenchPage(): ReactElement {
-  const [usage, setUsage] = useState<ClaudeUsage | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [usageError, setUsageError] = useState(false)
-  const [tasks, setTasks] = useState<Record<FrogPeriod, FrogTask[]>>({ daily: [], weekly: [] })
-
-  const loadUsage = async (): Promise<void> => {
-    setLoading(true)
-    setUsageError(false)
-    try {
-      setUsage(await window.claude.usage())
-    } catch {
-      setUsageError(true)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const navigate = useNavigate()
+  const { projects } = useProjects()
+  const today = useMemo(() => localDateKey(new Date()), [])
+  const [data, setData] = useState<WorkspaceData>({ schedule: [], todos: [] })
+  const [selectedDate, setSelectedDate] = useState(today)
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1))
+  const [scheduleTime, setScheduleTime] = useState('09:00')
+  const [scheduleTitle, setScheduleTitle] = useState('')
+  const [todoTitle, setTodoTitle] = useState('')
+  const [todoProjectId, setTodoProjectId] = useState('')
+  const [todoSessionId, setTodoSessionId] = useState('')
+  const [todoSessionTitle, setTodoSessionTitle] = useState('')
+  const [associationDialogOpen, setAssociationDialogOpen] = useState(false)
+  const [draftProjectId, setDraftProjectId] = useState('')
+  const [draftSessionId, setDraftSessionId] = useState('')
+  const [todoSessions, setTodoSessions] = useState<AcpSessionInfo[]>([])
+  const [sessionLoadState, setSessionLoadState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [editingTodoId, setEditingTodoId] = useState<string>()
+  const [editTodoTitle, setEditTodoTitle] = useState('')
+  const [editTodoDone, setEditTodoDone] = useState(false)
+  const [editProjectId, setEditProjectId] = useState('')
+  const [editSessionId, setEditSessionId] = useState('')
+  const [editSessionTitle, setEditSessionTitle] = useState('')
+  const [editSessions, setEditSessions] = useState<AcpSessionInfo[]>([])
+  const [editSessionLoadState, setEditSessionLoadState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [todoView, setTodoView] = useState<'active' | 'done'>('active')
 
   useEffect(() => {
-    void loadUsage()
     try {
-      const stored = window.localStorage.getItem(FROG_STORAGE_KEY)
-      if (stored) setTasks(JSON.parse(stored) as Record<FrogPeriod, FrogTask[]>)
+      const stored = window.localStorage.getItem(WORKSPACE_STORAGE_KEY)
+      if (stored) setData(JSON.parse(stored) as WorkspaceData)
     } catch {
-      window.localStorage.removeItem(FROG_STORAGE_KEY)
+      window.localStorage.removeItem(WORKSPACE_STORAGE_KEY)
     }
   }, [])
 
-  const updateTasks = (updater: (previous: Record<FrogPeriod, FrogTask[]>) => Record<FrogPeriod, FrogTask[]>): void => {
-    setTasks((previous) => {
+  useEffect(() => {
+    const project = projects.find((item) => item.id === draftProjectId)
+    setTodoSessions([])
+
+    if (!project) {
+      setSessionLoadState('idle')
+      return
+    }
+
+    let cancelled = false
+    setSessionLoadState('loading')
+    void window.acp.listSessions(project.path ?? WORKSPACE_PATH)
+      .then((sessions) => {
+        if (cancelled) return
+        setTodoSessions(sessions)
+        setSessionLoadState('idle')
+      })
+      .catch(() => {
+        if (cancelled) return
+        setSessionLoadState('error')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [draftProjectId, projects])
+
+  useEffect(() => {
+    const project = projects.find((item) => item.id === editProjectId)
+    setEditSessions([])
+
+    if (!project) {
+      setEditSessionLoadState('idle')
+      return
+    }
+
+    let cancelled = false
+    setEditSessionLoadState('loading')
+    void window.acp.listSessions(project.path ?? WORKSPACE_PATH)
+      .then((sessions) => {
+        if (cancelled) return
+        setEditSessions(sessions)
+        setEditSessionLoadState('idle')
+      })
+      .catch(() => {
+        if (cancelled) return
+        setEditSessionLoadState('error')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [editProjectId, projects])
+
+  const updateData = (updater: (previous: WorkspaceData) => WorkspaceData): void => {
+    setData((previous) => {
       const next = updater(previous)
-      window.localStorage.setItem(FROG_STORAGE_KEY, JSON.stringify(next))
+      window.localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(next))
       return next
     })
   }
 
-  const handleAdd = (period: FrogPeriod, label: string): void => updateTasks((previous) => ({
-    ...previous,
-    [period]: previous[period].length >= 3 ? previous[period] : [...previous[period], { id: crypto.randomUUID(), label, done: false }]
-  }))
-
-  const handleToggle = (period: FrogPeriod, id: string): void => updateTasks((previous) => ({
-    ...previous,
-    [period]: previous[period].map((task) => task.id === id ? { ...task, done: !task.done } : task)
-  }))
-
-  const handleDelete = (period: FrogPeriod, id: string): void => updateTasks((previous) => ({
-    ...previous,
-    [period]: previous[period].filter((task) => task.id !== id)
-  }))
-
-  const activity = useMemo(() => {
-    const byDate = new Map(usage?.dailyActivity.map((item) => [item.date, item]))
-    const maxMessages = Math.max(...(usage?.dailyActivity.map((item) => item.messageCount) ?? [0]))
-    const monday = startOfWeek(new Date())
-    monday.setDate(monday.getDate() - 13 * 7)
-    return Array.from({ length: 14 }, (_, week) => Array.from({ length: 7 }, (_, day) => {
-      const date = new Date(monday)
-      date.setDate(date.getDate() + week * 7 + day)
-      const key = localDateKey(date)
-      const current = byDate.get(key)
-      return { key, current, level: usageLevel(current, maxMessages), inFuture: date > new Date() }
+  const addSchedule = (event: FormEvent<HTMLFormElement>): void => {
+    event.preventDefault()
+    const title = scheduleTitle.trim()
+    if (!title) return
+    updateData((previous) => ({
+      ...previous,
+      schedule: [...previous.schedule, { id: crypto.randomUUID(), date: selectedDate, time: scheduleTime, title }]
+        .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
     }))
-  }, [usage])
+    setScheduleTitle('')
+  }
 
-  const sevenDayMessages = useMemo(() => {
-    if (!usage) return 0
-    const start = new Date()
-    start.setDate(start.getDate() - 6)
-    const startKey = localDateKey(start)
-    return usage.dailyActivity.filter((item) => item.date >= startKey).reduce((total, item) => total + item.messageCount, 0)
-  }, [usage])
+  const addTodo = (event: FormEvent<HTMLFormElement>): void => {
+    event.preventDefault()
+    const title = todoTitle.trim()
+    if (!title) return
+    updateData((previous) => ({
+      ...previous,
+      todos: [{ id: crypto.randomUUID(), title, done: false, important: false, projectId: todoProjectId || undefined, sessionId: todoSessionId || undefined, sessionTitle: todoSessionTitle || undefined }, ...previous.todos]
+    }))
+    setTodoTitle('')
+    setTodoProjectId('')
+    setTodoSessionId('')
+    setTodoSessionTitle('')
+  }
 
-  const favoriteModel = usage?.models[0]
-  const totalTokens = usage?.models.reduce((total, model) => total + model.totalTokens, 0) ?? 0
+  const toggleTodo = (id: string): void => updateData((previous) => ({ ...previous, todos: previous.todos.map((todo) => todo.id === id ? { ...todo, done: !todo.done } : todo) }))
+  const toggleImportant = (id: string): void => updateData((previous) => ({ ...previous, todos: previous.todos.map((todo) => todo.id === id ? { ...todo, important: !todo.important } : todo) }))
+  const removeTodo = (id: string): void => updateData((previous) => ({ ...previous, todos: previous.todos.filter((todo) => todo.id !== id) }))
+  const removeSchedule = (id: string): void => updateData((previous) => ({ ...previous, schedule: previous.schedule.filter((item) => item.id !== id) }))
+
+  const calendar = useMemo(() => calendarDays(calendarMonth), [calendarMonth])
+  const scheduledDates = useMemo(() => new Set(data.schedule.map((item) => item.date)), [data.schedule])
+  const selectedSchedule = data.schedule.filter((item) => item.date === selectedDate)
+  const visibleTodos = data.todos.filter((todo) => todoView === 'done' ? todo.done : !todo.done)
+  const completed = data.todos.filter((todo) => todo.done).length
+  const active = data.todos.length - completed
+  const important = data.todos.filter((todo) => todo.important && !todo.done)
+  const linkedProjects = new Set(data.todos.map((todo) => todo.projectId).filter(Boolean)).size
+
+  const selectDate = (date: Date): void => {
+    setSelectedDate(localDateKey(date))
+    if (date.getMonth() !== calendarMonth.getMonth() || date.getFullYear() !== calendarMonth.getFullYear()) {
+      setCalendarMonth(new Date(date.getFullYear(), date.getMonth(), 1))
+    }
+  }
+
+  const openAssociationDialog = (): void => {
+    setDraftProjectId(todoProjectId)
+    setDraftSessionId(todoSessionId)
+    setAssociationDialogOpen(true)
+  }
+
+  const applyAssociation = (): void => {
+    const session = todoSessions.find((item) => item.sessionId === draftSessionId)
+    if (!session) return
+    setTodoProjectId(draftProjectId)
+    setTodoSessionId(session.sessionId)
+    setTodoSessionTitle(session.title || '未命名会话')
+    setAssociationDialogOpen(false)
+  }
+
+  const clearAssociation = (): void => {
+    setTodoProjectId('')
+    setTodoSessionId('')
+    setTodoSessionTitle('')
+    setAssociationDialogOpen(false)
+  }
+
+  const openTodoEditor = (todo: TodoItem): void => {
+    setEditingTodoId(todo.id)
+    setEditTodoTitle(todo.title)
+    setEditTodoDone(todo.done)
+    setEditProjectId(todo.projectId || '')
+    setEditSessionId(todo.sessionId || '')
+    setEditSessionTitle(todo.sessionTitle || '')
+  }
+
+  const saveTodoEdit = (): void => {
+    const title = editTodoTitle.trim()
+    if (!title || !editingTodoId) return
+    updateData((previous) => ({
+      ...previous,
+      todos: previous.todos.map((todo) => {
+        if (todo.id !== editingTodoId) return todo
+        const selectedSession = editSessions.find((session) => session.sessionId === editSessionId)
+        return {
+          ...todo,
+          title,
+          done: editTodoDone,
+          projectId: editProjectId || undefined,
+          sessionId: editSessionId || undefined,
+          sessionTitle: selectedSession?.title || (todo.sessionId === editSessionId ? todo.sessionTitle : undefined)
+        }
+      })
+    }))
+    setEditingTodoId(undefined)
+  }
+
+  const clearEditAssociation = (): void => {
+    setEditProjectId('')
+    setEditSessionId('')
+    setEditSessionTitle('')
+  }
 
   return (
     <main className="workbench-page">
-      <section className="usage-panel" aria-labelledby="usage-title">
-        <div className="usage-header">
-          <div>
-            <span className="workbench-kicker">CLAUDE CODE / LOCAL STATS</span>
-            <h1 id="usage-title">用量概览</h1>
-            <p>{usage?.lastComputedDate ? `会话记录更新至 ${usage.lastComputedDate}${usage.refreshedAt ? ` · 刷新于 ${formatRefreshTime(usage.refreshedAt)}` : ''}` : '读取本机 Claude Code 会话记录'}</p>
+      <section className="calendar-panel" aria-labelledby="calendar-title">
+        <div className="calendar-frame">
+          <div className="calendar-heading">
+            <div>
+              <span className="workbench-kicker">SCHEDULE</span>
+              <h1 id="calendar-title">日程</h1>
+            </div>
+            <div className="calendar-nav">
+              <button type="button" className="workspace-icon-button" onClick={() => setCalendarMonth((value) => new Date(value.getFullYear(), value.getMonth() - 1, 1))} aria-label="上个月" title="上个月"><LeftOutlined /></button>
+              <span>{new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long' }).format(calendarMonth)}</span>
+              <button type="button" className="workspace-icon-button" onClick={() => setCalendarMonth((value) => new Date(value.getFullYear(), value.getMonth() + 1, 1))} aria-label="下个月" title="下个月"><RightOutlined /></button>
+            </div>
           </div>
-          <button className="usage-refresh" type="button" onClick={() => void loadUsage()} disabled={loading} title="刷新统计" aria-label="刷新统计">
-            <ReloadOutlined spin={loading} />
-          </button>
+          <div className="calendar-weekdays">{WEEKDAYS.map((weekday) => <span key={weekday}>{weekday}</span>)}</div>
+          <div className="calendar-grid" role="grid" aria-label="日程日历">
+            {calendar.map((date) => {
+              const dateKey = localDateKey(date)
+              const outside = date.getMonth() !== calendarMonth.getMonth()
+              const hasSchedule = scheduledDates.has(dateKey)
+              return <button key={dateKey} type="button" role="gridcell" className={`calendar-day ${outside ? 'calendar-day-outside' : ''} ${dateKey === selectedDate ? 'calendar-day-selected' : ''} ${dateKey === today ? 'calendar-day-today' : ''} ${hasSchedule ? 'calendar-day-scheduled' : ''}`} onClick={() => selectDate(date)} aria-label={displayDate(dateKey)}>{date.getDate()}</button>
+            })}
+          </div>
         </div>
 
-        {usageError ? (
-          <div className="usage-message">未能读取 `~/.claude/projects` 下的会话记录。请确认 Claude Code 已在本机运行过。</div>
-        ) : loading ? (
-          <div className="usage-skeleton" aria-label="正在读取 Claude Code 用量统计" />
-        ) : usage ? (
-          <>
-            <div className="usage-main-grid">
-              <div className="usage-heatmap-wrap">
-                <div className="usage-heatmap-heading">
-                  <span>过去 14 周活跃度</span>
-                  <span>按消息数量</span>
-                </div>
-                <div className="usage-heatmap" role="img" aria-label="Claude Code 过去十四周活跃热力图">
-                  <div className="usage-weekdays"><span>一</span><span>三</span><span>五</span></div>
-                  <div className="usage-heatmap-grid">
-                    {activity.flat().map((item) => <span key={item.key} className={`usage-day usage-day-${item.level} ${item.inFuture ? 'usage-day-future' : ''}`} title={`${item.key}：${item.current?.messageCount ?? 0} 条消息`} />)}
-                  </div>
-                </div>
-                <div className="usage-legend"><span>少</span><i className="usage-day-1" /><i className="usage-day-2" /><i className="usage-day-3" /><i className="usage-day-4" /><span>多</span></div>
-              </div>
-
-              <div className="usage-today">
-                <span>最近 7 天</span>
-                <strong>{formatNumber(sevenDayMessages)}</strong>
-                <small>条消息</small>
-                <div><b>{formatNumber(usage.totalToolCalls)}</b> 次工具调用</div>
-              </div>
-            </div>
-
-            <div className="usage-metrics">
-              <div><span>会话</span><strong>{formatNumber(usage.totalSessions)}</strong></div>
-              <div><span>活跃天</span><strong>{usage.activeDays}</strong></div>
-              <div><span>最长会话</span><strong>{formatDuration(usage.longestSessionDuration)}</strong><small>{formatNumber(usage.longestSessionMessages)} 条消息</small></div>
-              <div><span>常用模型</span><strong className="usage-model-name">{favoriteModel?.name ?? '暂无记录'}</strong><small>{formatTokens(favoriteModel?.totalTokens ?? 0)} tokens</small></div>
-              <div><span>已处理 tokens</span><strong>{formatTokens(totalTokens)}</strong></div>
-            </div>
-          </>
-        ) : null}
-      </section>
-
-      <section className="frogs-panel" aria-labelledby="frogs-title">
-        <div className="frogs-panel-intro">
-          <span className="workbench-kicker">THREE FROGS</span>
-          <h1 id="frogs-title">先吃掉最重要的青蛙</h1>
-          <p>只选择三件，给真正推动事情的行动留出空间。</p>
-        </div>
-        <div className="frogs-grid">
-          <FrogList period="daily" tasks={tasks.daily} onAdd={handleAdd} onToggle={handleToggle} onDelete={handleDelete} />
-          <FrogList period="weekly" tasks={tasks.weekly} onAdd={handleAdd} onToggle={handleToggle} onDelete={handleDelete} />
+        <div className="calendar-agenda">
+          <div className="agenda-heading"><span>{displayDate(selectedDate)}</span><b>{selectedSchedule.length} 项</b></div>
+          <div className="agenda-list">
+            {selectedSchedule.length ? selectedSchedule.map((item) => (
+              <div className="agenda-item" key={item.id}><time>{item.time}</time><span>{item.title}</span><button type="button" className="workspace-icon-button agenda-delete" onClick={() => removeSchedule(item.id)} aria-label={`删除日程「${item.title}」`} title="删除日程"><DeleteOutlined /></button></div>
+            )) : <p>这一天没有日程</p>}
+          </div>
+          <form className="agenda-add" onSubmit={addSchedule}>
+            <input type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} aria-label="日程时间" />
+            <input value={scheduleTitle} onChange={(event) => setScheduleTitle(event.target.value)} placeholder="添加事项" aria-label="添加日程事项" maxLength={80} />
+            <button className="workspace-icon-button workspace-add" type="submit" disabled={!scheduleTitle.trim()} aria-label="添加日程" title="添加日程"><PlusOutlined /></button>
+          </form>
         </div>
       </section>
+
+      <div className="workspace-bottom-grid">
+        <section className="todos-panel" aria-labelledby="todos-title">
+          <div className="todos-heading-row">
+            <div className="workbench-section-heading"><div><span className="workbench-kicker">TO-DO</span><h1 id="todos-title">待办事项</h1></div></div>
+            <div className="todo-filters" role="tablist" aria-label="待办筛选">
+              <button type="button" role="tab" aria-selected={todoView === 'active'} className={todoView === 'active' ? 'todo-filter-active' : ''} onClick={() => setTodoView('active')}>进行中 {active}</button>
+              <button type="button" role="tab" aria-selected={todoView === 'done'} className={todoView === 'done' ? 'todo-filter-active' : ''} onClick={() => setTodoView('done')}>已完成 {completed}</button>
+            </div>
+          </div>
+          <form className="todo-add" onSubmit={addTodo}>
+            <input value={todoTitle} onChange={(event) => setTodoTitle(event.target.value)} placeholder="添加待办事项" aria-label="添加待办事项" maxLength={100} />
+            <button type="button" className={`todo-session-trigger ${todoSessionId ? 'todo-session-trigger-linked' : ''}`} onClick={openAssociationDialog} title={todoSessionId ? `已关联「${todoSessionTitle}」` : '关联会话'}><MessageOutlined /><span>{todoSessionId ? todoSessionTitle : '关联会话'}</span></button>
+            <button className="workspace-icon-button workspace-add" type="submit" disabled={!todoTitle.trim()} aria-label="添加待办" title="添加待办"><PlusOutlined /></button>
+          </form>
+          {visibleTodos.length === 0 ? (
+            <div className="todo-empty"><CalendarOutlined /><span>{data.todos.length ? '这个视图没有待办事项' : '从一件待办开始今天的工作'}</span></div>
+          ) : (
+            <ul className="todo-list">
+              {visibleTodos.map((todo) => {
+                const project = todo.projectId ? projects.find((item) => item.id === todo.projectId) : undefined
+                const sessionProjectId = project?.id
+                const sessionLink = sessionProjectId && todo.sessionId ? `${project?.name} · ${todo.sessionTitle || '会话'}` : undefined
+                return <li className={`todo-item ${todo.done ? 'todo-item-done' : ''}`} key={todo.id}>
+                  <button type="button" className="todo-check" onClick={() => toggleTodo(todo.id)} aria-label={todo.done ? `标记「${todo.title}」未完成` : `完成「${todo.title}」`}>{todo.done && <CheckOutlined />}</button>
+                  <div className="todo-copy"><span className="todo-item-label">{todo.title}</span>{sessionLink ? <button type="button" className="todo-project-link" onClick={() => void navigate(`/projects/${sessionProjectId}?session=${encodeURIComponent(todo.sessionId!)}`)} title={`进入会话「${todo.sessionTitle || '未命名会话'}」`}><MessageOutlined />{sessionLink}</button> : project && <button type="button" className="todo-project-link" onClick={() => void navigate(`/projects/${project.id}`)} title={`进入「${project.name}」对话`}><MessageOutlined />{project.name}</button>}</div>
+                  <button type="button" className="workspace-icon-button todo-edit" onClick={() => openTodoEditor(todo)} aria-label={`编辑待办「${todo.title}」`} title="编辑待办"><EditOutlined /></button>
+                  <button type="button" className={`todo-important ${todo.important ? 'todo-important-active' : ''}`} onClick={() => toggleImportant(todo.id)} aria-label={todo.important ? `取消标记「${todo.title}」为重点` : `标记「${todo.title}」为重点`} title={todo.important ? '取消重点' : '标记重点'}>{todo.important ? <FlagFilled /> : <FlagOutlined />}</button>
+                  <button type="button" className="workspace-icon-button todo-delete" onClick={() => removeTodo(todo.id)} aria-label={`删除待办「${todo.title}」`} title="删除待办"><DeleteOutlined /></button>
+                </li>
+              })}
+            </ul>
+          )}
+        </section>
+
+        <aside className="status-panel" aria-labelledby="status-title">
+          <span className="workbench-kicker">WORK STATUS</span>
+          <h2 id="status-title">工作状态</h2>
+          <div className="status-overview"><strong>{completed}</strong><span>已完成</span><b>/ {data.todos.length}</b></div>
+          <div className="status-lines"><div><span>待处理</span><b>{active}</b></div><div><span>重点</span><b>{important.length}</b></div><div><span>关联项目</span><b>{linkedProjects}</b></div></div>
+          <div className="status-focus"><span>当前重点</span>{important.length ? <ul>{important.slice(0, 3).map((todo) => <li key={todo.id}>{todo.title}</li>)}</ul> : <p>标记待办为重点后会显示在这里</p>}</div>
+        </aside>
+      </div>
+
+      <Modal open={associationDialogOpen} onCancel={() => setAssociationDialogOpen(false)} footer={null} title="关联 Claude 会话" width={520} destroyOnClose>
+        <div className="todo-association-dialog">
+          <label>
+            <span>项目</span>
+            <select value={draftProjectId} onChange={(event) => { setDraftProjectId(event.target.value); setDraftSessionId('') }} aria-label="选择项目">
+              <option value="">选择项目</option>
+              {projects.map((project) => <option value={project.id} key={project.id}>{project.name}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>会话</span>
+            <select value={draftSessionId} onChange={(event) => setDraftSessionId(event.target.value)} aria-label="选择会话" disabled={!draftProjectId || sessionLoadState === 'loading'}>
+              <option value="">{sessionLoadState === 'loading' ? '正在读取会话…' : sessionLoadState === 'error' ? '会话读取失败，请重新选择项目' : !draftProjectId ? '请先选择项目' : todoSessions.length ? '选择会话' : '这个项目没有历史会话'}</option>
+              {todoSessions.map((session) => <option value={session.sessionId} key={session.sessionId}>{session.title || '未命名会话'}</option>)}
+            </select>
+          </label>
+          <div className="todo-association-actions">
+            <button type="button" className="todo-association-clear" onClick={clearAssociation}>清除关联</button>
+            <div><button type="button" className="todo-association-cancel" onClick={() => setAssociationDialogOpen(false)}>取消</button><button type="button" className="todo-association-confirm" onClick={applyAssociation} disabled={!draftSessionId}>关联会话</button></div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={Boolean(editingTodoId)} onCancel={() => setEditingTodoId(undefined)} footer={null} title="编辑待办" width={520} destroyOnClose>
+        <div className="todo-edit-dialog">
+          <label>
+            <span>待办内容</span>
+            <input value={editTodoTitle} onChange={(event) => setEditTodoTitle(event.target.value)} aria-label="待办内容" maxLength={100} autoFocus />
+          </label>
+          <label className="todo-edit-completion">
+            <input type="checkbox" checked={editTodoDone} onChange={(event) => setEditTodoDone(event.target.checked)} />
+            <span>标记为已完成</span>
+          </label>
+          <label>
+            <span>项目</span>
+            <select value={editProjectId} onChange={(event) => { setEditProjectId(event.target.value); setEditSessionId(''); setEditSessionTitle('') }} aria-label="编辑项目">
+              <option value="">不关联项目</option>
+              {projects.map((project) => <option value={project.id} key={project.id}>{project.name}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>会话</span>
+            <select value={editSessionId} onChange={(event) => { const session = editSessions.find((item) => item.sessionId === event.target.value); setEditSessionId(event.target.value); setEditSessionTitle(session?.title || '') }} aria-label="编辑会话" disabled={!editProjectId || editSessionLoadState === 'loading'}>
+              {editSessionId && !editSessions.some((session) => session.sessionId === editSessionId) && <option value={editSessionId}>{editSessionTitle || '已关联会话'}</option>}
+              <option value="">{editSessionLoadState === 'loading' ? '正在读取会话…' : editSessionLoadState === 'error' ? '会话读取失败，请重新选择项目' : !editProjectId ? '请先选择项目' : editSessions.length ? '不关联会话' : '这个项目没有历史会话'}</option>
+              {editSessions.map((session) => <option value={session.sessionId} key={session.sessionId}>{session.title || '未命名会话'}</option>)}
+            </select>
+          </label>
+          <div className="todo-association-actions">
+            <button type="button" className="todo-association-clear" onClick={clearEditAssociation}>清除关联</button>
+            <div><button type="button" className="todo-association-cancel" onClick={() => setEditingTodoId(undefined)}>取消</button><button type="button" className="todo-association-confirm" onClick={saveTodoEdit} disabled={!editTodoTitle.trim()}>保存更改</button></div>
+          </div>
+        </div>
+      </Modal>
     </main>
   )
 }

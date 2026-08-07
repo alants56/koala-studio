@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState, type KeyboardEvent, type ReactElement, ty
 import { Sender } from '@ant-design/x'
 import { App, Button, Popover } from 'antd'
 import {
-  CodeOutlined,
+  ApiOutlined,
+  AppstoreOutlined,
+  MacCommandOutlined,
   EditOutlined,
   FileSearchOutlined,
   CheckOutlined,
@@ -54,6 +56,82 @@ const MODE_PRESENTATIONS: Record<string, PermissionModePresentation> = {
 }
 
 const EMPTY_COMMANDS: AgentCommand[] = []
+
+type CommandSource = 'system' | 'mcp' | 'extension'
+
+// ACP 会抹平命令来源；已知内置名按系统命令处理，其余视为外部扩展。
+const SYSTEM_COMMANDS = new Set([
+  'add-dir',
+  'agents',
+  'bashes',
+  'bug',
+  'clear',
+  'compact',
+  'config',
+  'context',
+  'cost',
+  'doctor',
+  'exit',
+  'export',
+  'extra-usage',
+  'fast',
+  'feedback',
+  'help',
+  'hooks',
+  'ide',
+  'init',
+  'install-github-app',
+  'keybindings',
+  'login',
+  'logout',
+  'mcp',
+  'memory',
+  'mobile',
+  'model',
+  'output-style',
+  'permissions',
+  'plan',
+  'plugin',
+  'pr-comments',
+  'privacy-settings',
+  'release-notes',
+  'remote-control',
+  'rename',
+  'resume',
+  'review',
+  'rewind',
+  'sandbox',
+  'security-review',
+  'skills',
+  'stats',
+  'status',
+  'statusline',
+  'stickers',
+  'tasks',
+  'terminal-setup',
+  'theme',
+  'upgrade',
+  'usage',
+  'vim'
+])
+
+interface CommandSourcePresentation {
+  label: string
+  icon: ReactNode
+}
+
+const COMMAND_SOURCE_PRESENTATIONS: Record<CommandSource, CommandSourcePresentation> = {
+  system: { label: '系统', icon: <MacCommandOutlined /> },
+  mcp: { label: 'MCP', icon: <ApiOutlined /> },
+  extension: { label: 'Skill / 插件', icon: <AppstoreOutlined /> }
+}
+
+function getCommandSource(command: AgentCommand): CommandSource {
+  const name = command.name.toLocaleLowerCase()
+  if (name.startsWith('mcp:')) return 'mcp'
+  if (SYSTEM_COMMANDS.has(name)) return 'system'
+  return 'extension'
+}
 
 function fuzzyScore(value: string, query: string): number | null {
   const candidate = value.toLocaleLowerCase()
@@ -107,7 +185,7 @@ export function ChatComposer(): ReactElement {
   const ready = state.status === 'ready'
   const loading = state.status === 'working'
   const commands = state.commands ?? EMPTY_COMMANDS
-  const commandQuery = prompt.match(/^\/([^\s]*)$/)?.[1]
+  const commandQuery = prompt.match(/^[/、]([^\s]*)$/)?.[1]
   const filteredCommands = useMemo(
     () => (commandQuery === undefined ? [] : filterCommands(commands, commandQuery)),
     [commandQuery, commands]
@@ -214,29 +292,34 @@ export function ChatComposer(): ReactElement {
       {commandMenuOpen && (
         <div className="chat-command-menu" role="listbox" aria-label="匹配的命令">
           {filteredCommands.length > 0 ? (
-            filteredCommands.map((command, index) => (
-              <button
-                key={command.name}
-                type="button"
-                role="option"
-                aria-selected={index === activeCommandIndex}
-                className={`chat-command-option${index === activeCommandIndex ? ' chat-command-option-active' : ''}`}
-                onMouseEnter={() => setActiveCommandIndex(index)}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => selectCommand(command)}
-              >
-                <span className="chat-command-option-icon" aria-hidden="true">
-                  <CodeOutlined />
-                </span>
-                <span className="chat-command-option-copy">
-                  <span className="chat-command-option-heading">
-                    <span className="chat-command-option-name">/{command.name}</span>
-                    {command.hint && <span className="chat-command-option-hint">{command.hint}</span>}
+            filteredCommands.map((command, index) => {
+              const source = getCommandSource(command)
+              const sourcePresentation = COMMAND_SOURCE_PRESENTATIONS[source]
+              return (
+                <button
+                  key={command.name}
+                  type="button"
+                  role="option"
+                  aria-selected={index === activeCommandIndex}
+                  className={`chat-command-option chat-command-option-${source}${index === activeCommandIndex ? ' chat-command-option-active' : ''}`}
+                  onMouseEnter={() => setActiveCommandIndex(index)}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => selectCommand(command)}
+                >
+                  <span className="chat-command-option-icon" aria-hidden="true">
+                    {sourcePresentation.icon}
                   </span>
-                  <span className="chat-command-option-description">{command.description}</span>
-                </span>
-              </button>
-            ))
+                  <span className="chat-command-option-copy">
+                    <span className="chat-command-option-heading">
+                      <span className="chat-command-option-name">/{command.name}</span>
+                      {command.hint && <span className="chat-command-option-hint">{command.hint}</span>}
+                      <span className="chat-command-source-badge">{sourcePresentation.label}</span>
+                    </span>
+                    <span className="chat-command-option-description">{command.description}</span>
+                  </span>
+                </button>
+              )
+            })
           ) : (
             <div className="chat-command-empty">没有匹配“/{commandQuery}”的命令</div>
           )}
