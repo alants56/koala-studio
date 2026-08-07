@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactElement } from 'react'
+import { useMemo, useState, type DragEvent, type ReactElement } from 'react'
 import { App, Button, Col, Empty, Input, Row, Skeleton, Space, Typography } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { CreateProjectModal } from '@/components/projects/CreateProjectModal'
@@ -6,15 +6,76 @@ import { ProjectCard } from '@/components/projects/ProjectCard'
 import type { CreateProjectInput, Project, UpdateProjectInput } from '@/models'
 import { useProjects } from '@/state/ProjectsContext'
 
-/** 项目列表页：搜索（名称）、新建、删除。 */
+/** 项目列表页：搜索（名称）、新建、删除、拖动排序。 */
 export function ProjectsPage(): ReactElement {
-  const { projects, loading, createProject, updateProject, deleteProject, searchProjects } = useProjects()
+  const { projects, loading, createProject, updateProject, deleteProject, reorderProjects, searchProjects } = useProjects()
   const { modal } = App.useApp()
   const [keyword, setKeyword] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<Project>()
+  // 拖动排序：dragId 为被拖卡片，overId 为当前悬停落点，pendingOrder 为拖拽中的实时顺序。
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [overId, setOverId] = useState<string | null>(null)
+  const [pendingOrder, setPendingOrder] = useState<string[] | null>(null)
+
+  // 搜索时不做拖拽排序，避免只对子集重排。
+  const searching = keyword.trim().length > 0
 
   const filtered = useMemo(() => searchProjects(keyword), [searchProjects, keyword])
+
+  // 拖拽过程中用 pendingOrder 覆盖展示顺序；否则使用搜索结果顺序。
+  // 搜索时始终忽略 pendingOrder，避免拖拽被中断（如 ESC）后残留的顺序影响筛选视图。
+  const displayList = useMemo(() => {
+    if (searching || !pendingOrder) return filtered
+    const byId = new Map(filtered.map((project) => [project.id, project]))
+    return pendingOrder
+      .map((id) => byId.get(id))
+      .filter((project): project is Project => project !== undefined)
+  }, [filtered, pendingOrder, searching])
+
+  const handleDragStart = (id: string) => (event: DragEvent<HTMLElement>): void => {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', id)
+    setDragId(id)
+    setOverId(id)
+    setPendingOrder(projects.map((project) => project.id))
+  }
+
+  const handleDragEnter = (id: string): void => {
+    if (!dragId || !pendingOrder || dragId === id || overId === id) return
+    setOverId(id)
+    setPendingOrder((current) => {
+      if (!current) return current
+      const next = current.filter((item) => item !== dragId)
+      const to = next.indexOf(id)
+      if (to === -1) return current
+      next.splice(to, 0, dragId)
+      return next
+    })
+  }
+
+  /** 拖拽结束/放下：顺序有变化才落盘，然后清空拖拽状态。 */
+  const commitReorder = (): void => {
+    if (!pendingOrder) return
+    const currentOrder = projects.map((project) => project.id)
+    const changed = currentOrder.length !== pendingOrder.length || currentOrder.some((id, index) => id !== pendingOrder[index])
+    if (changed) {
+      void reorderProjects(pendingOrder)
+    }
+    setDragId(null)
+    setOverId(null)
+    setPendingOrder(null)
+  }
+
+  const handleDrop = (event: DragEvent<HTMLElement>): void => {
+    event.preventDefault()
+    event.stopPropagation()
+    commitReorder()
+  }
+
+  const handleDragEnd = (): void => {
+    commitReorder()
+  }
 
   const handleCreate = async (input: CreateProjectInput): Promise<void> => {
     await createProject(input)
@@ -79,11 +140,28 @@ export function ProjectsPage(): ReactElement {
             </Col>
           ))}
         </Row>
-      ) : filtered.length > 0 ? (
-        <Row className="project-grid" gutter={[16, 16]}>
-          {filtered.map((project) => (
+      ) : displayList.length > 0 ? (
+        <Row
+          className="project-grid"
+          gutter={[16, 16]}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={handleDrop}
+        >
+          {displayList.map((project) => (
             <Col key={project.id} xs={24} sm={12} lg={8} xl={6}>
-              <ProjectCard project={project} onEdit={() => openEditModal(project)} onDelete={() => handleDelete(project)} />
+              <ProjectCard
+                project={project}
+                onEdit={() => openEditModal(project)}
+                onDelete={() => handleDelete(project)}
+                draggable={!searching}
+                dragging={dragId === project.id}
+                dropTarget={dragId !== null && dragId !== project.id && overId === project.id}
+                onDragStart={handleDragStart(project.id)}
+                onDragEnter={() => handleDragEnter(project.id)}
+                onDragOver={(event) => event.preventDefault()}
+                onDragEnd={handleDragEnd}
+                onDrop={handleDrop}
+              />
             </Col>
           ))}
         </Row>

@@ -3,7 +3,16 @@ import { EventEmitter } from 'node:events'
 import { Readable, Writable } from 'node:stream'
 import * as acp from '@agentclientprotocol/sdk'
 import type { ClientConnection, SessionNotification } from '@agentclientprotocol/sdk'
-import type { AcpSessionInfo, AcpSessionResult, AgentMode, AgentState, ChatMessage, LoadedSession, PromptRequest } from '../../shared/acp'
+import type {
+  AcpSessionInfo,
+  AcpSessionResult,
+  AgentCommand,
+  AgentMode,
+  AgentState,
+  ChatMessage,
+  LoadedSession,
+  PromptRequest
+} from '../../shared/acp'
 
 export class AcpBridge extends EventEmitter {
   private agentProcess?: ChildProcessWithoutNullStreams
@@ -102,6 +111,7 @@ export class AcpBridge extends EventEmitter {
     if (!this.connection) throw new Error('请先连接 Claude ACP。')
 
     const collected: ChatMessage[] = []
+    let collectedCommands: acp.AvailableCommand[] | undefined
     const byId = new Map<string, ChatMessage>()
     const pushText = (
       id: string | undefined,
@@ -130,6 +140,7 @@ export class AcpBridge extends EventEmitter {
       const update = notification.update
       // 回放是渐进式送达的；adapter 在回放结束后发送 available_commands_update，作为完成信号
       if (update.sessionUpdate === 'available_commands_update') {
+        collectedCommands = update.availableCommands
         resolveDone?.()
         return
       }
@@ -169,8 +180,22 @@ export class AcpBridge extends EventEmitter {
 
     this.activeSessionId = sessionId
     const modes = this.toAgentModes(response.modes)
-    this.setState({ ...this.state, sessionId, modes, currentModeId: response.modes?.currentModeId })
+    this.setState({
+      ...this.state,
+      sessionId,
+      modes,
+      currentModeId: response.modes?.currentModeId,
+      commands: this.toAgentCommands(collectedCommands)
+    })
     return { sessionId, messages: collected, modes, currentModeId: response.modes?.currentModeId }
+  }
+
+  private toAgentCommands(commands: acp.AvailableCommand[] | undefined): AgentCommand[] | undefined {
+    return commands?.map((command) => ({
+      name: command.name,
+      description: command.description,
+      hint: command.input?.hint ?? undefined
+    }))
   }
 
   /** 通过 ACP session/new 新建会话并设为当前会话。 */
@@ -246,6 +271,10 @@ export class AcpBridge extends EventEmitter {
     }
     if (!this.activeSessionId || notification.sessionId !== this.activeSessionId) return
     const update = notification.update
+    if (update.sessionUpdate === 'available_commands_update') {
+      this.setState({ ...this.state, commands: this.toAgentCommands(update.availableCommands) })
+      return
+    }
     if (update.sessionUpdate === 'current_mode_update') {
       this.setState({ ...this.state, currentModeId: update.currentModeId })
       return

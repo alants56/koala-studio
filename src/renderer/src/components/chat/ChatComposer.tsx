@@ -1,7 +1,8 @@
-import { useMemo, useState, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
 import { Sender } from '@ant-design/x'
 import { App, Button, Popover } from 'antd'
 import {
+  CodeOutlined,
   EditOutlined,
   FileSearchOutlined,
   CheckOutlined,
@@ -11,6 +12,7 @@ import {
   WarningOutlined
 } from '@ant-design/icons'
 import { useAgent } from '@/state/AgentContext'
+import type { AgentCommand } from '@shared/acp'
 
 interface PermissionModePresentation {
   label: string
@@ -51,15 +53,66 @@ const MODE_PRESENTATIONS: Record<string, PermissionModePresentation> = {
   }
 }
 
+const EMPTY_COMMANDS: AgentCommand[] = []
+
+function fuzzyScore(value: string, query: string): number | null {
+  const candidate = value.toLocaleLowerCase()
+  const target = query.toLocaleLowerCase()
+  if (!target) return 0
+  if (candidate === target) return 1000
+  if (candidate.startsWith(target)) return 800 - candidate.length
+
+  const containedAt = candidate.indexOf(target)
+  if (containedAt >= 0) return 600 - containedAt * 4 - candidate.length
+
+  let cursor = 0
+  let gap = 0
+  let consecutive = 0
+  let previousMatch = -2
+  for (const character of target) {
+    const matchedAt = candidate.indexOf(character, cursor)
+    if (matchedAt < 0) return null
+    gap += matchedAt - cursor
+    if (matchedAt === previousMatch + 1) consecutive += 1
+    previousMatch = matchedAt
+    cursor = matchedAt + 1
+  }
+
+  return 350 + consecutive * 8 - gap * 3 - candidate.length
+}
+
+function filterCommands(commands: AgentCommand[], query: string): AgentCommand[] {
+  return commands
+    .map((command, index) => {
+      const nameScore = fuzzyScore(command.name, query)
+      const descriptionScore = fuzzyScore(command.description, query)
+      const hintScore = command.hint ? fuzzyScore(command.hint, query) : null
+      const score = Math.max(nameScore ?? -1, (descriptionScore ?? -1) - 300, (hintScore ?? -1) - 350)
+      return { command, index, score }
+    })
+    .filter((item) => item.score >= 0)
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .map((item) => item.command)
+}
+
 /** 对话输入区：基于 Ant Design X 的 Sender，Enter 发送、加载时显示停止按钮。 */
 export function ChatComposer(): ReactElement {
   const { state, send, stop, setMode } = useAgent()
   const { message } = App.useApp()
   const [prompt, setPrompt] = useState('')
   const [permissionOpen, setPermissionOpen] = useState(false)
+  const [activeCommandIndex, setActiveCommandIndex] = useState(0)
+  const [dismissedCommandPrompt, setDismissedCommandPrompt] = useState<string>()
 
   const ready = state.status === 'ready'
   const loading = state.status === 'working'
+  const commands = state.commands ?? EMPTY_COMMANDS
+  const commandQuery = prompt.match(/^\/([^\s]*)$/)?.[1]
+  const filteredCommands = useMemo(
+    () => (commandQuery === undefined ? [] : filterCommands(commands, commandQuery)),
+    [commandQuery, commands]
+  )
+  const commandMenuOpen = ready && commandQuery !== undefined && prompt !== dismissedCommandPrompt
   const modes = state.modes ?? []
   const modeOptions = useMemo(
     () =>
@@ -77,6 +130,10 @@ export function ChatComposer(): ReactElement {
   )
   const currentMode = modeOptions.find((mode) => mode.value === (state.currentModeId ?? modes[0]?.id))
 
+  useEffect(() => {
+    setActiveCommandIndex(0)
+  }, [commandQuery, commands])
+
   const handleModeChange = async (modeId: string): Promise<void> => {
     try {
       await setMode(modeId)
@@ -91,6 +148,42 @@ export function ChatComposer(): ReactElement {
     if (!trimmed || !ready) return
     setPrompt('')
     void send(trimmed)
+  }
+
+  const selectCommand = (command: AgentCommand): void => {
+    const nextPrompt = `/${command.name}${command.hint ? ' ' : ''}`
+    setPrompt(nextPrompt)
+    setDismissedCommandPrompt(nextPrompt)
+  }
+
+  const handlePromptChange = (nextPrompt: string): void => {
+    setPrompt(nextPrompt)
+    if (nextPrompt !== dismissedCommandPrompt) setDismissedCommandPrompt(undefined)
+  }
+
+  const handleComposerKeyDown = (event: KeyboardEvent): void | false => {
+    if (!commandMenuOpen) return
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      setDismissedCommandPrompt(prompt)
+      return false
+    }
+
+    if (filteredCommands.length === 0) return
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      const direction = event.key === 'ArrowDown' ? 1 : -1
+      setActiveCommandIndex((current) => (current + direction + filteredCommands.length) % filteredCommands.length)
+      return false
+    }
+
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault()
+      selectCommand(filteredCommands[activeCommandIndex] ?? filteredCommands[0])
+      return false
+    }
   }
 
   const permissionPanel = (
@@ -118,9 +211,41 @@ export function ChatComposer(): ReactElement {
 
   return (
     <div className="chat-composer-wrap">
+      {commandMenuOpen && (
+        <div className="chat-command-menu" role="listbox" aria-label="匹配的命令">
+          {filteredCommands.length > 0 ? (
+            filteredCommands.map((command, index) => (
+              <button
+                key={command.name}
+                type="button"
+                role="option"
+                aria-selected={index === activeCommandIndex}
+                className={`chat-command-option${index === activeCommandIndex ? ' chat-command-option-active' : ''}`}
+                onMouseEnter={() => setActiveCommandIndex(index)}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => selectCommand(command)}
+              >
+                <span className="chat-command-option-icon" aria-hidden="true">
+                  <CodeOutlined />
+                </span>
+                <span className="chat-command-option-copy">
+                  <span className="chat-command-option-heading">
+                    <span className="chat-command-option-name">/{command.name}</span>
+                    {command.hint && <span className="chat-command-option-hint">{command.hint}</span>}
+                  </span>
+                  <span className="chat-command-option-description">{command.description}</span>
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="chat-command-empty">没有匹配“/{commandQuery}”的命令</div>
+          )}
+        </div>
+      )}
       <Sender
         value={prompt}
-        onChange={setPrompt}
+        onChange={handlePromptChange}
+        onKeyDown={handleComposerKeyDown}
         onSubmit={handleSubmit}
         onCancel={() => void stop()}
         loading={loading}

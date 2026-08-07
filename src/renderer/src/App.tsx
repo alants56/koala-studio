@@ -4,6 +4,7 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { WorkbenchPage } from '@/pages/workbench/WorkbenchPage'
 import { ProjectsPage } from '@/pages/projects/ProjectsPage'
 import { ProjectChatPage } from '@/pages/projects/ProjectChatPage'
+import { ClaudeResourcesPage } from '@/pages/claude/ClaudeResourcesPage'
 import { ProjectsProvider } from '@/state/ProjectsContext'
 
 export function App(): ReactElement {
@@ -16,6 +17,7 @@ export function App(): ReactElement {
             <Route path="/workbench" element={<WorkbenchPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/projects/:projectId" element={<ProjectChatPage />} />
+            <Route path="/claude" element={<ClaudeResourcesPage />} />
           </Route>
         </Routes>
       </HashRouter>

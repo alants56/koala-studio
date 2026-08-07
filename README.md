@@ -23,6 +23,10 @@ pnpm dev
 - `/projects` 项目：项目卡片网格，支持按名称搜索、新建、删除
 - `/projects/:projectId` 项目对话：进入后自动连接 ACP；右上角「历史对话」抽屉展示
   Claude Code 会话记录（来自 ACP `session/list`），点击可在不同会话间切换（`session/load`）
+- `/claude` 插件：集中管理当前用户的 Claude Code 本地资源
+  - Skills：扫描 `~/.claude/skills`，可新建、编辑或删除 `SKILL.md`
+  - 插件：读取 `~/.claude/plugins/installed_plugins.json`，可启用、停用、更新或卸载
+  - MCP：读取并维护 `~/.claude.json` 中的用户级和项目级 `mcpServers` 配置；列表会隐藏环境变量与请求头内容
 
 ## 项目数据（本地存储）
 
@@ -35,6 +39,9 @@ pnpm dev
 - 写入采用「临时文件 + 重命名」的原子方式，避免数据损坏
 
 数据流：`renderer → preload (window.projects) → IPC → main (project-store)`。
+
+Claude 本地资源数据流：`renderer → preload (window.claude) → IPC → main (claude-resources)`。
+其中插件操作调用本机 `claude plugin` 命令；Skill 和 MCP 配置写入均采用临时文件后重命名，避免中断写入造成配置文件损坏。
 
 ## 对话记录（来自 Claude Code）
 

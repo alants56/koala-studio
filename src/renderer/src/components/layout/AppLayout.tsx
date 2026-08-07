@@ -4,6 +4,7 @@ import {
   CodeOutlined,
   DashboardOutlined,
   FolderOpenOutlined,
+  AppstoreOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined
 } from '@ant-design/icons'
@@ -14,12 +15,14 @@ const { Sider, Content } = Layout
 
 const MENU_ITEMS: MenuProps['items'] = [
   { key: '/workbench', icon: <DashboardOutlined />, label: '工作台' },
+  { key: '/claude', icon: <AppstoreOutlined />, label: '插件' },
   { key: '/projects', icon: <FolderOpenOutlined />, label: '项目' }
 ]
 
 function getSelectedKey(pathname: string): string {
   if (pathname.startsWith('/projects')) return '/projects'
   if (pathname.startsWith('/workbench')) return '/workbench'
+  if (pathname.startsWith('/claude')) return '/claude'
   return '/projects'
 }
 

@@ -9,6 +9,8 @@ interface ProjectsContextValue {
   createProject: (input: CreateProjectInput) => Promise<Project>
   updateProject: (id: string, input: UpdateProjectInput) => Promise<Project>
   deleteProject: (id: string) => Promise<void>
+  /** 按传入的 id 顺序重排项目列表（拖动排序后提交完整顺序）。 */
+  reorderProjects: (orderedIds: string[]) => Promise<void>
   getProject: (id: string) => Project | undefined
   /** 按名称搜索（不区分大小写）。 */
   searchProjects: (query: string) => Project[]
@@ -41,19 +43,30 @@ export function ProjectsProvider({ children }: { children: ReactNode }): ReactEl
 
   const createProject = useCallback(async (input: CreateProjectInput) => {
     const created = await projectsApi.create(input)
-    setProjects((current) => [...current, created].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
+    // 新项目在存储层置顶（sortOrder 最小），直接放到列表头部，不再按时间重排。
+    setProjects((current) => [created, ...current])
     return created
   }, [])
 
   const updateProject = useCallback(async (id: string, input: UpdateProjectInput) => {
     const updated = await projectsApi.update(id, input)
-    setProjects((current) => current.map((project) => (project.id === id ? updated : project)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
+    // 编辑只更新内容，保持当前手动排序位置。
+    setProjects((current) => current.map((project) => (project.id === id ? updated : project)))
     return updated
   }, [])
 
   const deleteProject = useCallback(async (id: string) => {
     await projectsApi.delete(id)
     setProjects((current) => current.filter((project) => project.id !== id))
+  }, [])
+
+  const reorderProjects = useCallback(async (orderedIds: string[]) => {
+    await projectsApi.reorder(orderedIds)
+    setProjects((current) => {
+      const byId = new Map(current.map((project) => [project.id, project]))
+      const ordered = orderedIds.map((id) => byId.get(id)).filter((project): project is Project => project !== undefined)
+      return ordered.length === orderedIds.length ? ordered : current
+    })
   }, [])
 
   const getProject = useCallback((id: string) => projects.find((project) => project.id === id), [projects])
@@ -68,8 +81,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }): ReactEl
   )
 
   const value = useMemo(
-    () => ({ projects, loading, refresh, createProject, updateProject, deleteProject, getProject, searchProjects }),
-    [projects, loading, refresh, createProject, updateProject, deleteProject, getProject, searchProjects]
+    () => ({ projects, loading, refresh, createProject, updateProject, deleteProject, reorderProjects, getProject, searchProjects }),
+    [projects, loading, refresh, createProject, updateProject, deleteProject, reorderProjects, getProject, searchProjects]
   )
 
   return <ProjectsContext.Provider value={value}>{children}</ProjectsContext.Provider>

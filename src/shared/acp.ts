@@ -6,12 +6,22 @@ export interface AgentMode {
   description?: string
 }
 
+/** Claude Code 的可用 slash 命令（来自 ACP 的 available_commands_update）。 */
+export interface AgentCommand {
+  name: string
+  description: string
+  /** 命令所需的参数提示，例如 model 的 "[模型名]"；无参数时省略。 */
+  hint?: string
+}
+
 export interface AgentState {
   status: AgentStatus
   sessionId?: string
   detail?: string
   modes?: AgentMode[]
   currentModeId?: string
+  /** 当前会话可用的 slash 命令，随会话变化。 */
+  commands?: AgentCommand[]
 }
 
 export interface ChatMessage {

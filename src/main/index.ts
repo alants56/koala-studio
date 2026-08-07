@@ -2,7 +2,18 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
 import type { CreateProjectInput, UpdateProjectInput } from '../shared/projects'
 import { AcpBridge } from './services/acp-bridge'
-import { createProject, deleteProject, listProjects, updateProject } from './services/project-store'
+import {
+  getClaudeUsage,
+  listClaudeResources,
+  readClaudeSkill,
+  removeClaudeMcp,
+  removeClaudeSkill,
+  revealClaudePath,
+  runClaudePluginAction,
+  saveClaudeMcp,
+  saveClaudeSkill
+} from './services/claude-resources'
+import { createProject, deleteProject, listProjects, reorderProjects, updateProject } from './services/project-store'
 
 let mainWindow: BrowserWindow | undefined
 const acpBridge = new AcpBridge()
@@ -70,7 +81,18 @@ app.whenReady().then(() => {
   ipcMain.handle('projects:create', (_event, input: CreateProjectInput) => createProject(input))
   ipcMain.handle('projects:update', (_event, id: string, input: UpdateProjectInput) => updateProject(id, input))
   ipcMain.handle('projects:delete', (_event, id: string) => deleteProject(id))
+  ipcMain.handle('projects:reorder', (_event, orderedIds: string[]) => reorderProjects(orderedIds))
   ipcMain.handle('projects:pick-directory', () => pickDirectory())
+
+  ipcMain.handle('claude:list', () => listClaudeResources())
+  ipcMain.handle('claude:usage', () => getClaudeUsage())
+  ipcMain.handle('claude:read-skill', (_event, id: string) => readClaudeSkill(id))
+  ipcMain.handle('claude:save-skill', (_event, input) => saveClaudeSkill(input))
+  ipcMain.handle('claude:remove-skill', (_event, id: string) => removeClaudeSkill(id))
+  ipcMain.handle('claude:save-mcp', (_event, input) => saveClaudeMcp(input))
+  ipcMain.handle('claude:remove-mcp', (_event, name: string, scope, projectPath?: string) => removeClaudeMcp(name, scope, projectPath))
+  ipcMain.handle('claude:plugin-action', (_event, action, id: string) => runClaudePluginAction(action, id))
+  ipcMain.handle('claude:reveal', (_event, path: string) => revealClaudePath(path))
 
 
   acpBridge.on('state', (state) => mainWindow?.webContents.send('acp:state', state))

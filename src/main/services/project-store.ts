@@ -35,12 +35,23 @@ async function writeAll(projects: Project[]): Promise<void> {
 
 export async function listProjects(): Promise<Project[]> {
   const projects = await readAll()
-  return [...projects].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  // 兼容旧数据：缺 sortOrder 的项目按 updatedAt 倒序补齐，一次落盘后即可手动排序。
+  if (projects.some((project) => typeof project.sortOrder !== 'number')) {
+    const migrated = [...projects]
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map((project, index) => ({ ...project, sortOrder: index }))
+    await writeAll(migrated)
+    return migrated
+  }
+  return [...projects].sort((a, b) => a.sortOrder - b.sortOrder)
 }
 
 export async function createProject(input: CreateProjectInput): Promise<Project> {
   const projects = await readAll()
   const now = new Date().toISOString()
+  // 新项目置顶：排在当前最前面的项目之前。
+  const existingOrders = projects.map((project) => project.sortOrder).filter((order): order is number => typeof order === 'number')
+  const minOrder = existingOrders.length > 0 ? Math.min(...existingOrders) : 0
   const project: Project = {
     id: randomUUID(),
     name: input.name.trim(),
@@ -48,7 +59,8 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
     path: input.path?.trim() || undefined,
     tags: input.tags.map((tag) => tag.trim()).filter(Boolean),
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
+    sortOrder: minOrder - 1
   }
   projects.push(project)
   await writeAll(projects)
@@ -80,4 +92,18 @@ export async function deleteProject(id: string): Promise<void> {
   if (next.length !== projects.length) {
     await writeAll(next)
   }
+}
+
+/** 按传入的 id 顺序重排所有项目。校验通过后按索引重写 sortOrder。 */
+export async function reorderProjects(orderedIds: string[]): Promise<void> {
+  const projects = await readAll()
+  if (orderedIds.length !== projects.length) {
+    throw new Error('项目列表不完整')
+  }
+  const byId = new Map(projects.map((project) => [project.id, project]))
+  for (const id of orderedIds) {
+    if (!byId.has(id)) throw new Error('包含不存在的项目')
+  }
+  const reordered = orderedIds.map((id, index) => ({ ...byId.get(id)!, sortOrder: index }))
+  await writeAll(reordered)
 }
