@@ -16,6 +16,7 @@ interface AgentContextValue {
   connect: () => Promise<void>
   send: (text: string) => Promise<void>
   stop: () => Promise<void>
+  setMode: (modeId: string) => Promise<void>
   /** 查询 Claude Code 在该目录下的会话记录（ACP session/list）。 */
   listSessions: () => Promise<AcpSessionInfo[]>
   /** 加载历史会话（ACP session/load），替换当前消息并设为当前会话。 */
@@ -63,7 +64,8 @@ export function AgentProvider({ cwd, children }: AgentProviderProps): ReactEleme
         if (elapsed < MIN_CONNECTING_MS) {
           await new Promise((resolve) => setTimeout(resolve, MIN_CONNECTING_MS - elapsed))
         }
-        setState({ status: 'ready', detail: 'Claude 已连接' })
+        // session/new 会在连接过程中同步权限模式；这里合并状态，避免把 modes 清掉。
+        setState((current) => ({ ...current, status: 'ready', detail: 'Claude 已连接' }))
       } else {
         setState(next)
       }
@@ -80,6 +82,10 @@ export function AgentProvider({ cwd, children }: AgentProviderProps): ReactEleme
 
   const stop = useCallback(async () => {
     await acp.stop()
+  }, [])
+
+  const setMode = useCallback(async (modeId: string) => {
+    await acp.setMode(modeId)
   }, [])
 
   const listSessions = useCallback(async () => acp.listSessions(cwd), [cwd])
@@ -124,8 +130,8 @@ export function AgentProvider({ cwd, children }: AgentProviderProps): ReactEleme
   }, [connect])
 
   const value = useMemo<AgentContextValue>(
-    () => ({ state, messages, sessionId, connect, send, stop, listSessions, loadSession, createNewSession }),
-    [state, messages, sessionId, connect, send, stop, listSessions, loadSession, createNewSession]
+    () => ({ state, messages, sessionId, connect, send, stop, setMode, listSessions, loadSession, createNewSession }),
+    [state, messages, sessionId, connect, send, stop, setMode, listSessions, loadSession, createNewSession]
   )
 
   return <AgentContext.Provider value={value}>{children}</AgentContext.Provider>

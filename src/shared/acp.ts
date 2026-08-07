@@ -1,9 +1,17 @@
 export type AgentStatus = 'disconnected' | 'connecting' | 'ready' | 'working' | 'error'
 
+export interface AgentMode {
+  id: string
+  name: string
+  description?: string
+}
+
 export interface AgentState {
   status: AgentStatus
   sessionId?: string
   detail?: string
+  modes?: AgentMode[]
+  currentModeId?: string
 }
 
 export interface ChatMessage {
@@ -32,12 +40,16 @@ export interface AcpSessionInfo {
 
 export interface AcpSessionResult {
   sessionId: string
+  modes?: AgentMode[]
+  currentModeId?: string
 }
 
 /** session/load 回放的历史消息。 */
 export interface LoadedSession {
   sessionId: string
   messages: ChatMessage[]
+  modes?: AgentMode[]
+  currentModeId?: string
 }
 
 export interface AcpApi {
@@ -45,6 +57,7 @@ export interface AcpApi {
   connect: (cwd: string) => Promise<AgentState>
   prompt: (request: PromptRequest) => Promise<void>
   stop: () => Promise<void>
+  setMode: (modeId: string) => Promise<void>
   /** 通过 ACP session/list 查询 Claude Code 在该目录下的会话记录。 */
   listSessions: (cwd: string) => Promise<AcpSessionInfo[]>
   /** 通过 ACP session/load 加载历史会话，并返回回放的消息。 */

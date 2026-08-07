@@ -1,6 +1,12 @@
 import { useMemo, useState, type ReactElement } from 'react'
 import { Button, Layout, Menu, Tooltip } from 'antd'
-import { DashboardOutlined, FolderOpenOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
+import {
+  CodeOutlined,
+  DashboardOutlined,
+  FolderOpenOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined
+} from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import type { MenuProps } from 'antd'
 
@@ -44,6 +50,7 @@ export function AppLayout(): ReactElement {
               <span className="koala-brand-caption">Agent workspace</span>
             </div>
           )}
+
         </div>
         <Menu
           className="koala-nav"
@@ -53,7 +60,12 @@ export function AppLayout(): ReactElement {
           onClick={({ key }) => void navigate(key)}
         />
         <div className="koala-sider-foot">
-          {!collapsed && <span>Claude Agent workspace</span>}
+          {!collapsed &&
+              <span className="chat-composer-attribution flex items-center gap-1.5">
+              <CodeOutlined />
+              Claude-Agent-ACP驱动
+            </span>
+          }
           <Tooltip title={collapsed ? '展开侧栏' : '收起侧栏'}>
             <Button
               type="text"

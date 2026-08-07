@@ -61,6 +61,7 @@ app.whenReady().then(() => {
   ipcMain.handle('acp:connect', (_, cwd: string) => acpBridge.connect(cwd))
   ipcMain.handle('acp:prompt', (_, request) => acpBridge.prompt(request))
   ipcMain.handle('acp:stop', () => acpBridge.stop())
+  ipcMain.handle('acp:set-mode', (_, modeId: string) => acpBridge.setMode(modeId))
   ipcMain.handle('acp:list-sessions', (_event, cwd: string) => acpBridge.listSessions(cwd))
   ipcMain.handle('acp:load-session', (_event, sessionId: string, cwd: string) => acpBridge.loadSession(sessionId, cwd))
   ipcMain.handle('acp:create-session', (_event, cwd: string) => acpBridge.createSession(cwd))

@@ -7,6 +7,7 @@ const acp: AcpApi = {
   connect: (cwd) => ipcRenderer.invoke('acp:connect', cwd),
   prompt: (request) => ipcRenderer.invoke('acp:prompt', request),
   stop: () => ipcRenderer.invoke('acp:stop'),
+  setMode: (modeId) => ipcRenderer.invoke('acp:set-mode', modeId),
   listSessions: (cwd) => ipcRenderer.invoke('acp:list-sessions', cwd),
   loadSession: (sessionId, cwd) => ipcRenderer.invoke('acp:load-session', sessionId, cwd),
   createSession: (cwd) => ipcRenderer.invoke('acp:create-session', cwd),

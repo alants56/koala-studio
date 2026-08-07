@@ -35,7 +35,8 @@ function ApplicationRoot(): ReactElement {
           colorBgContainer: darkMode ? '#252320' : '#faf9f5',
           borderRadius: 8,
           borderRadiusLG: 12,
-          fontFamily: '"Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif'
+          fontFamily: '"Koala Numerals", "Koala Serif", serif',
+          fontFamilyCode: '"Koala Mono", "JetBrains Mono", monospace'
         },
         components: {
           Button: { controlHeight: 34, primaryShadow: 'none' },

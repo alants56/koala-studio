@@ -3,6 +3,7 @@ export type {
   AcpApi,
   AcpSessionInfo,
   AcpSessionResult,
+  AgentMode,
   AgentState,
   AgentStatus,
   ChatMessage,

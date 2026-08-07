@@ -1,9 +1,34 @@
 @import "tailwindcss";
 
+/* 正文：思源宋体（Source Han Serif SC 可变字体，200-900 全字重） */
+@font-face {
+  font-family: "Koala Serif";
+  src: url("./assets/fonts/SourceHanSerifSC-VF.ttf") format("truetype");
+  font-weight: 200 900;
+  font-display: swap;
+}
+
+/* 数字：JetBrains Mono，只命中 0-9（含全角 ０-９），其余字符回落到正文 */
+@font-face {
+  font-family: "Koala Numerals";
+  src: url("./assets/fonts/JetBrainsMono.ttf") format("truetype");
+  font-weight: 100 800;
+  unicode-range: U+0030-0039, U+FF10-FF19;
+  font-display: swap;
+}
+
+/* 代码：JetBrains Mono */
+@font-face {
+  font-family: "Koala Mono";
+  src: url("./assets/fonts/JetBrainsMono.ttf") format("truetype");
+  font-weight: 100 800;
+  font-display: swap;
+}
+
 :root {
   color: var(--ink);
   background: var(--canvas);
-  font-family: "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-family: "Koala Numerals", "Koala Serif", serif;
   font-synthesis: none;
 
   /* Koala Studio palette (warm cream + terracotta) */
@@ -130,6 +155,7 @@ input {
 
 .koala-nav {
   padding: 20px 10px 8px;
+  background: var(--surface-soft) !important;
 }
 
 .koala-nav.ant-menu-inline {
@@ -334,8 +360,8 @@ input {
   border-color: rgb(var(--primary-rgb) / 45%) !important;
 }
 
-.koala-content .ant-input:focus,
-.koala-content .ant-input-focused,
+.koala-content .ant-input:not(.ant-input-borderless):focus,
+.koala-content .ant-input-focused:not(.ant-input-borderless),
 .koala-content .ant-select-focused .ant-select-selector {
   border-color: var(--primary) !important;
   box-shadow: 0 0 0 3px rgb(var(--primary-rgb) / 12%) !important;
@@ -435,6 +461,12 @@ input {
   overflow-x: auto;
 }
 
+.chat-markdown code,
+.chat-markdown pre,
+.chat-markdown :not(pre) > code {
+  font-family: "Koala Mono", "JetBrains Mono", monospace;
+}
+
 .chat-markdown table {
   display: block;
   max-width: 100%;
@@ -470,11 +502,133 @@ input {
 }
 
 .chat-composer-wrap .ant-sender:focus-within {
+  border-color: var(--hairline);
+  box-shadow: 0 8px 20px rgb(var(--primary-rgb) / 5%);
+}
+
+/* 权限触发器获得焦点时，不要把整个输入框伪装成输入态。 */
+.chat-composer-wrap .ant-sender:has(.ant-sender-input:focus) {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgb(var(--primary-rgb) / 10%);
 }
 
 .chat-composer-footer {
+  width: 100%;
+  justify-content: flex-start;
+  color: var(--muted-soft);
+}
+
+.chat-permission-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.chat-permission-label {
+  color: inherit;
+  font-size: 11px;
+}
+
+.chat-permission-trigger.ant-btn {
+  min-height: 30px;
+  border: 0;
+  border-color: transparent !important;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  box-shadow: none !important;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+  padding: 5px 11px;
+}
+
+.chat-permission-trigger.ant-btn:hover,
+.chat-permission-trigger.ant-btn:focus-visible,
+.chat-permission-trigger.ant-btn:active {
+  border-color: transparent !important;
+  background: var(--surface-soft);
+  box-shadow: none !important;
+  color: var(--ink);
+  font-weight: 400 !important;
+  transform: none;
+}
+
+.chat-permission-trigger-bypass.ant-btn,
+.chat-permission-trigger-bypass.ant-btn:hover,
+.chat-permission-trigger-bypass.ant-btn:focus-visible,
+.chat-permission-trigger-bypass.ant-btn:active {
+  background: rgb(var(--primary-rgb) / 10%);
+  color: var(--primary);
+}
+
+.chat-permission-panel {
+  width: min(360px, calc(100vw - 48px));
+}
+
+.chat-permission-option {
+  width: 100%;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  padding: 9px 8px;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 18px;
+  gap: 9px;
+  align-items: center;
+}
+
+.chat-permission-option:hover {
+  background: var(--surface-soft);
+}
+
+.chat-permission-option-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.chat-permission-option-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-permission-option-title {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 620;
+  line-height: 1.35;
+}
+
+.chat-permission-option-description {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-permission-option-check {
+  color: var(--muted);
+}
+
+.chat-permission-option-bypass .chat-permission-option-icon,
+.chat-permission-option-bypass .chat-permission-option-title,
+.chat-permission-option-bypass .chat-permission-option-description,
+.chat-permission-option-bypass .chat-permission-option-check {
+  color: var(--primary);
+}
+
+.chat-composer-attribution {
   color: var(--muted-soft);
 }
 
@@ -748,6 +902,24 @@ input {
     border-color: var(--surface-dark-elevated);
     background: var(--surface-dark-elevated);
     box-shadow: none;
+  }
+
+  .chat-permission-trigger.ant-btn,
+  .chat-permission-trigger.ant-btn:hover,
+  .chat-permission-trigger.ant-btn:focus-visible {
+    background: var(--surface-dark-soft);
+    color: var(--on-dark-soft);
+  }
+
+  .chat-permission-trigger-bypass.ant-btn,
+  .chat-permission-trigger-bypass.ant-btn:hover,
+  .chat-permission-trigger-bypass.ant-btn:focus-visible {
+    background: rgb(var(--primary-rgb) / 14%);
+    color: var(--primary);
+  }
+
+  .chat-permission-select.ant-select {
+    background: var(--surface-dark-elevated);
   }
 
   .chat-history-drawer .ant-drawer-header {

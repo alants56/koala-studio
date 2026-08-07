@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import { Readable, Writable } from 'node:stream'
 import * as acp from '@agentclientprotocol/sdk'
 import type { ClientConnection, SessionNotification } from '@agentclientprotocol/sdk'
-import type { AcpSessionInfo, AcpSessionResult, AgentState, ChatMessage, LoadedSession, PromptRequest } from '../../shared/acp'
+import type { AcpSessionInfo, AcpSessionResult, AgentMode, AgentState, ChatMessage, LoadedSession, PromptRequest } from '../../shared/acp'
 
 export class AcpBridge extends EventEmitter {
   private agentProcess?: ChildProcessWithoutNullStreams
@@ -157,8 +157,9 @@ export class AcpBridge extends EventEmitter {
       }
     }
 
+    let response: acp.LoadSessionResponse
     try {
-      await this.connection.agent.request(acp.methods.agent.session.load, { sessionId, cwd, mcpServers: [] })
+      response = await this.connection.agent.request(acp.methods.agent.session.load, { sessionId, cwd, mcpServers: [] })
       // 等待回放完成信号（兜底 30s），再给最后的 chunk 一点落定时间
       await Promise.race([done, new Promise((resolve) => setTimeout(resolve, 30000))])
       await new Promise((resolve) => setTimeout(resolve, 300))
@@ -167,8 +168,9 @@ export class AcpBridge extends EventEmitter {
     }
 
     this.activeSessionId = sessionId
-    this.setState({ ...this.state, sessionId })
-    return { sessionId, messages: collected }
+    const modes = this.toAgentModes(response.modes)
+    this.setState({ ...this.state, sessionId, modes, currentModeId: response.modes?.currentModeId })
+    return { sessionId, messages: collected, modes, currentModeId: response.modes?.currentModeId }
   }
 
   /** 通过 ACP session/new 新建会话并设为当前会话。 */
@@ -177,8 +179,9 @@ export class AcpBridge extends EventEmitter {
     const response = await this.connection.agent.request(acp.methods.agent.session.new, { cwd, mcpServers: [] })
     this.activeSessionId = response.sessionId
     this.sessionCwd = cwd
-    this.setState({ ...this.state, sessionId: response.sessionId })
-    return { sessionId: response.sessionId }
+    const modes = this.toAgentModes(response.modes)
+    this.setState({ ...this.state, sessionId: response.sessionId, modes, currentModeId: response.modes?.currentModeId })
+    return { sessionId: response.sessionId, modes, currentModeId: response.modes?.currentModeId }
   }
 
   async prompt(request: PromptRequest): Promise<void> {
@@ -213,6 +216,17 @@ export class AcpBridge extends EventEmitter {
     }
   }
 
+  async setMode(modeId: string): Promise<void> {
+    if (!this.connection || !this.activeSessionId) {
+      throw new Error('请先连接 Claude ACP。')
+    }
+    await this.connection.agent.request(acp.methods.agent.session.setMode, {
+      sessionId: this.activeSessionId,
+      modeId
+    })
+    this.setState({ ...this.state, currentModeId: modeId })
+  }
+
   dispose(): void {
     this.activeSessionId = undefined
     this.sessionCwd = undefined
@@ -232,6 +246,10 @@ export class AcpBridge extends EventEmitter {
     }
     if (!this.activeSessionId || notification.sessionId !== this.activeSessionId) return
     const update = notification.update
+    if (update.sessionUpdate === 'current_mode_update') {
+      this.setState({ ...this.state, currentModeId: update.currentModeId })
+      return
+    }
     if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text') {
       this.emit('message', {
         id: update.messageId ?? 'assistant-stream',
@@ -267,5 +285,9 @@ export class AcpBridge extends EventEmitter {
 
   private systemMessage(content: string): ChatMessage {
     return { id: crypto.randomUUID(), role: 'system', content, createdAt: new Date().toISOString() }
+  }
+
+  private toAgentModes(modes: acp.SessionModeState | null | undefined): AgentMode[] | undefined {
+    return modes?.availableModes.map((mode) => ({ id: mode.id, name: mode.name, description: mode.description ?? undefined }))
   }
 }
