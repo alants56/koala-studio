@@ -14,11 +14,11 @@ export const INITIAL_MESSAGES: ChatMessage[] = [
 
 /** 连接状态对应的圆点颜色（UI 小状态指示）。 */
 export const STATUS_DOT_COLORS: Record<AgentStatus, string> = {
-  disconnected: '#d9d9d9',
-  connecting: '#faad14',
-  ready: '#52c41a',
-  working: '#1677ff',
-  error: '#ff4d4f'
+  disconnected: 'var(--muted-soft)',
+  connecting: 'var(--warning)',
+  ready: 'var(--success)',
+  working: 'var(--primary)',
+  error: 'var(--error)'
 }
 
 export const STATUS_DETAILS: Record<AgentStatus, StatusMeta> = {

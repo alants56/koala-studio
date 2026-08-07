@@ -7,7 +7,7 @@ import { MarkdownMessage } from './MarkdownMessage'
 const MAX_WIDTH = '82%'
 
 /** 思考 / 工具调用的灰色次要文本色。 */
-const SECONDARY = 'rgba(100,116,139,0.95)'
+const SECONDARY = 'rgba(108,106,100,0.95)'
 
 /** 单条对话消息（基于 Ant Design X 渲染）。
  * - 用户消息：右侧气泡，无标签
@@ -69,7 +69,7 @@ export function ChatMessageItem({ message, streaming = false }: { message: ChatM
         content={<MarkdownMessage content={message.content} inverse />}
         shape="corner"
         style={{ maxWidth: MAX_WIDTH }}
-        styles={{ content: { background: '#4f46e5', color: '#fff' } }}
+        styles={{ content: { background: 'var(--primary)', color: 'var(--on-primary)' } }}
       />
     )
   }

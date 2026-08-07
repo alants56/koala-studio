@@ -14,12 +14,19 @@ function createWindow(): void {
     minWidth: 1080,
     minHeight: 720,
     titleBarStyle: 'hiddenInset',
-    backgroundColor: '#f4f7fb',
+    backgroundColor: '#ffffff',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false
+    }
+  })
+
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.meta && input.shift && input.key.toLowerCase() === 'o') {
+      event.preventDefault()
+      mainWindow?.webContents.openDevTools({ mode: 'detach', activate: true })
     }
   })
 

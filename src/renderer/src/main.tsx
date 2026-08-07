@@ -23,25 +23,27 @@ function ApplicationRoot(): ReactElement {
       theme={{
         algorithm: darkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
-          colorPrimary: '#1d7a63',
-          colorInfo: '#1d7a63',
-          colorSuccess: '#3d9b6c',
-          colorText: darkMode ? '#e7ece8' : '#202522',
-          colorTextSecondary: darkMode ? '#a6b0aa' : '#6f7973',
-          colorBorder: darkMode ? '#343d37' : '#dfe5e1',
-          colorBgLayout: darkMode ? '#171a18' : '#f4f6f4',
-          colorBgContainer: darkMode ? '#202522' : '#ffffff',
+          colorPrimary: '#cc785c',
+          colorInfo: '#cc785c',
+          colorSuccess: '#5db872',
+          colorWarning: '#d4a017',
+          colorError: '#c64545',
+          colorText: darkMode ? '#faf9f5' : '#141413',
+          colorTextSecondary: darkMode ? '#a09d96' : '#6c6a64',
+          colorBorder: darkMode ? '#252320' : '#e6dfd8',
+          colorBgLayout: darkMode ? '#181715' : '#faf9f5',
+          colorBgContainer: darkMode ? '#252320' : '#faf9f5',
           borderRadius: 8,
           borderRadiusLG: 12,
           fontFamily: '"Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif'
         },
         components: {
           Button: { controlHeight: 34, primaryShadow: 'none' },
-          Input: { activeShadow: '0 0 0 3px rgb(29 122 99 / 12%)' },
+          Input: { activeShadow: '0 0 0 3px rgb(204 120 92 / 12%)' },
           Menu: {
             itemHeight: 42,
-            itemSelectedBg: darkMode ? '#263c32' : '#e8f4ee',
-            itemSelectedColor: darkMode ? '#a8e0c7' : '#17644f'
+            itemSelectedBg: darkMode ? 'rgb(204 120 92 / 14%)' : 'rgb(204 120 92 / 10%)',
+            itemSelectedColor: darkMode ? '#d9957c' : '#a9583e'
           },
           Modal: { borderRadiusLG: 12 }
         }

@@ -27,6 +27,7 @@ export function AppLayout(): ReactElement {
 
   return (
     <Layout className="koala-shell">
+      <div className="window-drag-region" aria-hidden="true" />
       <Sider
         className="koala-sider"
         width={224}
