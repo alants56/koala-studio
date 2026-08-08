@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { dirname } from 'node:path'
-import type { Automation, AutomationRun, AutomationListInput, AutomationListResult, AutomationRunOutput, CreateAutomationInput, UpdateAutomationInput } from './automations'
+import type { Automation, AutomationRun, AutomationListInput, AutomationListResult, AutomationRunLog, AutomationRunOutput, CreateAutomationInput, UpdateAutomationInput } from './automations'
 
 const STARTER_AUTOMATIONS: Automation[] = [
   { id: 'daily-brief', name: '每日项目简报', description: '汇总活跃项目的会话进度和待办，生成今天的工作摘要。', state: 'active', trigger: '每天 09:00', triggerDetail: '按计划触发', action: '生成并发送摘要', actionDetail: '通知中心', scope: '全部活跃项目', runs: [{ id: 'run-1', status: 'success', startedAt: '今天 09:00', duration: '14 秒', summary: '已汇总 3 个活跃项目', detail: '摘要已发送到通知中心。' }] },
@@ -74,15 +74,17 @@ export class AutomationStore {
     if (input.enabled !== false && input.trigger.trim() === '指定时间' && !schedule) {
       throw new Error('启用指定时间任务必须提供 schedule、actionType 和 projectPath，不能只填写展示时间。')
     }
-    if (schedule && input.actionType !== 'feature_brief') throw new Error('当前定时执行仅支持“生成功能更新简报”动作。')
-    if (schedule && !input.projectPath?.trim()) throw new Error('定时功能更新简报需要指定 Git 项目路径。')
+    if (schedule && !input.actionType) throw new Error('定时任务必须指定可执行动作。')
+    if (schedule && !input.projectPath?.trim()) throw new Error('定时任务需要指定项目文件夹。')
+    if (schedule && input.actionType === 'claude_prompt' && !input.instruction?.trim()) throw new Error('Claude Code 定时任务需要填写自定义指令。')
     const automation: Automation = {
       id: randomUUID(), name, description: input.description?.trim() || `${input.trigger}时，${input.action}。`,
       state: input.enabled === false ? 'paused' : 'active', trigger: input.trigger.trim(), triggerDetail: input.triggerDetail?.trim() || inferTriggerDetail(input.trigger),
       action: input.action.trim(), actionDetail: input.actionDetail?.trim() || '通知中心', scope: input.scope.trim(), runs: [],
       ...(schedule ? { schedule } : {}),
       ...(input.actionType ? { actionType: input.actionType } : {}),
-      ...(input.projectPath?.trim() ? { projectPath: input.projectPath.trim() } : {})
+      ...(input.projectPath?.trim() ? { projectPath: input.projectPath.trim() } : {}),
+      ...(input.instruction?.trim() ? { instruction: input.instruction.trim() } : {})
     }
     const items = await this.readAll()
     await this.writeAll([automation, ...items])
@@ -98,12 +100,14 @@ export class AutomationStore {
     const updated: Automation = { ...current, ...changes, ...(input.schedule ? { schedule: validateSchedule(input.schedule) } : {}) }
     if (input.schedule === null) delete updated.schedule
     if (input.projectPath === null) delete updated.projectPath
+    if (input.instruction === null) delete updated.instruction
     if (!updated.name.trim()) throw new Error('自动化名称不能为空。')
     if (updated.state === 'active' && updated.trigger.trim() === '指定时间' && !updated.schedule) {
       throw new Error('启用指定时间任务必须提供完整的执行计划。')
     }
-    if (updated.schedule && updated.actionType !== 'feature_brief') throw new Error('当前定时执行仅支持“生成功能更新简报”动作。')
-    if (updated.schedule && !updated.projectPath?.trim()) throw new Error('定时功能更新简报需要指定 Git 项目路径。')
+    if (updated.schedule && !updated.actionType) throw new Error('定时任务必须指定可执行动作。')
+    if (updated.schedule && !updated.projectPath?.trim()) throw new Error('定时任务需要指定项目文件夹。')
+    if (updated.schedule && updated.actionType === 'claude_prompt' && !updated.instruction?.trim()) throw new Error('Claude Code 定时任务需要填写自定义指令。')
     items[index] = updated
     await this.writeAll(items)
     return updated
@@ -114,15 +118,26 @@ export class AutomationStore {
     if (enabled && automation.trigger.trim() === '指定时间' && !automation.schedule) {
       throw new Error('该任务缺少真实执行计划，请重新创建并选择执行时间和项目文件夹。')
     }
+    if (enabled && automation.schedule && !automation.projectPath?.trim()) throw new Error('该任务缺少项目文件夹。')
+    if (enabled && automation.schedule && automation.actionType === 'claude_prompt' && !automation.instruction?.trim()) {
+      throw new Error('该任务缺少 Claude Code 自定义指令。')
+    }
     return this.replace({ ...automation, state: enabled ? 'active' : 'paused' })
   }
 
   async runTest(id: string): Promise<Automation> {
     const automation = await this.get(id)
+    const at = new Date().toISOString()
     const content = `自动化：${automation.name}\n触发条件：${automation.trigger}\n执行动作：${automation.action}\n作用范围：${automation.scope}\n\n测试通过。本次测试不会对外发送通知或写入项目数据。`
     const run = {
       id: randomUUID(), status: 'success' as const, startedAt: nowLabel(), duration: '2 秒', summary: `测试运行完成：${automation.action}`,
-      detail: '触发条件、执行动作和作用范围均已通过测试。', output: { title: '测试运行结果', content, format: 'text' as const }
+      detail: '触发条件、执行动作和作用范围均已通过测试。', output: { title: '测试运行结果', content, format: 'text' as const },
+      logs: [
+        { at, level: 'info' as const, message: '开始测试自动化配置' },
+        { at, level: 'info' as const, message: `检查触发条件：${automation.trigger}` },
+        { at, level: 'info' as const, message: `检查执行动作：${automation.action}` },
+        { at, level: 'success' as const, message: '测试完成，未对外发送通知或写入项目数据' }
+      ]
     }
     return this.replace({ ...automation, runs: [run, ...automation.runs] })
   }
@@ -134,6 +149,7 @@ export class AutomationStore {
     summary: string
     detail?: string
     output?: AutomationRunOutput
+    logs?: AutomationRunLog[]
     needsAttention?: boolean
   }): Promise<Automation> {
     const automation = await this.get(id)
@@ -144,7 +160,8 @@ export class AutomationStore {
       duration: durationLabel(input.durationMs),
       summary: input.summary,
       ...(input.detail ? { detail: input.detail } : {}),
-      ...(input.output ? { output: input.output } : {})
+      ...(input.output ? { output: input.output } : {}),
+      ...(input.logs?.length ? { logs: input.logs } : {})
     }
     const updated: Automation = { ...automation, runs: [run, ...automation.runs] }
     if (automation.schedule?.type === 'once') {

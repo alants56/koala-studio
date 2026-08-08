@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import type { AutomationRunLogLevel } from '../../shared/automations'
 
 const execFileAsync = promisify(execFile)
 
@@ -24,18 +25,22 @@ async function git(projectPath: string, args: string[]): Promise<string> {
 }
 
 /** Generates a local, deterministic brief without taking over the active agent session. */
-export async function generateFeatureBrief(projectPath: string): Promise<AutomationExecutionResult> {
+export async function generateFeatureBrief(projectPath: string, log: (message: string, level?: AutomationRunLogLevel) => void = () => {}): Promise<AutomationExecutionResult> {
   const path = projectPath.trim()
+  log('校验项目文件夹')
   if (!path) throw new Error('生成功能更新简报需要指定项目路径。')
 
   const insideWorkTree = await git(path, ['rev-parse', '--is-inside-work-tree'])
   if (insideWorkTree !== 'true') throw new Error('指定路径不是 Git 项目，无法生成更新简报。')
+  log(`项目文件夹有效：${path}`, 'success')
 
+  log('读取 Git 工作区状态、差异统计和最新提交')
   const [status, diffStat, latestCommit] = await Promise.all([
     git(path, ['status', '--short']),
     git(path, ['diff', '--stat']),
     git(path, ['log', '-1', '--pretty=format:%s'])
   ])
+  log('Git 数据读取完成', 'success')
   const changes = status ? status.split('\n') : []
   const changed = changes.filter((line) => !line.startsWith('??')).length
   const untracked = changes.filter((line) => line.startsWith('??')).length
@@ -48,7 +53,9 @@ export async function generateFeatureBrief(projectPath: string): Promise<Automat
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
   }).format(new Date())
 
+  log('整理变更信息并生成简报')
   const content = `# 功能更新简报\n\n**生成时间：** ${generatedAt}\n\n**项目：** ${path}\n\n## 最新提交\n\n${commit}\n\n## 工作区状态\n\n${worktree}\n\n## 差异统计\n\n\`\`\`text\n${diff}\n\`\`\``
+  log(`简报生成完成，共发现 ${changes.length} 项工作区变更`, 'success')
 
   return {
     summary: `已生成功能更新简报（${changes.length} 项工作区变更）`,

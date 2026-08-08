@@ -1,7 +1,8 @@
 export type AutomationState = 'active' | 'paused' | 'attention'
 export type AutomationRunStatus = 'success' | 'failed'
+export type AutomationRunLogLevel = 'info' | 'success' | 'error'
 export type AutomationScheduleType = 'once' | 'daily'
-export type AutomationActionType = 'feature_brief'
+export type AutomationActionType = 'feature_brief' | 'claude_prompt'
 
 export interface AutomationSchedule {
   type: AutomationScheduleType
@@ -17,6 +18,13 @@ export interface AutomationRun {
   summary: string
   detail?: string
   output?: AutomationRunOutput
+  logs?: AutomationRunLog[]
+}
+
+export interface AutomationRunLog {
+  at: string
+  level: AutomationRunLogLevel
+  message: string
 }
 
 export interface AutomationRunOutput {
@@ -40,6 +48,8 @@ export interface Automation {
   schedule?: AutomationSchedule
   actionType?: AutomationActionType
   projectPath?: string
+  /** Custom instruction executed by an isolated Claude Code session. */
+  instruction?: string
 }
 
 export interface CreateAutomationInput {
@@ -54,6 +64,7 @@ export interface CreateAutomationInput {
   schedule?: AutomationSchedule
   actionType?: AutomationActionType
   projectPath?: string
+  instruction?: string
 }
 
 export interface UpdateAutomationInput {
@@ -67,6 +78,7 @@ export interface UpdateAutomationInput {
   schedule?: AutomationSchedule | null
   actionType?: AutomationActionType
   projectPath?: string | null
+  instruction?: string | null
 }
 
 export interface AutomationListInput {

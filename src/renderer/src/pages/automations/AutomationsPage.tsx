@@ -5,11 +5,11 @@ import type { Automation, AutomationRun, AutomationState, CreateAutomationInput 
 import { MarkdownMessage } from '../../components/chat/MarkdownMessage'
 import { projectsApi } from '../../services/projects'
 
-type DetailTab = 'workflow' | 'runs' | 'settings'
+type DetailTab = 'workflow' | 'runs' | 'process' | 'settings'
 
-interface DraftAutomation { name: string; trigger: string; action: string; scope: string; scheduledAt: string; projectPath: string }
+interface DraftAutomation { name: string; trigger: string; action: string; scope: string; scheduledAt: string; projectPath: string; instruction: string }
 
-const EMPTY_DRAFT: DraftAutomation = { name: '', trigger: '指定时间', action: '生成功能更新简报', scope: '指定项目', scheduledAt: '', projectPath: '' }
+const EMPTY_DRAFT: DraftAutomation = { name: '', trigger: '指定时间', action: '生成功能更新简报', scope: '指定项目', scheduledAt: '', projectPath: '', instruction: '' }
 const STATE_META: Record<AutomationState, { label: string; color: 'success' | 'default' | 'error' }> = {
   active: { label: '运行中', color: 'success' }, paused: { label: '已暂停', color: 'default' }, attention: { label: '需处理', color: 'error' }
 }
@@ -62,7 +62,7 @@ export function AutomationsPage(): ReactElement {
     setDetailTab('runs')
   }
   const duplicate = (automation: Automation): void => {
-    void window.automations.create({ name: `${automation.name} 副本`, description: automation.description, trigger: automation.trigger, triggerDetail: automation.triggerDetail, action: automation.action, actionDetail: automation.actionDetail, scope: automation.scope, actionType: automation.actionType, projectPath: automation.projectPath, enabled: false }).then((copy) => { setAutomations((items) => [copy, ...items]); setSelectedId(copy.id); void message.success('已创建副本') }).catch(() => void message.error('无法创建自动化。'))
+    void window.automations.create({ name: `${automation.name} 副本`, description: automation.description, trigger: automation.trigger, triggerDetail: automation.triggerDetail, action: automation.action, actionDetail: automation.actionDetail, scope: automation.scope, actionType: automation.actionType, projectPath: automation.projectPath, instruction: automation.instruction, enabled: false }).then((copy) => { setAutomations((items) => [copy, ...items]); setSelectedId(copy.id); void message.success('已创建副本') }).catch(() => void message.error('无法创建自动化。'))
   }
   const remove = (automation: Automation): void => {
     modal.confirm({ title: '删除自动化', content: `确定删除「${automation.name}」吗？运行记录也会一并移除。`, okText: '删除', cancelText: '取消', okButtonProps: { danger: true }, onOk: async () => { await window.automations.delete(automation.id); setAutomations((items) => items.filter((item) => item.id !== automation.id)); if (selectedId === automation.id) setSelectedId(''); void message.success('自动化已删除') } })
@@ -80,17 +80,19 @@ export function AutomationsPage(): ReactElement {
   }
   const create = (): void => {
     if (!draft.name.trim()) { void message.error('请填写自动化名称'); return }
-    const scheduledBrief = draft.trigger === '指定时间' && draft.action === '生成功能更新简报'
-    if (draft.trigger === '指定时间' && !scheduledBrief) { void message.error('当前指定时间仅支持生成功能更新简报'); return }
-    if (draft.action === '生成功能更新简报' && !scheduledBrief) { void message.error('生成功能更新简报需要指定执行时间'); return }
-    if (scheduledBrief && !draft.scheduledAt) { void message.error('请选择执行时间'); return }
-    if (scheduledBrief && !draft.projectPath.trim()) { void message.error('请选择 Git 项目文件夹'); return }
-    const scheduledAt = scheduledBrief ? new Date(draft.scheduledAt) : undefined
+    const actionType = draft.action === '生成功能更新简报' ? 'feature_brief' as const : draft.action === '让 Claude Code 执行指令' ? 'claude_prompt' as const : undefined
+    const scheduledAction = draft.trigger === '指定时间' && actionType
+    if (draft.trigger === '指定时间' && !actionType) { void message.error('当前指定时间仅支持功能简报或 Claude Code 自定义指令'); return }
+    if (actionType && !scheduledAction) { void message.error('该执行动作需要指定执行时间'); return }
+    if (scheduledAction && !draft.scheduledAt) { void message.error('请选择执行时间'); return }
+    if (scheduledAction && !draft.projectPath.trim()) { void message.error('请选择项目文件夹'); return }
+    if (actionType === 'claude_prompt' && !draft.instruction.trim()) { void message.error('请填写 Claude Code 自定义指令'); return }
+    const scheduledAt = scheduledAction ? new Date(draft.scheduledAt) : undefined
     if (scheduledAt && (Number.isNaN(scheduledAt.getTime()) || scheduledAt <= new Date())) { void message.error('执行时间需要晚于当前时间'); return }
     const input: CreateAutomationInput = {
       name: draft.name.trim(), trigger: draft.trigger, triggerDetail: scheduledAt ? `计划于 ${formatSchedule(scheduledAt)}` : undefined,
-      action: draft.action, actionDetail: scheduledAt ? '自动化运行记录' : undefined, scope: draft.scope,
-      ...(scheduledAt ? { schedule: { type: 'once' as const, nextRunAt: scheduledAt.toISOString() }, actionType: 'feature_brief' as const, projectPath: draft.projectPath.trim() } : {})
+      action: draft.action, actionDetail: actionType === 'claude_prompt' ? 'Claude Code 独立会话' : scheduledAt ? '自动化运行记录' : undefined, scope: draft.scope,
+      ...(scheduledAt && actionType ? { schedule: { type: 'once' as const, nextRunAt: scheduledAt.toISOString() }, actionType, projectPath: draft.projectPath.trim(), ...(actionType === 'claude_prompt' ? { instruction: draft.instruction.trim() } : {}) } : {})
     }
     void window.automations.create(input).then((automation) => { setAutomations((items) => [automation, ...items]); setSelectedId(automation.id); setCreateOpen(false); setDraft(EMPTY_DRAFT); void message.success('自动化已创建并启用') }).catch((error: unknown) => void message.error(errorText(error, '无法创建自动化。')))
   }
@@ -127,11 +129,11 @@ export function AutomationsPage(): ReactElement {
       {selected && <aside className="automation-detail" aria-label={`${selected.name}详情`}>
         <div className="automation-detail-top"><div className="automation-detail-title"><span className="automation-detail-icon"><ThunderboltFilled /></span><div><h2>{selected.name}</h2><p>{selected.description}</p></div></div><Dropdown menu={actionMenu(selected)} trigger={['click']}><Button type="text" icon={<MoreOutlined />} aria-label="更多操作" /></Dropdown></div>
         <div className="automation-detail-controls"><Tag color={STATE_META[selected.state].color}>{STATE_META[selected.state].label}</Tag><Switch checked={selected.state === 'active'} checkedChildren="运行中" unCheckedChildren="已暂停" onChange={(enabled) => toggle(selected.id, enabled)} /><Button icon={<PlayCircleOutlined />} onClick={() => run(selected)}>测试</Button></div>
-        <Segmented className="automation-detail-tabs" value={detailTab} onChange={(value) => setDetailTab(value as DetailTab)} options={[{ label: '流程', value: 'workflow' }, { label: `运行 ${selected.runs.length}`, value: 'runs' }, { label: '设置', value: 'settings' }]} />
-        {detailTab === 'workflow' && <WorkflowView automation={selected} />}{detailTab === 'runs' && <RunsView runs={selected.runs} onViewResult={setResultRun} />}{detailTab === 'settings' && <SettingsView automation={selected} onDelete={() => remove(selected)} />}
+        <Segmented className="automation-detail-tabs" value={detailTab} onChange={(value) => setDetailTab(value as DetailTab)} options={[{ label: '流程', value: 'workflow' }, { label: `运行 ${selected.runs.length}`, value: 'runs' }, { label: '执行过程', value: 'process' }, { label: '设置', value: 'settings' }]} />
+        {detailTab === 'workflow' && <WorkflowView automation={selected} />}{detailTab === 'runs' && <RunsView runs={selected.runs} onViewResult={setResultRun} />}{detailTab === 'process' && <ProcessView runs={selected.runs} />}{detailTab === 'settings' && <SettingsView automation={selected} onDelete={() => remove(selected)} />}
       </aside>}
     </div>
-    <Modal title="新建自动化" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={create} okText="创建并启用" cancelText="取消" destroyOnHidden><div className="automation-form"><label>名称<Input autoFocus placeholder="例如：五分钟后功能更新简报" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></label><SelectField label="触发条件" value={draft.trigger} values={['指定时间', '每天 09:00', '每周一 09:00', '创建项目时', '运行失败时', '项目 7 天无活动时']} onChange={(trigger) => setDraft((current) => ({ ...current, trigger }))} />{draft.trigger === '指定时间' && <label>执行时间<Input type="datetime-local" value={draft.scheduledAt} onChange={(event) => setDraft((current) => ({ ...current, scheduledAt: event.target.value }))} /></label>}<SelectField label="执行动作" value={draft.action} values={['生成功能更新简报', '生成并发送摘要', '创建高优先级待办', '发送跟进提醒', '创建协作清单']} onChange={(action) => setDraft((current) => ({ ...current, action }))} />{draft.action === '生成功能更新简报' && <label>Git 项目文件夹<Space.Compact className="automation-path-picker"><Input placeholder="选择一个 Git 项目文件夹" readOnly value={draft.projectPath} onClick={() => void pickProjectPath()} /><Button icon={<FolderOpenOutlined />} loading={pickingProjectPath} onClick={() => void pickProjectPath()}>选择文件夹</Button></Space.Compact></label>}<SelectField label="作用范围" value={draft.scope} values={['指定项目', '全部活跃项目', '全部项目', '全部自动化', '新建项目']} onChange={(scope) => setDraft((current) => ({ ...current, scope }))} /></div></Modal>
+    <Modal title="新建自动化" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={create} okText="创建并启用" cancelText="取消" destroyOnHidden><div className="automation-form"><label>名称<Input autoFocus placeholder="例如：让 Claude 整理今日进展" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></label><SelectField label="触发条件" value={draft.trigger} values={['指定时间', '每天 09:00', '每周一 09:00', '创建项目时', '运行失败时', '项目 7 天无活动时']} onChange={(trigger) => setDraft((current) => ({ ...current, trigger }))} />{draft.trigger === '指定时间' && <label>执行时间<Input type="datetime-local" value={draft.scheduledAt} onChange={(event) => setDraft((current) => ({ ...current, scheduledAt: event.target.value }))} /></label>}<SelectField label="执行动作" value={draft.action} values={['生成功能更新简报', '让 Claude Code 执行指令', '生成并发送摘要', '创建高优先级待办', '发送跟进提醒', '创建协作清单']} onChange={(action) => setDraft((current) => ({ ...current, action }))} />{draft.action === '让 Claude Code 执行指令' && <label>自定义指令<Input.TextArea autoSize={{ minRows: 4, maxRows: 9 }} maxLength={4000} showCount placeholder="例如：检查当前项目的测试失败，修复能安全确认的问题，并总结修改和验证结果。" value={draft.instruction} onChange={(event) => setDraft((current) => ({ ...current, instruction: event.target.value }))} /></label>}{(draft.action === '生成功能更新简报' || draft.action === '让 Claude Code 执行指令') && <label>项目文件夹<Space.Compact className="automation-path-picker"><Input placeholder="选择项目文件夹" readOnly value={draft.projectPath} onClick={() => void pickProjectPath()} /><Button icon={<FolderOpenOutlined />} loading={pickingProjectPath} onClick={() => void pickProjectPath()}>选择文件夹</Button></Space.Compact></label>}<SelectField label="作用范围" value={draft.scope} values={['指定项目', '全部活跃项目', '全部项目', '全部自动化', '新建项目']} onChange={(scope) => setDraft((current) => ({ ...current, scope }))} /></div></Modal>
     <ResultModal run={resultRun} onClose={() => setResultRun(undefined)} onCopy={(content) => { void navigator.clipboard.writeText(content).then(() => message.success('运行结果已复制')).catch(() => message.error('无法复制运行结果')) }} />
   </div>
 }
@@ -147,10 +149,30 @@ function WorkflowView({ automation }: { automation: Automation }): ReactElement 
 function WorkflowNode({ className, icon, label, title, description }: { className: string; icon: ReactElement; label: string; title: string; description: string }): ReactElement { return <div className={`workflow-node ${className}`}><span className="workflow-icon">{icon}</span><div><small>{label}</small><strong>{title}</strong><p>{description}</p></div></div> }
 function Connector(): ReactElement { return <div className="workflow-connector"><span /></div> }
 function RunsView({ runs, onViewResult }: { runs: AutomationRun[]; onViewResult: (run: AutomationRun) => void }): ReactElement { return runs.length ? <div className="automation-runs">{runs.map((run) => <div className="automation-run" key={run.id}><span className={`automation-run-icon ${run.status}`}>{run.status === 'failed' ? <CloseCircleFilled /> : <CheckCircleFilled />}</span><div className="automation-run-body"><div className="automation-run-heading"><strong>{run.summary}</strong>{(run.output || run.detail) && <Button type="link" size="small" icon={<FileSearchOutlined />} onClick={() => onViewResult(run)}>查看结果</Button>}</div><p>{run.detail || (run.status === 'success' ? '本次运行已完成。' : '本次运行未产生结果。')}</p><small>{run.startedAt} · 用时 {run.duration}</small></div></div>)}</div> : <Empty className="automation-empty" image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚无运行记录" /> }
+function ProcessView({ runs }: { runs: AutomationRun[] }): ReactElement {
+  return runs.length ? <div className="automation-process">{runs.map((run) => <section className="automation-process-run" key={run.id}><header><span className={`automation-run-icon ${run.status}`}>{run.status === 'failed' ? <CloseCircleFilled /> : <CheckCircleFilled />}</span><div><strong>{run.summary}</strong><small>{run.startedAt} · 用时 {run.duration}</small></div></header>{run.logs?.length ? <div className="automation-log-list">{run.logs.map((log, index) => <div className={`automation-log-entry is-${log.level}`} key={`${log.at}-${index}`}><time dateTime={log.at} title={formatLogDate(log.at)}>{formatLogTime(log.at)}</time><span className="automation-log-dot" /><p>{log.message}</p></div>)}</div> : <div className="automation-log-empty">该次运行产生于过程日志启用前，没有可复盘的步骤。</div>}</section>)}</div> : <Empty className="automation-empty" image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚无执行过程" />
+}
+function formatLogTime(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '--:--:--' : new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date)
+}
+function formatLogDate(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'medium', hour12: false }).format(date)
+}
 function ResultModal({ run, onClose, onCopy }: { run?: AutomationRun; onClose: () => void; onCopy: (content: string) => void }): ReactElement {
   const result = run?.output ?? (run?.detail ? { title: run.status === 'failed' ? '失败详情' : '运行结果', content: run.detail, format: 'text' as const } : undefined)
   return <Modal className="automation-result-modal" title={result?.title ?? '运行结果'} open={Boolean(run)} width={760} onCancel={onClose} destroyOnHidden footer={<><Button onClick={onClose}>关闭</Button>{result && <Button type="primary" icon={<CopyOutlined />} onClick={() => onCopy(result.content)}>复制结果</Button>}</>}>
     {run && <><div className="automation-result-meta"><Badge status={run.status === 'success' ? 'success' : 'error'} text={run.status === 'success' ? '运行成功' : '运行失败'} /><span>{run.startedAt}</span><span>用时 {run.duration}</span></div>{result ? <div className={`automation-result-content is-${result.format}`}>{result.format === 'markdown' ? <MarkdownMessage content={result.content} /> : <pre>{result.content}</pre>}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="本次运行没有可展示的结果" />}</>}
   </Modal>
 }
-function SettingsView({ automation, onDelete }: { automation: Automation; onDelete: () => void }): ReactElement { return <div className="automation-settings"><div><div><strong>执行范围</strong><span>限制自动化可以读取和写入的内容。</span></div><Tag>{automation.scope}</Tag></div><div><div><strong>失败通知</strong><span>运行失败时，在工作台创建高优先级待办。</span></div><Switch defaultChecked /></div><div><div><strong>危险操作</strong><span>此自动化不会删除项目、消息或文件。</span></div><Tag color="success">无</Tag></div><div className="automation-danger"><div><strong>删除自动化</strong><span>删除后无法恢复规则及其运行记录。</span></div><Button danger icon={<DeleteOutlined />} onClick={onDelete}>删除</Button></div></div> }
+function SettingsView({ automation, onDelete }: { automation: Automation; onDelete: () => void }): ReactElement {
+  const usesClaude = automation.actionType === 'claude_prompt'
+  return <div className="automation-settings">
+    <div><div><strong>执行范围</strong><span>{automation.projectPath || automation.scope}</span></div><Tag>{automation.scope}</Tag></div>
+    {usesClaude && <div className="automation-instruction-setting"><div><strong>自定义指令</strong><span>{automation.instruction}</span></div></div>}
+    <div><div><strong>失败通知</strong><span>运行失败时，在工作台创建高优先级待办。</span></div><Switch defaultChecked /></div>
+    <div><div><strong>工具权限</strong><span>{usesClaude ? 'Claude Code 可在所选项目中执行单次工具操作。' : '此自动化只读取项目状态。'}</span></div><Tag color={usesClaude ? 'warning' : 'success'}>{usesClaude ? '单次授权' : '只读'}</Tag></div>
+    <div className="automation-danger"><div><strong>删除自动化</strong><span>删除后无法恢复规则及其运行记录。</span></div><Button danger icon={<DeleteOutlined />} onClick={onDelete}>删除</Button></div>
+  </div>
+}

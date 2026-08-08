@@ -36,14 +36,14 @@ server.registerTool('koala_get_automation', {
 }, async ({ id }) => execute(() => store.get(id)))
 
 server.registerTool('koala_create_automation', {
-  title: '创建 Koala 自动化', description: '创建一条自动化规则。重要：创建 trigger=指定时间 的启用任务时，必须同时传 schedule、actionType=feature_brief 和绝对 projectPath；仅在 triggerDetail 中写“计划于某时”不会触发执行。默认启用；创建后可用 koala_test_automation 验证流程。',
-  inputSchema: { name: z.string().min(1).max(120), description: z.string().max(500).optional(), trigger: z.string().min(1).max(120), triggerDetail: z.string().max(120).optional(), action: z.string().min(1).max(120), actionDetail: z.string().max(120).optional(), scope: z.string().min(1).max(120), enabled: z.boolean().optional(), schedule: scheduleSchema.optional(), actionType: z.enum(['feature_brief']).optional(), projectPath: z.string().min(1).max(4096).optional() },
+  title: '创建 Koala 自动化', description: '创建一条自动化规则。重要：创建 trigger=指定时间 的启用任务时，必须同时传 schedule、actionType 和绝对 projectPath。actionType=feature_brief 生成固定简报；actionType=claude_prompt 会启动独立 Claude Code 会话执行 instruction。仅在 triggerDetail 中写“计划于某时”不会触发执行。',
+  inputSchema: { name: z.string().min(1).max(120), description: z.string().max(500).optional(), trigger: z.string().min(1).max(120), triggerDetail: z.string().max(120).optional(), action: z.string().min(1).max(120), actionDetail: z.string().max(120).optional(), scope: z.string().min(1).max(120), enabled: z.boolean().optional(), schedule: scheduleSchema.optional(), actionType: z.enum(['feature_brief', 'claude_prompt']).optional(), projectPath: z.string().min(1).max(4096).optional(), instruction: z.string().min(1).max(4000).optional().describe('actionType=claude_prompt 时必填，由 Claude Code 在 projectPath 中自主完成。') },
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
 }, async (input) => execute(() => store.create(input)))
 
 server.registerTool('koala_update_automation', {
   title: '更新 Koala 自动化', description: '更新一条自动化的名称、触发条件、动作、作用范围或计划。schedule 传 null 可取消计划。',
-  inputSchema: { id: z.string().min(1), name: z.string().min(1).max(120).optional(), description: z.string().max(500).optional(), trigger: z.string().min(1).max(120).optional(), triggerDetail: z.string().max(120).optional(), action: z.string().min(1).max(120).optional(), actionDetail: z.string().max(120).optional(), scope: z.string().min(1).max(120).optional(), schedule: scheduleSchema.nullable().optional(), actionType: z.enum(['feature_brief']).optional(), projectPath: z.string().min(1).max(4096).nullable().optional() },
+  inputSchema: { id: z.string().min(1), name: z.string().min(1).max(120).optional(), description: z.string().max(500).optional(), trigger: z.string().min(1).max(120).optional(), triggerDetail: z.string().max(120).optional(), action: z.string().min(1).max(120).optional(), actionDetail: z.string().max(120).optional(), scope: z.string().min(1).max(120).optional(), schedule: scheduleSchema.nullable().optional(), actionType: z.enum(['feature_brief', 'claude_prompt']).optional(), projectPath: z.string().min(1).max(4096).nullable().optional(), instruction: z.string().min(1).max(4000).nullable().optional() },
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
 }, async ({ id, ...input }) => execute(() => store.update(id, input)))
 

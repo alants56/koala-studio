@@ -1,8 +1,9 @@
-import type { Automation } from '../../shared/automations'
+import type { Automation, AutomationRunLog, AutomationRunLogLevel } from '../../shared/automations'
 import { AutomationStore } from '../../shared/automation-store'
+import { executeClaudeInstruction } from './claude-automation-executor'
 import { generateFeatureBrief, type AutomationExecutionResult } from './feature-brief'
 
-export type AutomationExecutor = (automation: Automation) => Promise<AutomationExecutionResult>
+export type AutomationExecutor = (automation: Automation, log: (message: string, level?: AutomationRunLogLevel) => void) => Promise<AutomationExecutionResult>
 
 export class AutomationScheduler {
   private interval?: NodeJS.Timeout
@@ -39,7 +40,11 @@ export class AutomationScheduler {
     const incomplete = active.filter((automation) => automation.trigger.trim() === '指定时间' && !automation.schedule)
     await Promise.all(incomplete.map((automation) => this.store.recordExecution(automation.id, {
       status: 'failed', startedAt: now, durationMs: 0, summary: '定时任务配置不完整',
-      detail: 'Koala 创建任务时没有保存真实执行时间或项目文件夹。请重新创建该任务。', needsAttention: true
+      detail: 'Koala 创建任务时没有保存真实执行时间或项目文件夹。请重新创建该任务。', needsAttention: true,
+      logs: [
+        { at: now.toISOString(), level: 'info', message: '调度器检查到任务已到达指定时间' },
+        { at: now.toISOString(), level: 'error', message: '缺少真实执行时间或项目文件夹，任务未执行' }
+      ]
     })))
 
     const due = active.filter((automation) => {
@@ -53,13 +58,21 @@ export class AutomationScheduler {
     if (this.running.has(automation.id)) return
     this.running.add(automation.id)
     const startedAt = new Date()
+    const logs: AutomationRunLog[] = []
+    const log = (message: string, level: AutomationRunLogLevel = 'info'): void => {
+      logs.push({ at: new Date().toISOString(), level, message })
+    }
+    log('任务到期，调度器开始执行')
+    log(`准备执行：${automation.action}`)
     try {
-      const result = await this.executor(automation)
-      await this.store.recordExecution(automation.id, { status: 'success', startedAt, durationMs: Date.now() - startedAt.getTime(), ...result })
+      const result = await this.executor(automation, log)
+      log('执行完成，运行结果已保存', 'success')
+      await this.store.recordExecution(automation.id, { status: 'success', startedAt, durationMs: Date.now() - startedAt.getTime(), logs, ...result })
     } catch (error) {
       const message = error instanceof Error ? error.message : '执行自动化时发生未知错误。'
+      log(`执行失败：${message}`, 'error')
       await this.store.recordExecution(automation.id, {
-        status: 'failed', startedAt, durationMs: Date.now() - startedAt.getTime(), summary: '自动化执行失败', detail: message, needsAttention: true
+        status: 'failed', startedAt, durationMs: Date.now() - startedAt.getTime(), summary: '自动化执行失败', detail: message, logs, needsAttention: true
       })
     } finally {
       this.running.delete(automation.id)
@@ -67,7 +80,8 @@ export class AutomationScheduler {
   }
 }
 
-export async function executeScheduledAutomation(automation: Automation): Promise<AutomationExecutionResult> {
-  if (automation.actionType === 'feature_brief') return generateFeatureBrief(automation.projectPath ?? '')
-  throw new Error(`自动化「${automation.name}」没有可执行的计划动作。请选择“生成功能更新简报”。`)
+export async function executeScheduledAutomation(automation: Automation, log: (message: string, level?: AutomationRunLogLevel) => void): Promise<AutomationExecutionResult> {
+  if (automation.actionType === 'feature_brief') return generateFeatureBrief(automation.projectPath ?? '', log)
+  if (automation.actionType === 'claude_prompt') return executeClaudeInstruction(automation, log)
+  throw new Error(`自动化「${automation.name}」没有可执行的计划动作。`)
 }

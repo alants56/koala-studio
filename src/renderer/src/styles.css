@@ -990,6 +990,24 @@ input {
 .automation-run p { margin: 3px 0; color: var(--muted); font-size: 11px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
 .automation-run small { color: var(--muted-soft); font-family: "Koala Mono", monospace; font-size: 10px; }
 
+.automation-process { padding: 7px 20px 20px; }
+.automation-process-run { padding: 15px 0 17px; border-bottom: 1px solid var(--hairline); }
+.automation-process-run:last-child { border-bottom: 0; }
+.automation-process-run > header { display: flex; align-items: flex-start; gap: 9px; }
+.automation-process-run > header > div { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.automation-process-run > header strong { color: var(--body-strong); font-size: 12px; font-weight: 650; line-height: 1.45; }
+.automation-process-run > header small { color: var(--muted-soft); font-family: "Koala Mono", monospace; font-size: 10px; }
+.automation-log-list { margin-top: 13px; }
+.automation-log-entry { position: relative; display: grid; grid-template-columns: 58px 10px minmax(0, 1fr); gap: 7px; min-height: 31px; align-items: start; }
+.automation-log-entry:not(:last-child)::after { position: absolute; top: 13px; bottom: -4px; left: 62px; width: 1px; background: var(--hairline); content: ""; }
+.automation-log-entry time { padding-top: 1px; color: var(--muted-soft); font-family: "Koala Mono", monospace; font-size: 9px; line-height: 1.5; }
+.automation-log-dot { z-index: 1; width: 7px; height: 7px; margin-top: 4px; border: 2px solid var(--surface-soft); border-radius: 50%; background: var(--muted-soft); box-shadow: 0 0 0 1px var(--muted-soft); }
+.automation-log-entry.is-success .automation-log-dot { background: var(--success); box-shadow: 0 0 0 1px var(--success); }
+.automation-log-entry.is-error .automation-log-dot { background: var(--error); box-shadow: 0 0 0 1px var(--error); }
+.automation-log-entry p { margin: 0; color: var(--body); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.automation-log-entry.is-error p { color: var(--error); }
+.automation-log-empty { margin: 12px 0 0 24px; padding: 10px 12px; border-left: 2px solid var(--hairline); color: var(--muted); font-size: 11px; line-height: 1.5; }
+
 .automation-result-meta { display: flex; align-items: center; gap: 14px; padding: 1px 0 14px; border-bottom: 1px solid var(--hairline); color: var(--muted); font-family: "Koala Mono", monospace; font-size: 11px; }
 .automation-result-meta .ant-badge-status-text { color: var(--body-strong); font-family: inherit; font-size: 11px; }
 .automation-result-content { max-height: min(62vh, 660px); min-height: 240px; margin-top: 16px; overflow: auto; border: 1px solid var(--hairline); border-radius: 7px; background: var(--canvas); }
@@ -1007,6 +1025,9 @@ input {
 .automation-settings > div > div { display: flex; flex-direction: column; gap: 3px; }
 .automation-settings strong { color: var(--body-strong); font-size: 13px; font-weight: 660; }
 .automation-settings span { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.automation-settings .automation-instruction-setting { align-items: flex-start; }
+.automation-instruction-setting > div { min-width: 0; flex: 1; }
+.automation-instruction-setting span { white-space: pre-wrap; overflow-wrap: anywhere; }
 .automation-settings .ant-tag { margin: 0; white-space: nowrap; }
 .automation-settings .automation-danger { border-bottom: 0; }
 .automation-danger .ant-btn { font-size: 12px; }
