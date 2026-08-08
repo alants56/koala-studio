@@ -65,12 +65,19 @@ html,
 body,
 #root {
   min-width: 1080px;
-  min-height: 100vh;
+  height: 100%;
   margin: 0;
+  overflow: hidden;
 }
 
 body {
   background: var(--canvas);
+}
+
+#root > .ant-app {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 button,
@@ -85,7 +92,9 @@ input {
 }
 
 .koala-shell {
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   background: var(--canvas);
 }
 
@@ -100,13 +109,20 @@ input {
 }
 
 .koala-sider {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   background: var(--surface-soft) !important;
   border-inline-end: 1px solid var(--hairline);
 }
 
 .koala-sider .ant-layout-sider-children {
   display: flex;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
   flex-direction: column;
+  overflow: hidden;
   padding-top: 24px;
 }
 
@@ -115,6 +131,7 @@ input {
   position: relative;
   align-items: center;
   height: 56px;
+  flex: 0 0 auto;
   padding: 0 18px;
   color: var(--ink);
   -webkit-app-region: drag;
@@ -201,7 +218,8 @@ input {
 }
 
 .koala-nav {
-  padding: 20px 10px 8px;
+  flex: 0 0 auto;
+  padding: 0px 10px 0px;
   background: var(--surface-soft) !important;
 }
 
@@ -222,9 +240,168 @@ input {
   font-size: 17px;
 }
 
+.koala-sider:not(.ant-layout-sider-collapsed) .koala-nav .ant-menu-item {
+  padding-inline: 9px !important;
+}
+
+.koala-project-navigation {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 4px 10px 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--hairline) transparent;
+  scrollbar-width: thin;
+}
+
+.koala-project-row,
+.koala-session-row,
+.koala-tree-more,
+.koala-project-empty {
+  border: 0;
+  background: transparent;
+  color: var(--body);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.koala-project-row:hover,
+.koala-session-row:hover,
+.koala-project-empty:hover,
+.koala-tree-more:hover {
+  background: rgb(var(--primary-rgb) / 8%);
+  color: var(--primary-active);
+}
+
+.koala-project-row:focus-visible,
+.koala-session-row:focus-visible,
+.koala-project-empty:focus-visible,
+.koala-tree-more:focus-visible {
+  outline: 2px solid rgb(var(--primary-rgb) / 55%);
+  outline-offset: -2px;
+}
+
+.koala-project-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.koala-project-branch {
+  min-width: 0;
+}
+
+.koala-project-row,
+.koala-session-row,
+.koala-tree-more {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  border-radius: 7px;
+}
+
+.koala-project-row {
+  height: 32px;
+  padding: 0 9px;
+  font-size: 13px;
+  font-weight: 620;
+}
+
+.koala-project-row.is-active,
+.koala-session-row.is-active {
+  background: rgb(var(--primary-rgb) / 11%);
+  color: var(--primary-active);
+}
+
+.koala-project-row .anticon {
+  flex: 0 0 auto;
+  font-size: 15px;
+}
+
+.koala-project-row span:last-child,
+.koala-session-row span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.koala-session-tree {
+  position: relative;
+  margin-left: 16px;
+  padding-left: 10px;
+}
+
+.koala-session-tree::before {
+  position: absolute;
+  top: 0;
+  bottom: 4px;
+  left: 0;
+  width: 1px;
+  background: var(--hairline);
+  content: '';
+}
+
+.koala-session-row {
+  height: 31px;
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.koala-session-row .anticon {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
+.koala-session-status {
+  display: block;
+  padding: 5px 8px 7px;
+  overflow: hidden;
+  color: var(--muted-soft);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.koala-tree-more {
+  height: 30px;
+  padding: 0 9px;
+  color: var(--muted-soft);
+  font-size: 11px;
+}
+
+.koala-tree-more .anticon {
+  font-size: 9px;
+}
+
+.koala-projects-more {
+  margin-top: 3px;
+}
+
+.koala-project-empty {
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 7px;
+  color: var(--muted-soft);
+  font-size: 12px;
+}
+
+.koala-project-tree-loading {
+  padding: 8px 10px;
+}
+
+.koala-project-tree-loading .ant-skeleton-paragraph {
+  margin: 0 !important;
+}
+
 .koala-sider-foot {
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
   margin-top: auto;
   padding: 16px 18px 18px;
   color: var(--muted-soft);
@@ -232,13 +409,17 @@ input {
 }
 
 .koala-content-wrap {
+  height: 100%;
   min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden;
   padding: 18px;
 }
 
 .koala-content {
-  height: calc(100vh - 36px);
-  min-height: 620px;
+  height: 100%;
+  min-height: 0;
   overflow: auto;
   border: 1px solid var(--hairline);
   border-radius: 12px;
@@ -1725,6 +1906,7 @@ input {
   .koala-sider-foot .chat-composer-attribution,
   .koala-nav .ant-menu-title-content { display: none; }
   .koala-nav .ant-menu-item { padding-inline: 20px !important; }
+  .koala-project-navigation { display: none; }
   .koala-sider-foot { align-items: center; justify-content: center; padding-inline: 0; }
   .workbench-page { padding-inline: 18px; }
   .calendar-panel { grid-template-columns: minmax(0, 1fr); gap: 19px; }
@@ -2109,6 +2291,18 @@ input {
   .workbench-aside-label,
   .recent-project-detail {
     color: var(--on-dark-soft) !important;
+  }
+
+  .koala-project-row,
+  .koala-session-row,
+  .koala-tree-more,
+  .koala-project-empty,
+  .koala-session-status {
+    color: var(--on-dark-soft);
+  }
+
+  .koala-session-tree::before {
+    background: var(--surface-dark-elevated);
   }
 
   .koala-content {

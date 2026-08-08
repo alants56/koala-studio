@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { AcpSessionInfo, AgentState, ChatMessage } from '@shared/acp'
 import { acp, assertAcpApi } from '@/services/acp'
 import { INITIAL_MESSAGES } from '@/utils/constants'
+import { dispatchSessionActivity } from '@/utils/session-events'
 
 /** 连接加载动画的最短展示时长：连接过快时也保证动画可感知，避免一闪而过。 */
 const MIN_CONNECTING_MS = 800
@@ -91,8 +92,19 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
   }, [cwd, openInitialSession])
 
   const send = useCallback(async (text: string) => {
-    await acp.prompt({ text, cwd })
-  }, [cwd])
+    if (!sessionId) throw new Error('当前会话尚未就绪。')
+    const activity = {
+      cwd,
+      sessionId,
+      title: text.replace(/\s+/g, ' ').slice(0, 80)
+    }
+    dispatchSessionActivity({ ...activity, phase: 'started' })
+    try {
+      await acp.prompt({ text, cwd })
+    } finally {
+      dispatchSessionActivity({ ...activity, phase: 'completed' })
+    }
+  }, [cwd, sessionId])
 
   const stop = useCallback(async () => {
     await acp.stop()

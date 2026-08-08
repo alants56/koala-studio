@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { useLayoutEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { Button, Layout, Menu, Tooltip } from 'antd'
 import {
   CodeOutlined,
@@ -11,22 +11,23 @@ import {
 } from '@ant-design/icons'
 import { useLocation, useNavigate, useOutlet } from 'react-router-dom'
 import type { MenuProps } from 'antd'
+import { ProjectNavigation } from './ProjectNavigation'
 
 const { Sider, Content } = Layout
 
 const MENU_ITEMS: MenuProps['items'] = [
   { key: '/workbench', icon: <DashboardOutlined />, label: '工作台' },
   { key: '/claude', icon: <AppstoreOutlined />, label: '插件' },
-  { key: '/projects', icon: <FolderOpenOutlined />, label: '项目' },
-  { key: '/automations', icon: <ThunderboltOutlined />, label: '自动化' }
+  { key: '/automations', icon: <ThunderboltOutlined />, label: '自动化执行' },
+  { key: '/projects', icon: <FolderOpenOutlined />, label: '项目' }
 ]
 
 function getSelectedKey(pathname: string): string {
-  if (pathname.startsWith('/projects')) return '/projects'
+  if (pathname === '/projects') return '/projects'
   if (pathname.startsWith('/workbench')) return '/workbench'
   if (pathname.startsWith('/claude')) return '/claude'
   if (pathname.startsWith('/automations')) return '/automations'
-  return '/projects'
+  return ''
 }
 
 /** 应用整体框架：左侧导航 + 顶栏 + 内容区（Ant Design Pro 风格）。 */
@@ -35,7 +36,6 @@ export function AppLayout(): ReactElement {
   const location = useLocation()
   const navigate = useNavigate()
   const outlet = useOutlet()
-  const lastProjectDestination = useRef('/projects')
   const [projectDetailOutlet, setProjectDetailOutlet] = useState<ReactNode>(null)
 
   const selectedKey = useMemo(() => getSelectedKey(location.pathname), [location.pathname])
@@ -48,21 +48,7 @@ export function AppLayout(): ReactElement {
 
   const retainedProjectDetail = projectDetailActive ? outlet : projectDetailOutlet
 
-  useEffect(() => {
-    if (location.pathname === '/projects') {
-      lastProjectDestination.current = '/projects'
-    } else if (projectDetailActive) {
-      lastProjectDestination.current = `${location.pathname}${location.search}`
-    }
-  }, [location.pathname, location.search, projectDetailActive])
-
   const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
-    if (key === '/projects') {
-      // 当前已在项目列表或详情时不改变页面；从其他一级页面返回上次项目状态。
-      if (selectedKey === '/projects') return
-      void navigate(lastProjectDestination.current)
-      return
-    }
     void navigate(key)
   }
 
@@ -99,10 +85,11 @@ export function AppLayout(): ReactElement {
         <Menu
           className="koala-nav"
           mode="inline"
-          selectedKeys={[selectedKey]}
+          selectedKeys={selectedKey ? [selectedKey] : []}
           items={MENU_ITEMS}
           onClick={handleMenuClick}
         />
+        <ProjectNavigation collapsed={collapsed} />
         <div className="koala-sider-foot">
           {!collapsed && (
             <span className="chat-composer-attribution flex items-center gap-1.5">

@@ -78,7 +78,15 @@ app.whenReady().then(() => {
   ipcMain.handle('acp:prompt', (_, request) => acpBridge.prompt(request))
   ipcMain.handle('acp:stop', () => acpBridge.stop())
   ipcMain.handle('acp:set-mode', (_, modeId: string) => acpBridge.setMode(modeId))
-  ipcMain.handle('acp:list-sessions', (_event, cwd: string) => acpBridge.listSessions(cwd))
+  ipcMain.handle('acp:list-sessions', async (_event, cwd: string) => {
+    // 会话索引查询使用短连接，避免侧栏读取其他项目时切断当前聊天。
+    const listingBridge = new AcpBridge()
+    try {
+      return await listingBridge.listSessions(cwd)
+    } finally {
+      listingBridge.dispose()
+    }
+  })
   ipcMain.handle('acp:load-session', (_event, sessionId: string, cwd: string) => acpBridge.loadSession(sessionId, cwd))
   ipcMain.handle('acp:create-session', (_event, cwd: string) => acpBridge.createSession(cwd))
 

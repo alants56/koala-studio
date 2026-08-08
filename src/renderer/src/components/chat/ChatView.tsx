@@ -1,8 +1,7 @@
 import { useState, type ReactElement } from 'react'
 import { Alert, App, Button, Drawer, Empty, Skeleton, Space, Tooltip, Typography } from 'antd'
 import { Conversations } from '@ant-design/x'
-import { ArrowLeftOutlined, HistoryOutlined, MessageOutlined, PlusOutlined } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import { HistoryOutlined, MessageOutlined, PlusOutlined } from '@ant-design/icons'
 import type { AcpSessionInfo, Project } from '@/models'
 import { useAgent } from '@/state/AgentContext'
 import { STATUS_DETAILS, STATUS_DOT_COLORS } from '@/utils/constants'
@@ -14,7 +13,6 @@ import { ChatThread } from './ChatThread'
 /** 单个项目的协作会话视图：小圆点状态 + 历史对话抽屉（来自 ACP）+ 对话线程 + 输入区。 */
 export function ChatView({ project }: { project: Project }): ReactElement {
   const { state, sessionId, connect, listSessions, loadSession, createNewSession } = useAgent()
-  const navigate = useNavigate()
   const { message } = App.useApp()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [sessions, setSessions] = useState<AcpSessionInfo[]>([])
@@ -63,34 +61,29 @@ export function ChatView({ project }: { project: Project }): ReactElement {
   return (
     <div className="chat-shell">
       <div className="chat-header">
-        <Space size="middle" align="start">
-          <Tooltip title="返回项目列表">
-            <Button type="text" size="small" icon={<ArrowLeftOutlined />} onClick={() => navigate('/projects')} aria-label="返回项目列表" />
-          </Tooltip>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Tooltip title={canRetry ? `点击重新连接（${status.label}）` : status.label}>
-                <span
-                  className="chat-status"
-                  onClick={canRetry ? () => void connect() : undefined}
-                  role={canRetry ? 'button' : undefined}
-                  tabIndex={canRetry ? 0 : undefined}
-                  onKeyDown={(event) => {
-                    if (canRetry && (event.key === 'Enter' || event.key === ' ')) {
-                      event.preventDefault()
-                      void connect()
-                    }
-                  }}
-                >
-                  <span className="chat-status-dot" style={{ background: STATUS_DOT_COLORS[state.status] }} />
-                  {status.label}
-                </span>
-              </Tooltip>
-              <Typography.Title level={4} className="chat-project-title" style={{ margin: 0 }}>{project.name}</Typography.Title>
-            </div>
-            {project.path && <Typography.Text className="chat-project-path">{project.path}</Typography.Text>}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Tooltip title={canRetry ? `点击重新连接（${status.label}）` : status.label}>
+              <span
+                className="chat-status"
+                onClick={canRetry ? () => void connect() : undefined}
+                role={canRetry ? 'button' : undefined}
+                tabIndex={canRetry ? 0 : undefined}
+                onKeyDown={(event) => {
+                  if (canRetry && (event.key === 'Enter' || event.key === ' ')) {
+                    event.preventDefault()
+                    void connect()
+                  }
+                }}
+              >
+                <span className="chat-status-dot" style={{ background: STATUS_DOT_COLORS[state.status] }} />
+                {status.label}
+              </span>
+            </Tooltip>
+            <Typography.Title level={4} className="chat-project-title" style={{ margin: 0 }}>{project.name}</Typography.Title>
           </div>
-        </Space>
+          {project.path && <Typography.Text className="chat-project-path">{project.path}</Typography.Text>}
+        </div>
         <Space size={2}>
           <Tooltip title="新建对话">
             <Button type="text" size="small" icon={<PlusOutlined />} onClick={() => void handleNew()} aria-label="新建对话" />
