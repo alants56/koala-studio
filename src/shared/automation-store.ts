@@ -18,6 +18,10 @@ function inferTriggerDetail(trigger: string): string {
   return trigger.includes('每天') || trigger.includes('每周') ? '按计划触发' : '事件触发'
 }
 
+function requiresProjectPath(actionType: Automation['actionType']): boolean {
+  return actionType === 'feature_brief' || actionType === 'claude_prompt'
+}
+
 export class AutomationStore {
   private cache?: Automation[]
   private cacheMtimeMs?: number
@@ -75,7 +79,7 @@ export class AutomationStore {
       throw new Error('启用指定时间任务必须提供 schedule、actionType 和 projectPath，不能只填写展示时间。')
     }
     if (schedule && !input.actionType) throw new Error('定时任务必须指定可执行动作。')
-    if (schedule && !input.projectPath?.trim()) throw new Error('定时任务需要指定项目文件夹。')
+    if (schedule && requiresProjectPath(input.actionType) && !input.projectPath?.trim()) throw new Error('定时任务需要指定项目文件夹。')
     if (schedule && input.actionType === 'claude_prompt' && !input.instruction?.trim()) throw new Error('Claude Code 定时任务需要填写自定义指令。')
     const automation: Automation = {
       id: randomUUID(), name, description: input.description?.trim() || `${input.trigger}时，${input.action}。`,
@@ -106,7 +110,7 @@ export class AutomationStore {
       throw new Error('启用指定时间任务必须提供完整的执行计划。')
     }
     if (updated.schedule && !updated.actionType) throw new Error('定时任务必须指定可执行动作。')
-    if (updated.schedule && !updated.projectPath?.trim()) throw new Error('定时任务需要指定项目文件夹。')
+    if (updated.schedule && requiresProjectPath(updated.actionType) && !updated.projectPath?.trim()) throw new Error('定时任务需要指定项目文件夹。')
     if (updated.schedule && updated.actionType === 'claude_prompt' && !updated.instruction?.trim()) throw new Error('Claude Code 定时任务需要填写自定义指令。')
     items[index] = updated
     await this.writeAll(items)
@@ -118,7 +122,7 @@ export class AutomationStore {
     if (enabled && automation.trigger.trim() === '指定时间' && !automation.schedule) {
       throw new Error('该任务缺少真实执行计划，请重新创建并选择执行时间和项目文件夹。')
     }
-    if (enabled && automation.schedule && !automation.projectPath?.trim()) throw new Error('该任务缺少项目文件夹。')
+    if (enabled && automation.schedule && requiresProjectPath(automation.actionType) && !automation.projectPath?.trim()) throw new Error('该任务缺少项目文件夹。')
     if (enabled && automation.schedule && automation.actionType === 'claude_prompt' && !automation.instruction?.trim()) {
       throw new Error('该任务缺少 Claude Code 自定义指令。')
     }

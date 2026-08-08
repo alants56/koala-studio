@@ -77,7 +77,7 @@ export function AppLayout(): ReactElement {
         onCollapse={setCollapsed}
         trigger={null}
       >
-        <div className="koala-brand">
+        <div className={`koala-brand${collapsed ? ' koala-brand--collapsed' : ''}`}>
           <div className="koala-brand-mark">K</div>
           {!collapsed && (
             <div className="koala-brand-copy">
@@ -85,7 +85,16 @@ export function AppLayout(): ReactElement {
               <span className="koala-brand-caption">Agent workspace</span>
             </div>
           )}
-
+          <Tooltip title={collapsed ? '展开侧栏' : '收起侧栏'}>
+            <Button
+              className="koala-brand-toggle"
+              type="text"
+              size="small"
+              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={() => setCollapsed((value) => !value)}
+              aria-label={collapsed ? '展开侧栏' : '收起侧栏'}
+            />
+          </Tooltip>
         </div>
         <Menu
           className="koala-nav"
@@ -95,21 +104,12 @@ export function AppLayout(): ReactElement {
           onClick={handleMenuClick}
         />
         <div className="koala-sider-foot">
-          {!collapsed &&
-              <span className="chat-composer-attribution flex items-center gap-1.5">
+          {!collapsed && (
+            <span className="chat-composer-attribution flex items-center gap-1.5">
               <CodeOutlined />
               Claude-Agent-ACP驱动
             </span>
-          }
-          <Tooltip title={collapsed ? '展开侧栏' : '收起侧栏'}>
-            <Button
-              type="text"
-              size="small"
-              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => setCollapsed((value) => !value)}
-              aria-label={collapsed ? '展开侧栏' : '收起侧栏'}
-            />
-          </Tooltip>
+          )}
         </div>
       </Sider>
       <Layout className="koala-content-wrap">

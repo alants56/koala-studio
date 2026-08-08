@@ -10,7 +10,7 @@ export interface AutomationExecutionResult {
   output: {
     title: string
     content: string
-    format: 'markdown'
+    format: 'text' | 'markdown'
   }
 }
 

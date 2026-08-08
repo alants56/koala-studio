@@ -9,7 +9,7 @@ type DetailTab = 'workflow' | 'runs' | 'process' | 'settings'
 
 interface DraftAutomation { name: string; trigger: string; action: string; scope: string; scheduledAt: string; projectPath: string; instruction: string }
 
-const EMPTY_DRAFT: DraftAutomation = { name: '', trigger: '指定时间', action: '生成功能更新简报', scope: '指定项目', scheduledAt: '', projectPath: '', instruction: '' }
+const EMPTY_DRAFT: DraftAutomation = { name: '', trigger: '指定时间', action: '让 Claude Code 执行指令', scope: '指定项目', scheduledAt: '', projectPath: '', instruction: '' }
 const STATE_META: Record<AutomationState, { label: string; color: 'success' | 'default' | 'error' }> = {
   active: { label: '运行中', color: 'success' }, paused: { label: '已暂停', color: 'default' }, attention: { label: '需处理', color: 'error' }
 }
@@ -80,19 +80,19 @@ export function AutomationsPage(): ReactElement {
   }
   const create = (): void => {
     if (!draft.name.trim()) { void message.error('请填写自动化名称'); return }
-    const actionType = draft.action === '生成功能更新简报' ? 'feature_brief' as const : draft.action === '让 Claude Code 执行指令' ? 'claude_prompt' as const : undefined
+    const actionType = draft.action === '让 Claude Code 执行指令' ? 'claude_prompt' as const : draft.action === '创建高优先级待办' ? 'create_high_priority_todo' as const : undefined
     const scheduledAction = draft.trigger === '指定时间' && actionType
-    if (draft.trigger === '指定时间' && !actionType) { void message.error('当前指定时间仅支持功能简报或 Claude Code 自定义指令'); return }
+    if (draft.trigger === '指定时间' && !actionType) { void message.error('请选择有效的执行动作'); return }
     if (actionType && !scheduledAction) { void message.error('该执行动作需要指定执行时间'); return }
     if (scheduledAction && !draft.scheduledAt) { void message.error('请选择执行时间'); return }
-    if (scheduledAction && !draft.projectPath.trim()) { void message.error('请选择项目文件夹'); return }
+    if (actionType === 'claude_prompt' && !draft.projectPath.trim()) { void message.error('请选择项目文件夹'); return }
     if (actionType === 'claude_prompt' && !draft.instruction.trim()) { void message.error('请填写 Claude Code 自定义指令'); return }
     const scheduledAt = scheduledAction ? new Date(draft.scheduledAt) : undefined
     if (scheduledAt && (Number.isNaN(scheduledAt.getTime()) || scheduledAt <= new Date())) { void message.error('执行时间需要晚于当前时间'); return }
     const input: CreateAutomationInput = {
       name: draft.name.trim(), trigger: draft.trigger, triggerDetail: scheduledAt ? `计划于 ${formatSchedule(scheduledAt)}` : undefined,
-      action: draft.action, actionDetail: actionType === 'claude_prompt' ? 'Claude Code 独立会话' : scheduledAt ? '自动化运行记录' : undefined, scope: draft.scope,
-      ...(scheduledAt && actionType ? { schedule: { type: 'once' as const, nextRunAt: scheduledAt.toISOString() }, actionType, projectPath: draft.projectPath.trim(), ...(actionType === 'claude_prompt' ? { instruction: draft.instruction.trim() } : {}) } : {})
+      action: draft.action, actionDetail: actionType === 'claude_prompt' ? 'Claude Code 独立会话' : actionType === 'create_high_priority_todo' ? '工作台' : undefined, scope: draft.scope,
+      ...(scheduledAt && actionType ? { schedule: { type: 'once' as const, nextRunAt: scheduledAt.toISOString() }, actionType, ...(actionType === 'claude_prompt' ? { projectPath: draft.projectPath.trim(), instruction: draft.instruction.trim() } : {}) } : {})
     }
     void window.automations.create(input).then((automation) => { setAutomations((items) => [automation, ...items]); setSelectedId(automation.id); setCreateOpen(false); setDraft(EMPTY_DRAFT); void message.success('自动化已创建并启用') }).catch((error: unknown) => void message.error(errorText(error, '无法创建自动化。')))
   }
@@ -133,7 +133,7 @@ export function AutomationsPage(): ReactElement {
         {detailTab === 'workflow' && <WorkflowView automation={selected} />}{detailTab === 'runs' && <RunsView runs={selected.runs} onViewResult={setResultRun} />}{detailTab === 'process' && <ProcessView runs={selected.runs} />}{detailTab === 'settings' && <SettingsView automation={selected} onDelete={() => remove(selected)} />}
       </aside>}
     </div>
-    <Modal title="新建自动化" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={create} okText="创建并启用" cancelText="取消" destroyOnHidden><div className="automation-form"><label>名称<Input autoFocus placeholder="例如：让 Claude 整理今日进展" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></label><SelectField label="触发条件" value={draft.trigger} values={['指定时间', '每天 09:00', '每周一 09:00', '创建项目时', '运行失败时', '项目 7 天无活动时']} onChange={(trigger) => setDraft((current) => ({ ...current, trigger }))} />{draft.trigger === '指定时间' && <label>执行时间<Input type="datetime-local" value={draft.scheduledAt} onChange={(event) => setDraft((current) => ({ ...current, scheduledAt: event.target.value }))} /></label>}<SelectField label="执行动作" value={draft.action} values={['生成功能更新简报', '让 Claude Code 执行指令', '生成并发送摘要', '创建高优先级待办', '发送跟进提醒', '创建协作清单']} onChange={(action) => setDraft((current) => ({ ...current, action }))} />{draft.action === '让 Claude Code 执行指令' && <label>自定义指令<Input.TextArea autoSize={{ minRows: 4, maxRows: 9 }} maxLength={4000} showCount placeholder="例如：检查当前项目的测试失败，修复能安全确认的问题，并总结修改和验证结果。" value={draft.instruction} onChange={(event) => setDraft((current) => ({ ...current, instruction: event.target.value }))} /></label>}{(draft.action === '生成功能更新简报' || draft.action === '让 Claude Code 执行指令') && <label>项目文件夹<Space.Compact className="automation-path-picker"><Input placeholder="选择项目文件夹" readOnly value={draft.projectPath} onClick={() => void pickProjectPath()} /><Button icon={<FolderOpenOutlined />} loading={pickingProjectPath} onClick={() => void pickProjectPath()}>选择文件夹</Button></Space.Compact></label>}<SelectField label="作用范围" value={draft.scope} values={['指定项目', '全部活跃项目', '全部项目', '全部自动化', '新建项目']} onChange={(scope) => setDraft((current) => ({ ...current, scope }))} /></div></Modal>
+    <Modal title="新建自动化" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={create} okText="创建并启用" cancelText="取消" destroyOnHidden><div className="automation-form"><label>名称<Input autoFocus placeholder="例如：让 Claude 整理今日进展" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></label><SelectField label="触发条件" value={draft.trigger} values={['指定时间', '每天 09:00', '每周一 09:00', '创建项目时', '运行失败时', '项目 7 天无活动时']} onChange={(trigger) => setDraft((current) => ({ ...current, trigger }))} />{draft.trigger === '指定时间' && <label>执行时间<Input type="datetime-local" value={draft.scheduledAt} onChange={(event) => setDraft((current) => ({ ...current, scheduledAt: event.target.value }))} /></label>}<SelectField label="执行动作" value={draft.action} values={['让 Claude Code 执行指令', '创建高优先级待办']} onChange={(action) => setDraft((current) => ({ ...current, action }))} />{draft.action === '让 Claude Code 执行指令' && <label>自定义指令<Input.TextArea autoSize={{ minRows: 4, maxRows: 9 }} maxLength={4000} showCount placeholder="例如：检查当前项目的测试失败，修复能安全确认的问题，并总结修改和验证结果。" value={draft.instruction} onChange={(event) => setDraft((current) => ({ ...current, instruction: event.target.value }))} /></label>}{draft.action === '让 Claude Code 执行指令' && <label>项目文件夹<Space.Compact className="automation-path-picker"><Input placeholder="选择项目文件夹" readOnly value={draft.projectPath} onClick={() => void pickProjectPath()} /><Button icon={<FolderOpenOutlined />} loading={pickingProjectPath} onClick={() => void pickProjectPath()}>选择文件夹</Button></Space.Compact></label>}<SelectField label="作用范围" value={draft.scope} values={['指定项目', '全部活跃项目', '全部项目', '全部自动化', '新建项目']} onChange={(scope) => setDraft((current) => ({ ...current, scope }))} /></div></Modal>
     <ResultModal run={resultRun} onClose={() => setResultRun(undefined)} onCopy={(content) => { void navigator.clipboard.writeText(content).then(() => message.success('运行结果已复制')).catch(() => message.error('无法复制运行结果')) }} />
   </div>
 }

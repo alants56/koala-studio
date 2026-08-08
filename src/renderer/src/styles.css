@@ -112,6 +112,7 @@ input {
 
 .koala-brand {
   display: flex;
+  position: relative;
   align-items: center;
   height: 56px;
   padding: 0 18px;
@@ -140,6 +141,52 @@ input {
   margin-left: 10px;
   flex-direction: column;
   line-height: 1.15;
+}
+
+.koala-brand-toggle {
+  margin-left: auto;
+  color: var(--muted) !important;
+  -webkit-app-region: no-drag;
+}
+
+.koala-brand-toggle:hover {
+  color: var(--primary-active) !important;
+  background: rgb(var(--primary-rgb) / 10%) !important;
+}
+
+.koala-brand--collapsed {
+  justify-content: center;
+}
+
+.koala-brand--collapsed .koala-brand-mark,
+.koala-brand--collapsed .koala-brand-toggle {
+  position: absolute;
+  inset: 12px auto auto 24px;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+}
+
+.koala-brand--collapsed .koala-brand-mark {
+  transition: opacity 160ms ease;
+}
+
+.koala-brand--collapsed .koala-brand-toggle {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 160ms ease, color 160ms ease, background-color 160ms ease;
+}
+
+.koala-brand--collapsed:hover .koala-brand-mark,
+.koala-brand--collapsed:focus-within .koala-brand-mark {
+  opacity: 0;
+}
+
+.koala-brand--collapsed:hover .koala-brand-toggle,
+.koala-brand--collapsed:focus-within .koala-brand-toggle {
+  opacity: 1;
 }
 
 .koala-brand-name {
@@ -177,10 +224,7 @@ input {
 
 .koala-sider-foot {
   display: flex;
-  min-height: 40px;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
   margin-top: auto;
   padding: 16px 18px 18px;
   color: var(--muted-soft);

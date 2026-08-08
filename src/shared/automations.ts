@@ -2,7 +2,7 @@ export type AutomationState = 'active' | 'paused' | 'attention'
 export type AutomationRunStatus = 'success' | 'failed'
 export type AutomationRunLogLevel = 'info' | 'success' | 'error'
 export type AutomationScheduleType = 'once' | 'daily'
-export type AutomationActionType = 'feature_brief' | 'claude_prompt'
+export type AutomationActionType = 'feature_brief' | 'claude_prompt' | 'create_high_priority_todo'
 
 export interface AutomationSchedule {
   type: AutomationScheduleType
