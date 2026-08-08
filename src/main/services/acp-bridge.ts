@@ -17,6 +17,11 @@ import type {
 import { automationsFilePath } from './automation-store'
 import { todosFilePath } from './todo-store'
 
+interface AcpBridgeOptions {
+  getPreferredModeId?: () => Promise<string | undefined>
+  setPreferredModeId?: (modeId: string) => Promise<void>
+}
+
 export class AcpBridge extends EventEmitter {
   private agentProcess?: ChildProcessWithoutNullStreams
   private connection?: ClientConnection
@@ -26,6 +31,10 @@ export class AcpBridge extends EventEmitter {
   private connectPromise?: Promise<AgentState>
   /** 临时收集 session/load 回放通知的监听器。 */
   private sessionUpdateListener?: (notification: SessionNotification) => void
+
+  constructor(private readonly options: AcpBridgeOptions = {}) {
+    super()
+  }
 
   private automationMcpServers(): acp.McpServer[] {
     return [{
@@ -195,16 +204,17 @@ export class AcpBridge extends EventEmitter {
       this.sessionUpdateListener = undefined
     }
 
-    this.activeSessionId = sessionId
     const modes = this.toAgentModes(response.modes)
+    this.activeSessionId = sessionId
+    const currentModeId = await this.restorePreferredMode(modes, response.modes?.currentModeId)
     this.setState({
       ...this.state,
       sessionId,
       modes,
-      currentModeId: response.modes?.currentModeId,
+      currentModeId,
       commands: this.toAgentCommands(collectedCommands)
     })
-    return { sessionId, messages: collected, modes, currentModeId: response.modes?.currentModeId }
+    return { sessionId, messages: collected, modes, currentModeId }
   }
 
   private toAgentCommands(commands: acp.AvailableCommand[] | undefined): AgentCommand[] | undefined {
@@ -222,8 +232,9 @@ export class AcpBridge extends EventEmitter {
     this.activeSessionId = response.sessionId
     this.sessionCwd = cwd
     const modes = this.toAgentModes(response.modes)
-    this.setState({ ...this.state, sessionId: response.sessionId, modes, currentModeId: response.modes?.currentModeId })
-    return { sessionId: response.sessionId, modes, currentModeId: response.modes?.currentModeId }
+    const currentModeId = await this.restorePreferredMode(modes, response.modes?.currentModeId)
+    this.setState({ ...this.state, sessionId: response.sessionId, modes, currentModeId })
+    return { sessionId: response.sessionId, modes, currentModeId }
   }
 
   async prompt(request: PromptRequest): Promise<void> {
@@ -267,6 +278,29 @@ export class AcpBridge extends EventEmitter {
       modeId
     })
     this.setState({ ...this.state, currentModeId: modeId })
+    await this.options.setPreferredModeId?.(modeId)
+  }
+
+  private async restorePreferredMode(
+    modes: AgentMode[] | undefined,
+    currentModeId: string | undefined
+  ): Promise<string | undefined> {
+    const preferredModeId = await this.options.getPreferredModeId?.()
+    if (
+      !preferredModeId ||
+      preferredModeId === currentModeId ||
+      !modes?.some((mode) => mode.id === preferredModeId) ||
+      !this.connection ||
+      !this.activeSessionId
+    ) {
+      return currentModeId
+    }
+
+    await this.connection.agent.request(acp.methods.agent.session.setMode, {
+      sessionId: this.activeSessionId,
+      modeId: preferredModeId
+    })
+    return preferredModeId
   }
 
   dispose(): void {

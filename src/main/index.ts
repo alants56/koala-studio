@@ -18,9 +18,18 @@ import { createProject, deleteProject, listProjects, reorderProjects, updateProj
 import { getAutomationStore } from './services/automation-store'
 import { AutomationScheduler, executeScheduledAutomation } from './services/automation-scheduler'
 import { getTodoStore } from './services/todo-store'
+import {
+  getLastDirectoryPath,
+  getPreferredPermissionModeId,
+  setLastDirectoryPath,
+  setPreferredPermissionModeId
+} from './services/preferences-store'
 
 let mainWindow: BrowserWindow | undefined
-const acpBridge = new AcpBridge()
+const acpBridge = new AcpBridge({
+  getPreferredModeId: getPreferredPermissionModeId,
+  setPreferredModeId: setPreferredPermissionModeId
+})
 let automationScheduler: AutomationScheduler | undefined
 
 function createWindow(): void {
@@ -60,16 +69,20 @@ function createWindow(): void {
 
 /** 打开系统目录选择对话框：支持选择已有文件夹，也支持新建文件夹（macOS createDirectory）。 */
 async function pickDirectory(): Promise<string | null> {
+  const defaultPath = await getLastDirectoryPath()
   const options: Electron.OpenDialogOptions = {
     title: '选择项目文件夹',
     buttonLabel: '选择',
+    defaultPath,
     properties: ['openDirectory', 'createDirectory']
   }
   const result = mainWindow
     ? await dialog.showOpenDialog(mainWindow, options)
     : await dialog.showOpenDialog(options)
   if (result.canceled || result.filePaths.length === 0) return null
-  return result.filePaths[0]
+  const selectedPath = result.filePaths[0]
+  await setLastDirectoryPath(selectedPath)
+  return selectedPath
 }
 
 app.whenReady().then(() => {
