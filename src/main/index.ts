@@ -1,5 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
+import type { CreateAutomationInput, UpdateAutomationInput } from '../shared/automations'
+import type { CreateTodoInput, UpdateTodoInput } from '../shared/todos'
 import type { CreateProjectInput, UpdateProjectInput } from '../shared/projects'
 import { AcpBridge } from './services/acp-bridge'
 import {
@@ -13,9 +15,13 @@ import {
   saveClaudeSkill
 } from './services/claude-resources'
 import { createProject, deleteProject, listProjects, reorderProjects, updateProject } from './services/project-store'
+import { getAutomationStore } from './services/automation-store'
+import { AutomationScheduler, executeScheduledAutomation } from './services/automation-scheduler'
+import { getTodoStore } from './services/todo-store'
 
 let mainWindow: BrowserWindow | undefined
 const acpBridge = new AcpBridge()
+let automationScheduler: AutomationScheduler | undefined
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -83,6 +89,21 @@ app.whenReady().then(() => {
   ipcMain.handle('projects:reorder', (_event, orderedIds: string[]) => reorderProjects(orderedIds))
   ipcMain.handle('projects:pick-directory', () => pickDirectory())
 
+  ipcMain.handle('automations:list', (_event, input) => getAutomationStore().list(input))
+  ipcMain.handle('automations:get', (_event, id: string) => getAutomationStore().get(id))
+  ipcMain.handle('automations:create', (_event, input: CreateAutomationInput) => getAutomationStore().create(input))
+  ipcMain.handle('automations:update', (_event, id: string, input: UpdateAutomationInput) => getAutomationStore().update(id, input))
+  ipcMain.handle('automations:set-enabled', (_event, id: string, enabled: boolean) => getAutomationStore().setEnabled(id, enabled))
+  ipcMain.handle('automations:run-test', (_event, id: string) => getAutomationStore().runTest(id))
+  ipcMain.handle('automations:delete', (_event, id: string) => getAutomationStore().delete(id))
+
+  ipcMain.handle('todos:list', (_event, input) => getTodoStore().list(input))
+  ipcMain.handle('todos:get', (_event, id: string) => getTodoStore().get(id))
+  ipcMain.handle('todos:create', (_event, input: CreateTodoInput) => getTodoStore().create(input))
+  ipcMain.handle('todos:update', (_event, id: string, input: UpdateTodoInput) => getTodoStore().update(id, input))
+  ipcMain.handle('todos:set-done', (_event, id: string, done: boolean) => getTodoStore().setDone(id, done))
+  ipcMain.handle('todos:delete', (_event, id: string) => getTodoStore().delete(id))
+
   ipcMain.handle('claude:list', () => listClaudeResources())
   ipcMain.handle('claude:read-skill', (_event, id: string) => readClaudeSkill(id))
   ipcMain.handle('claude:save-skill', (_event, input) => saveClaudeSkill(input))
@@ -96,6 +117,8 @@ app.whenReady().then(() => {
   acpBridge.on('state', (state) => mainWindow?.webContents.send('acp:state', state))
   acpBridge.on('message', (message) => mainWindow?.webContents.send('acp:message', message))
 
+  automationScheduler = new AutomationScheduler(getAutomationStore(), executeScheduledAutomation)
+  automationScheduler.start()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -106,4 +129,7 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => acpBridge.dispose())
+app.on('before-quit', () => {
+  automationScheduler?.stop()
+  acpBridge.dispose()
+})

@@ -7,9 +7,10 @@
   "main": "./out/main/index.js",
   "private": true,
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "npm run mcp:build && electron-vite dev",
     "start": "electron-vite preview",
-    "build": "npm run typecheck && electron-vite build",
+    "build": "npm run typecheck && electron-vite build && npm run mcp:build",
+    "mcp:build": "tsc -p tsconfig.mcp.json",
     "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
     "package": "npm run build && electron-builder"
   },
@@ -19,11 +20,13 @@
     "@ant-design/icons": "^6.3.2",
     "@ant-design/x": "^2.9.0",
     "@ant-design/x-markdown": "^2.9.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@vitejs/plugin-react": "^5.1.1",
     "antd": "^6.5.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-router-dom": "^7.18.2"
+    "react-router-dom": "^7.18.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",

@@ -768,6 +768,274 @@ input {
   color: var(--muted-soft);
 }
 
+/* 自动化：规则列表与运行详情共处的操作台。 */
+.automations-page {
+  min-height: 100%;
+  padding: 36px 42px 40px;
+}
+
+.automation-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.automation-kicker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--primary-active);
+  font-family: "Koala Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.automation-header h1 {
+  margin: 7px 0 0;
+  color: var(--ink);
+  font-size: 25px;
+  font-weight: 730;
+  letter-spacing: 0;
+  line-height: 1.22;
+}
+
+.automation-header p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.automation-health {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(132px, 1fr)) minmax(220px, 1.35fr);
+  align-items: stretch;
+  gap: 0;
+  margin: 28px 0 20px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.automation-health-item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+  padding: 14px 16px;
+  border-right: 1px solid var(--hairline);
+}
+
+.automation-health-icon,
+.automation-row-icon,
+.automation-detail-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.automation-health-icon {
+  width: 31px;
+  height: 31px;
+  border-radius: 7px;
+  font-size: 15px;
+}
+
+.automation-health-icon.is-active { color: var(--primary-active); background: rgb(var(--primary-rgb) / 12%); }
+.automation-health-icon.is-success { color: #337e48; background: #dff0df; }
+.automation-health-icon.is-alert { color: #ad3737; background: #f7e2e1; }
+.automation-health-icon.is-neutral { color: var(--muted); background: var(--surface-card); }
+
+.automation-health-item div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.automation-health-item strong { color: var(--ink); font-family: "Koala Mono", monospace; font-size: 20px; font-weight: 600; line-height: 1; }
+.automation-health-item span:not(.automation-health-icon) { color: var(--muted); font-size: 11px; white-space: nowrap; }
+
+.automation-health-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.automation-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 3px rgb(93 184 114 / 14%);
+}
+
+.automation-workspace {
+  display: grid;
+  min-height: 570px;
+  grid-template-columns: minmax(0, 1.38fr) minmax(300px, 0.82fr);
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--canvas);
+}
+
+.automation-list-panel { min-width: 0; }
+
+.automation-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.automation-list-toolbar .ant-segmented {
+  flex: 0 1 auto;
+  background: var(--surface-soft);
+}
+
+.automation-list-toolbar .ant-segmented-item-label { min-width: 58px; padding-inline: 7px; font-size: 12px; }
+.automation-list-toolbar .ant-input-affix-wrapper { width: 190px; border-radius: 6px; }
+
+.automation-list-heading,
+.automation-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.35fr) minmax(105px, 0.75fr) minmax(150px, 0.98fr) 72px 64px;
+  column-gap: 14px;
+  align-items: center;
+}
+
+.automation-list-heading {
+  min-height: 35px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--hairline-soft);
+  color: var(--muted-soft);
+  font-family: "Koala Mono", monospace;
+  font-size: 10px;
+}
+
+.automation-row {
+  min-height: 86px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--hairline-soft);
+  cursor: pointer;
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+
+.automation-row:hover { background: var(--surface-soft); }
+.automation-row.is-selected { background: rgb(var(--primary-rgb) / 8%); box-shadow: inset 3px 0 0 var(--primary); }
+
+.automation-row-name { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.automation-row-icon { width: 32px; height: 32px; border-radius: 7px; color: #417d75; background: #dff0eb; font-size: 15px; }
+.automation-row-icon.is-problem { color: #aa3838; background: #f5e1e0; }
+.automation-row-name div, .automation-trigger, .automation-last-run { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.automation-row-name strong { overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 670; text-overflow: ellipsis; white-space: nowrap; }
+.automation-row-name span:not(.automation-row-icon), .automation-trigger small, .automation-last-run small { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.automation-trigger > span, .automation-last-run > span { color: var(--body); font-size: 12px; }
+.automation-last-run.failed > span, .automation-last-run.failed small { color: var(--error); }
+.automation-row .ant-badge-status-text { color: var(--body); font-size: 11px; white-space: nowrap; }
+.automation-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.automation-row-actions .ant-btn { color: var(--muted); }
+.automation-empty { padding: 82px 0; }
+
+.automation-detail {
+  min-width: 0;
+  border-left: 1px solid var(--hairline);
+  background: var(--surface-soft);
+}
+
+.automation-detail-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 20px 20px 0; }
+.automation-detail-title { display: flex; min-width: 0; align-items: flex-start; gap: 10px; }
+.automation-detail-icon { width: 31px; height: 31px; border-radius: 7px; color: var(--primary-active); background: rgb(var(--primary-rgb) / 12%); font-size: 15px; }
+.automation-detail-title h2 { margin: 0; color: var(--ink); font-size: 17px; font-weight: 710; line-height: 1.35; }
+.automation-detail-title p { display: -webkit-box; margin: 4px 0 0; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.automation-detail-top > .ant-btn { color: var(--muted); }
+
+.automation-detail-controls { display: flex; align-items: center; gap: 8px; padding: 15px 20px 17px; }
+.automation-detail-controls .ant-tag { margin: 0 auto 0 0; border-radius: 4px; font-size: 11px; }
+.automation-detail-controls .ant-btn { border-color: var(--hairline); background: var(--canvas); font-size: 12px; }
+.automation-detail-tabs { display: flex; margin: 0 20px; background: transparent; border-bottom: 1px solid var(--hairline); border-radius: 0; }
+.automation-detail-tabs .ant-segmented-group { width: 100%; }
+.automation-detail-tabs .ant-segmented-item { flex: 1; border-radius: 0; text-align: center; }
+.automation-detail-tabs .ant-segmented-item-selected { background: transparent; box-shadow: inset 0 -2px 0 var(--primary); }
+.automation-detail-tabs .ant-segmented-item-label { padding: 8px 4px 9px; font-size: 12px; }
+
+.automation-workflow { padding: 20px; }
+.workflow-node { display: flex; align-items: center; gap: 11px; padding: 12px; border: 1px solid var(--hairline); border-radius: 7px; background: var(--canvas); }
+.workflow-node.trigger { border-color: rgb(var(--primary-rgb) / 38%); }
+.workflow-node.action { border-color: #c5dfd4; }
+.workflow-icon { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 6px; color: var(--primary-active); background: rgb(var(--primary-rgb) / 11%); font-size: 14px; }
+.workflow-node.condition .workflow-icon { color: #91712c; background: #f6ecd5; }
+.workflow-node.action .workflow-icon { color: #397d70; background: #dff0eb; }
+.workflow-node div { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+.workflow-node small { color: var(--muted-soft); font-size: 10px; }
+.workflow-node strong { margin-top: 1px; color: var(--ink); font-size: 13px; font-weight: 660; }
+.workflow-node p { margin: 2px 0 0; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.workflow-connector { display: flex; height: 25px; justify-content: center; }
+.workflow-connector span { width: 1px; height: 100%; background: var(--hairline); }
+.workflow-connector span::after { display: block; width: 5px; height: 5px; margin: auto; border-right: 1px solid var(--muted-soft); border-bottom: 1px solid var(--muted-soft); content: ""; transform: rotate(45deg); }
+.workflow-foot { display: flex; align-items: flex-start; gap: 7px; margin-top: 17px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.workflow-foot .anticon { margin-top: 2px; color: var(--primary); }
+
+.automation-runs { padding: 9px 20px 20px; }
+.automation-run { display: flex; gap: 9px; padding: 13px 0; border-bottom: 1px solid var(--hairline); }
+.automation-run:last-child { border-bottom: 0; }
+.automation-run-icon { margin-top: 2px; color: var(--success); font-size: 15px; }
+.automation-run-icon.failed { color: var(--error); }
+.automation-run div { min-width: 0; }
+.automation-run-body { flex: 1; }
+.automation-run-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.automation-run strong { display: block; color: var(--body-strong); font-size: 12px; font-weight: 650; line-height: 1.4; }
+.automation-run-heading strong { min-width: 0; padding-top: 3px; }
+.automation-run-heading .ant-btn { height: 24px; flex: none; padding: 0 2px; font-size: 11px; }
+.automation-run p { margin: 3px 0; color: var(--muted); font-size: 11px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.automation-run small { color: var(--muted-soft); font-family: "Koala Mono", monospace; font-size: 10px; }
+
+.automation-result-meta { display: flex; align-items: center; gap: 14px; padding: 1px 0 14px; border-bottom: 1px solid var(--hairline); color: var(--muted); font-family: "Koala Mono", monospace; font-size: 11px; }
+.automation-result-meta .ant-badge-status-text { color: var(--body-strong); font-family: inherit; font-size: 11px; }
+.automation-result-content { max-height: min(62vh, 660px); min-height: 240px; margin-top: 16px; overflow: auto; border: 1px solid var(--hairline); border-radius: 7px; background: var(--canvas); }
+.automation-result-content.is-text { padding: 20px; background: var(--surface-soft); }
+.automation-result-content pre { margin: 0; color: var(--body-strong); font-family: "Koala Mono", monospace; font-size: 12px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
+.automation-result-content.is-markdown { padding: 22px 24px; }
+.automation-result-content .chat-markdown { color: var(--body); font-size: 13px; line-height: 1.7; }
+.automation-result-content .chat-markdown > :first-child { margin-top: 0; }
+.automation-result-content .chat-markdown > :last-child { margin-bottom: 0; }
+.automation-result-content .chat-markdown h1 { color: var(--ink); font-size: 21px; }
+.automation-result-content .chat-markdown h2 { margin-top: 22px; color: var(--body-strong); font-size: 15px; }
+
+.automation-settings { padding: 7px 20px 20px; }
+.automation-settings > div { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 0; border-bottom: 1px solid var(--hairline); }
+.automation-settings > div > div { display: flex; flex-direction: column; gap: 3px; }
+.automation-settings strong { color: var(--body-strong); font-size: 13px; font-weight: 660; }
+.automation-settings span { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.automation-settings .ant-tag { margin: 0; white-space: nowrap; }
+.automation-settings .automation-danger { border-bottom: 0; }
+.automation-danger .ant-btn { font-size: 12px; }
+
+.automation-form { display: grid; gap: 17px; padding-top: 9px; }
+.automation-form label { display: grid; gap: 7px; color: var(--body); font-size: 12px; font-weight: 620; }
+.automation-form .ant-select { width: 100%; }
+.automation-path-picker { width: 100%; }
+.automation-path-picker .ant-input[readonly] { cursor: pointer; }
+.automation-path-picker .ant-btn { flex: none; }
+
+@media (max-width: 1180px) {
+  .automation-health { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .automation-health-note { grid-column: 1 / -1; border-top: 1px solid var(--hairline); }
+  .automation-workspace { grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr); }
+  .automation-list-heading,
+  .automation-row { grid-template-columns: minmax(180px, 1fr) minmax(108px, 0.7fr) 88px; }
+  .automation-list-heading span:nth-child(3),
+  .automation-list-heading span:nth-child(4),
+  .automation-row > .automation-last-run,
+  .automation-row > div:nth-child(4) { display: none; }
+}
+
+@media (max-width: 900px) {
+  .automations-page { padding-inline: 24px; }
+  .automation-workspace { grid-template-columns: minmax(0, 1fr); }
+  .automation-detail { border-top: 1px solid var(--hairline); border-left: 0; }
+}
+
 /* 工作台：日程、待办与工作状态。 */
 .workbench-page {
   min-height: 100%;

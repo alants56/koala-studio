@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { AcpApi } from '../shared/acp'
 import type { ProjectsApi } from '../shared/projects'
 import type { ClaudeApi } from '../shared/claude'
+import type { AutomationsApi } from '../shared/automations'
+import type { TodosApi } from '../shared/todos'
 
 const acp: AcpApi = {
   getState: () => ipcRenderer.invoke('acp:get-state'),
@@ -44,6 +46,27 @@ const claude: ClaudeApi = {
   reveal: (path) => ipcRenderer.invoke('claude:reveal', path)
 }
 
+const automations: AutomationsApi = {
+  list: (input) => ipcRenderer.invoke('automations:list', input),
+  get: (id) => ipcRenderer.invoke('automations:get', id),
+  create: (input) => ipcRenderer.invoke('automations:create', input),
+  update: (id, input) => ipcRenderer.invoke('automations:update', id, input),
+  setEnabled: (id, enabled) => ipcRenderer.invoke('automations:set-enabled', id, enabled),
+  runTest: (id) => ipcRenderer.invoke('automations:run-test', id),
+  delete: (id) => ipcRenderer.invoke('automations:delete', id)
+}
+
+const todos: TodosApi = {
+  list: (input) => ipcRenderer.invoke('todos:list', input),
+  get: (id) => ipcRenderer.invoke('todos:get', id),
+  create: (input) => ipcRenderer.invoke('todos:create', input),
+  update: (id, input) => ipcRenderer.invoke('todos:update', id, input),
+  setDone: (id, done) => ipcRenderer.invoke('todos:set-done', id, done),
+  delete: (id) => ipcRenderer.invoke('todos:delete', id)
+}
+
 contextBridge.exposeInMainWorld('acp', acp)
 contextBridge.exposeInMainWorld('projects', projects)
 contextBridge.exposeInMainWorld('claude', claude)
+contextBridge.exposeInMainWorld('automations', automations)
+contextBridge.exposeInMainWorld('todos', todos)

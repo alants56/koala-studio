@@ -27,6 +27,7 @@ pnpm dev
   - Skills：扫描 `~/.claude/skills`，可新建、编辑或删除 `SKILL.md`
   - 插件：读取 `~/.claude/plugins/installed_plugins.json`，可启用、停用、更新或卸载
   - MCP：读取并维护 `~/.claude.json` 中的用户级和项目级 `mcpServers` 配置；列表会隐藏环境变量与请求头内容
+- `/automations` 自动化：管理规则、测试运行和运行记录。规则保存在主进程数据文件中，并可由当前项目的 Agent 调用。
 
 ## 项目数据（本地存储）
 
@@ -42,6 +43,23 @@ pnpm dev
 
 Claude 本地资源数据流：`renderer → preload (window.claude) → IPC → main (claude-resources)`。
 其中插件操作调用本机 `claude plugin` 命令；Skill 和 MCP 配置写入均采用临时文件后重命名，避免中断写入造成配置文件损坏。
+
+## 自动化 MCP
+
+每个新建或载入的 ACP 会话都会自动获得 `koala-automations` stdio MCP 服务，无需单独配置。它与自动化页面和工作台待办共享
+`app.getPath('userData')/automations.json` 与 `todos.json`，Agent 的改动会显示在页面中。
+
+可用工具：
+
+- `koala_list_automations`、`koala_get_automation`
+- `koala_create_automation`、`koala_update_automation`
+- `koala_set_automation_enabled`、`koala_test_automation`
+- `koala_delete_automation`
+- `koala_list_todos`、`koala_get_todo`
+- `koala_create_todo`、`koala_update_todo`、`koala_set_todo_done`
+- `koala_delete_todo`
+
+MCP 入口由 `pnpm mcp:build` 生成到 `out/mcp/mcp/automations-server.js`；标准 `pnpm dev` 和 `pnpm build` 都会自动构建它。
 
 ## 对话记录（来自 Claude Code）
 

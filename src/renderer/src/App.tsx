@@ -5,6 +5,7 @@ import { WorkbenchPage } from '@/pages/workbench/WorkbenchPage'
 import { ProjectsPage } from '@/pages/projects/ProjectsPage'
 import { ProjectChatPage } from '@/pages/projects/ProjectChatPage'
 import { ClaudeResourcesPage } from '@/pages/claude/ClaudeResourcesPage'
+import { AutomationsPage } from '@/pages/automations/AutomationsPage'
 import { ProjectsProvider } from '@/state/ProjectsContext'
 
 export function App(): ReactElement {
@@ -18,6 +19,7 @@ export function App(): ReactElement {
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/projects/:projectId" element={<ProjectChatPage />} />
             <Route path="/claude" element={<ClaudeResourcesPage />} />
+            <Route path="/automations" element={<AutomationsPage />} />
           </Route>
         </Routes>
       </HashRouter>

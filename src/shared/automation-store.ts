@@ -1,0 +1,197 @@
+import { randomUUID } from 'node:crypto'
+import { promises as fs } from 'node:fs'
+import { dirname } from 'node:path'
+import type { Automation, AutomationRun, AutomationListInput, AutomationListResult, AutomationRunOutput, CreateAutomationInput, UpdateAutomationInput } from './automations'
+
+const STARTER_AUTOMATIONS: Automation[] = [
+  { id: 'daily-brief', name: '每日项目简报', description: '汇总活跃项目的会话进度和待办，生成今天的工作摘要。', state: 'active', trigger: '每天 09:00', triggerDetail: '按计划触发', action: '生成并发送摘要', actionDetail: '通知中心', scope: '全部活跃项目', runs: [{ id: 'run-1', status: 'success', startedAt: '今天 09:00', duration: '14 秒', summary: '已汇总 3 个活跃项目', detail: '摘要已发送到通知中心。' }] },
+  { id: 'review-failure', name: '失败运行提醒', description: '任何自动化任务失败时，立即创建一条需要处理的待办。', state: 'active', trigger: '运行失败时', triggerDetail: '事件触发', action: '创建高优先级待办', actionDetail: '工作台', scope: '全部自动化', runs: [{ id: 'run-2', status: 'success', startedAt: '昨天 18:42', duration: '1 秒', summary: '已处理 1 次失败事件', detail: '待办已关联到对应运行记录。' }] },
+  { id: 'idle-project', name: '闲置项目跟进', description: '项目连续 7 天没有新消息时，提示确认下一步。', state: 'attention', trigger: '每天 17:30', triggerDetail: '按计划触发', action: '发送跟进提醒', actionDetail: '通知中心', scope: '全部项目', runs: [{ id: 'run-3', status: 'failed', startedAt: '昨天 17:30', duration: '3 秒', summary: '无法读取 1 个项目的会话状态', detail: '请检查该项目的 ACP 连接后重试。' }] },
+  { id: 'new-project', name: '新项目初始化', description: '创建项目后自动准备协作上下文和首个待办。', state: 'paused', trigger: '创建项目时', triggerDetail: '事件触发', action: '创建协作清单', actionDetail: '项目工作台', scope: '新建项目', runs: [] }
+]
+
+function nowLabel(): string {
+  return `今天 ${new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date())}`
+}
+
+function inferTriggerDetail(trigger: string): string {
+  return trigger.includes('每天') || trigger.includes('每周') ? '按计划触发' : '事件触发'
+}
+
+export class AutomationStore {
+  private cache?: Automation[]
+  private cacheMtimeMs?: number
+
+  constructor(private readonly file: string) {}
+
+  private async readAll(): Promise<Automation[]> {
+    try {
+      const stats = await fs.stat(this.file)
+      if (this.cache && this.cacheMtimeMs === stats.mtimeMs) return this.cache
+      const raw = await fs.readFile(this.file, 'utf8')
+      const parsed: unknown = JSON.parse(raw)
+      this.cache = Array.isArray(parsed) ? parsed as Automation[] : structuredClone(STARTER_AUTOMATIONS)
+      this.cacheMtimeMs = stats.mtimeMs
+    } catch {
+      this.cache = structuredClone(STARTER_AUTOMATIONS)
+      await this.writeAll(this.cache)
+    }
+    return this.cache
+  }
+
+  private async writeAll(items: Automation[]): Promise<void> {
+    this.cache = items
+    await fs.mkdir(dirname(this.file), { recursive: true })
+    const temporaryFile = `${this.file}.${process.pid}.${randomUUID()}.tmp`
+    await fs.writeFile(temporaryFile, JSON.stringify(items, null, 2), 'utf8')
+    await fs.rename(temporaryFile, this.file)
+    this.cacheMtimeMs = undefined
+  }
+
+  async list(input: AutomationListInput = {}): Promise<AutomationListResult> {
+    const state = input.state
+    const query = input.query?.trim().toLowerCase()
+    const offset = Math.max(0, input.offset ?? 0)
+    const limit = Math.min(100, Math.max(1, input.limit ?? 50))
+    const matched = (await this.readAll()).filter((item) => {
+      const searchable = `${item.name} ${item.description} ${item.trigger} ${item.action}`.toLowerCase()
+      return (!state || item.state === state) && (!query || searchable.includes(query))
+    })
+    const items = matched.slice(offset, offset + limit)
+    return { total: matched.length, count: items.length, offset, hasMore: offset + items.length < matched.length, ...(offset + items.length < matched.length ? { nextOffset: offset + items.length } : {}), items }
+  }
+
+  async get(id: string): Promise<Automation> {
+    const automation = (await this.readAll()).find((item) => item.id === id)
+    if (!automation) throw new Error(`未找到自动化「${id}」。请先调用 koala_list_automations 获取有效 ID。`)
+    return automation
+  }
+
+  async create(input: CreateAutomationInput): Promise<Automation> {
+    const name = input.name.trim()
+    if (!name) throw new Error('自动化名称不能为空。')
+    const schedule = input.schedule ? validateSchedule(input.schedule) : undefined
+    if (input.enabled !== false && input.trigger.trim() === '指定时间' && !schedule) {
+      throw new Error('启用指定时间任务必须提供 schedule、actionType 和 projectPath，不能只填写展示时间。')
+    }
+    if (schedule && input.actionType !== 'feature_brief') throw new Error('当前定时执行仅支持“生成功能更新简报”动作。')
+    if (schedule && !input.projectPath?.trim()) throw new Error('定时功能更新简报需要指定 Git 项目路径。')
+    const automation: Automation = {
+      id: randomUUID(), name, description: input.description?.trim() || `${input.trigger}时，${input.action}。`,
+      state: input.enabled === false ? 'paused' : 'active', trigger: input.trigger.trim(), triggerDetail: input.triggerDetail?.trim() || inferTriggerDetail(input.trigger),
+      action: input.action.trim(), actionDetail: input.actionDetail?.trim() || '通知中心', scope: input.scope.trim(), runs: [],
+      ...(schedule ? { schedule } : {}),
+      ...(input.actionType ? { actionType: input.actionType } : {}),
+      ...(input.projectPath?.trim() ? { projectPath: input.projectPath.trim() } : {})
+    }
+    const items = await this.readAll()
+    await this.writeAll([automation, ...items])
+    return automation
+  }
+
+  async update(id: string, input: UpdateAutomationInput): Promise<Automation> {
+    const items = await this.readAll()
+    const index = items.findIndex((item) => item.id === id)
+    if (index === -1) throw new Error(`未找到自动化「${id}」。请先调用 koala_list_automations 获取有效 ID。`)
+    const current = items[index]
+    const changes = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined))
+    const updated: Automation = { ...current, ...changes, ...(input.schedule ? { schedule: validateSchedule(input.schedule) } : {}) }
+    if (input.schedule === null) delete updated.schedule
+    if (input.projectPath === null) delete updated.projectPath
+    if (!updated.name.trim()) throw new Error('自动化名称不能为空。')
+    if (updated.state === 'active' && updated.trigger.trim() === '指定时间' && !updated.schedule) {
+      throw new Error('启用指定时间任务必须提供完整的执行计划。')
+    }
+    if (updated.schedule && updated.actionType !== 'feature_brief') throw new Error('当前定时执行仅支持“生成功能更新简报”动作。')
+    if (updated.schedule && !updated.projectPath?.trim()) throw new Error('定时功能更新简报需要指定 Git 项目路径。')
+    items[index] = updated
+    await this.writeAll(items)
+    return updated
+  }
+
+  async setEnabled(id: string, enabled: boolean): Promise<Automation> {
+    const automation = await this.get(id)
+    if (enabled && automation.trigger.trim() === '指定时间' && !automation.schedule) {
+      throw new Error('该任务缺少真实执行计划，请重新创建并选择执行时间和项目文件夹。')
+    }
+    return this.replace({ ...automation, state: enabled ? 'active' : 'paused' })
+  }
+
+  async runTest(id: string): Promise<Automation> {
+    const automation = await this.get(id)
+    const content = `自动化：${automation.name}\n触发条件：${automation.trigger}\n执行动作：${automation.action}\n作用范围：${automation.scope}\n\n测试通过。本次测试不会对外发送通知或写入项目数据。`
+    const run = {
+      id: randomUUID(), status: 'success' as const, startedAt: nowLabel(), duration: '2 秒', summary: `测试运行完成：${automation.action}`,
+      detail: '触发条件、执行动作和作用范围均已通过测试。', output: { title: '测试运行结果', content, format: 'text' as const }
+    }
+    return this.replace({ ...automation, runs: [run, ...automation.runs] })
+  }
+
+  async recordExecution(id: string, input: {
+    status: AutomationRun['status']
+    startedAt: Date
+    durationMs: number
+    summary: string
+    detail?: string
+    output?: AutomationRunOutput
+    needsAttention?: boolean
+  }): Promise<Automation> {
+    const automation = await this.get(id)
+    const run: AutomationRun = {
+      id: randomUUID(),
+      status: input.status,
+      startedAt: nowLabelFor(input.startedAt),
+      duration: durationLabel(input.durationMs),
+      summary: input.summary,
+      ...(input.detail ? { detail: input.detail } : {}),
+      ...(input.output ? { output: input.output } : {})
+    }
+    const updated: Automation = { ...automation, runs: [run, ...automation.runs] }
+    if (automation.schedule?.type === 'once') {
+      updated.state = 'paused'
+      delete updated.schedule
+    } else if (automation.schedule?.type === 'daily') {
+      updated.schedule = { ...automation.schedule, nextRunAt: nextDailyRun(automation.schedule.nextRunAt, input.startedAt).toISOString() }
+    }
+    if (input.needsAttention) updated.state = 'attention'
+    return this.replace(updated)
+  }
+
+  async delete(id: string): Promise<void> {
+    const items = await this.readAll()
+    const next = items.filter((item) => item.id !== id)
+    if (next.length === items.length) throw new Error(`未找到自动化「${id}」。请先调用 koala_list_automations 获取有效 ID。`)
+    await this.writeAll(next)
+  }
+
+  private async replace(updated: Automation): Promise<Automation> {
+    const items = await this.readAll()
+    const index = items.findIndex((item) => item.id === updated.id)
+    if (index === -1) throw new Error(`未找到自动化「${updated.id}」。`)
+    items[index] = updated
+    await this.writeAll(items)
+    return updated
+  }
+}
+
+function validateSchedule(schedule: NonNullable<CreateAutomationInput['schedule']>): NonNullable<CreateAutomationInput['schedule']> {
+  const date = new Date(schedule.nextRunAt)
+  if (Number.isNaN(date.getTime())) throw new Error('计划执行时间必须是有效的 ISO 时间。')
+  return { type: schedule.type, nextRunAt: date.toISOString() }
+}
+
+function nowLabelFor(date: Date): string {
+  return `今天 ${new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date)}`
+}
+
+function durationLabel(durationMs: number): string {
+  const seconds = Math.max(0, Math.round(durationMs / 1000))
+  return seconds < 60 ? `${seconds} 秒` : `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`
+}
+
+function nextDailyRun(previous: string, after: Date): Date {
+  const next = new Date(previous)
+  do next.setUTCDate(next.getUTCDate() + 1)
+  while (next <= after)
+  return next
+}

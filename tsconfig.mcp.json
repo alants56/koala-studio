@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "types": ["node"],
+    "rootDir": "src",
+    "outDir": "out/mcp"
+  },
+  "include": ["src/mcp/**/*.ts", "src/shared/automation-store.ts", "src/shared/automations.ts", "src/shared/todo-store.ts", "src/shared/todos.ts"]
+}

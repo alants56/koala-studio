@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { EventEmitter } from 'node:events'
+import { join } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import * as acp from '@agentclientprotocol/sdk'
 import type { ClientConnection, SessionNotification } from '@agentclientprotocol/sdk'
@@ -13,6 +14,8 @@ import type {
   LoadedSession,
   PromptRequest
 } from '../../shared/acp'
+import { automationsFilePath } from './automation-store'
+import { todosFilePath } from './todo-store'
 
 export class AcpBridge extends EventEmitter {
   private agentProcess?: ChildProcessWithoutNullStreams
@@ -23,6 +26,19 @@ export class AcpBridge extends EventEmitter {
   private connectPromise?: Promise<AgentState>
   /** 临时收集 session/load 回放通知的监听器。 */
   private sessionUpdateListener?: (notification: SessionNotification) => void
+
+  private automationMcpServers(): acp.McpServer[] {
+    return [{
+      name: 'koala-automations',
+      command: process.execPath,
+      args: [join(__dirname, '../mcp/mcp/automations-server.js')],
+      env: [
+        { name: 'ELECTRON_RUN_AS_NODE', value: '1' },
+        { name: 'KOALA_AUTOMATIONS_FILE', value: automationsFilePath() },
+        { name: 'KOALA_TODOS_FILE', value: todosFilePath() }
+      ]
+    }]
+  }
 
   getState(): AgentState {
     return this.state
@@ -171,7 +187,7 @@ export class AcpBridge extends EventEmitter {
 
     let response: acp.LoadSessionResponse
     try {
-      response = await this.connection.agent.request(acp.methods.agent.session.load, { sessionId, cwd, mcpServers: [] })
+      response = await this.connection.agent.request(acp.methods.agent.session.load, { sessionId, cwd, mcpServers: this.automationMcpServers() })
       // 等待回放完成信号（兜底 30s），再给最后的 chunk 一点落定时间
       await Promise.race([done, new Promise((resolve) => setTimeout(resolve, 30000))])
       await new Promise((resolve) => setTimeout(resolve, 300))
@@ -202,7 +218,7 @@ export class AcpBridge extends EventEmitter {
   /** 通过 ACP session/new 新建会话并设为当前会话。 */
   async createSession(cwd: string): Promise<AcpSessionResult> {
     if (!this.connection) throw new Error('请先连接 Claude ACP。')
-    const response = await this.connection.agent.request(acp.methods.agent.session.new, { cwd, mcpServers: [] })
+    const response = await this.connection.agent.request(acp.methods.agent.session.new, { cwd, mcpServers: this.automationMcpServers() })
     this.activeSessionId = response.sessionId
     this.sessionCwd = cwd
     const modes = this.toAgentModes(response.modes)

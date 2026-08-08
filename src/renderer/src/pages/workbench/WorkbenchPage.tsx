@@ -3,6 +3,7 @@ import { CalendarOutlined, CheckOutlined, DeleteOutlined, EditOutlined, FlagFill
 import { Modal } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import type { AcpSessionInfo } from '@shared/acp'
+import type { TodoItem } from '@shared/todos'
 import { useProjects } from '@/state/ProjectsContext'
 import { WORKSPACE_PATH } from '@/utils/constants'
 
@@ -13,19 +14,8 @@ interface ScheduleItem {
   title: string
 }
 
-interface TodoItem {
-  id: string
-  title: string
-  done: boolean
-  important: boolean
-  projectId?: string
-  sessionId?: string
-  sessionTitle?: string
-}
-
 interface WorkspaceData {
   schedule: ScheduleItem[]
-  todos: TodoItem[]
 }
 
 const WORKSPACE_STORAGE_KEY = 'koala-studio:workspace-v3'
@@ -60,7 +50,8 @@ export function WorkbenchPage(): ReactElement {
   const navigate = useNavigate()
   const { projects } = useProjects()
   const today = useMemo(() => localDateKey(new Date()), [])
-  const [data, setData] = useState<WorkspaceData>({ schedule: [], todos: [] })
+  const [data, setData] = useState<WorkspaceData>({ schedule: [] })
+  const [todos, setTodos] = useState<TodoItem[]>([])
   const [selectedDate, setSelectedDate] = useState(today)
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1))
   const [scheduleTime, setScheduleTime] = useState('09:00')
@@ -85,12 +76,22 @@ export function WorkbenchPage(): ReactElement {
   const [todoView, setTodoView] = useState<'active' | 'done'>('active')
 
   useEffect(() => {
+    let legacyTodos: Array<Omit<TodoItem, 'createdAt' | 'updatedAt'>> = []
     try {
       const stored = window.localStorage.getItem(WORKSPACE_STORAGE_KEY)
-      if (stored) setData(JSON.parse(stored) as WorkspaceData)
+      if (stored) {
+        const legacy = JSON.parse(stored) as WorkspaceData & { todos?: Array<Omit<TodoItem, 'createdAt' | 'updatedAt'>> }
+        setData({ schedule: legacy.schedule ?? [] })
+        legacyTodos = legacy.todos ?? []
+      }
     } catch {
       window.localStorage.removeItem(WORKSPACE_STORAGE_KEY)
     }
+    void window.todos.list({ limit: 100 }).then(async ({ items }) => {
+      if (items.length || !legacyTodos.length) { setTodos(items); return }
+      const migrated = await Promise.all(legacyTodos.map((todo) => window.todos.create({ title: todo.title, important: todo.important, projectId: todo.projectId, sessionId: todo.sessionId, sessionTitle: todo.sessionTitle })))
+      setTodos(migrated)
+    })
   }, [])
 
   useEffect(() => {
@@ -171,29 +172,27 @@ export function WorkbenchPage(): ReactElement {
     event.preventDefault()
     const title = todoTitle.trim()
     if (!title) return
-    updateData((previous) => ({
-      ...previous,
-      todos: [{ id: crypto.randomUUID(), title, done: false, important: false, projectId: todoProjectId || undefined, sessionId: todoSessionId || undefined, sessionTitle: todoSessionTitle || undefined }, ...previous.todos]
-    }))
+    void window.todos.create({ title, projectId: todoProjectId || undefined, sessionId: todoSessionId || undefined, sessionTitle: todoSessionTitle || undefined }).then((todo) => setTodos((items) => [todo, ...items]))
     setTodoTitle('')
     setTodoProjectId('')
     setTodoSessionId('')
     setTodoSessionTitle('')
   }
 
-  const toggleTodo = (id: string): void => updateData((previous) => ({ ...previous, todos: previous.todos.map((todo) => todo.id === id ? { ...todo, done: !todo.done } : todo) }))
-  const toggleImportant = (id: string): void => updateData((previous) => ({ ...previous, todos: previous.todos.map((todo) => todo.id === id ? { ...todo, important: !todo.important } : todo) }))
-  const removeTodo = (id: string): void => updateData((previous) => ({ ...previous, todos: previous.todos.filter((todo) => todo.id !== id) }))
+  const replaceTodo = (updated: TodoItem): void => setTodos((items) => items.map((todo) => todo.id === updated.id ? updated : todo))
+  const toggleTodo = (id: string): void => { const todo = todos.find((item) => item.id === id); if (todo) void window.todos.setDone(id, !todo.done).then(replaceTodo) }
+  const toggleImportant = (id: string): void => { const todo = todos.find((item) => item.id === id); if (todo) void window.todos.update(id, { important: !todo.important }).then(replaceTodo) }
+  const removeTodo = (id: string): void => { void window.todos.delete(id).then(() => setTodos((items) => items.filter((todo) => todo.id !== id))) }
   const removeSchedule = (id: string): void => updateData((previous) => ({ ...previous, schedule: previous.schedule.filter((item) => item.id !== id) }))
 
   const calendar = useMemo(() => calendarDays(calendarMonth), [calendarMonth])
   const scheduledDates = useMemo(() => new Set(data.schedule.map((item) => item.date)), [data.schedule])
   const selectedSchedule = data.schedule.filter((item) => item.date === selectedDate)
-  const visibleTodos = data.todos.filter((todo) => todoView === 'done' ? todo.done : !todo.done)
-  const completed = data.todos.filter((todo) => todo.done).length
-  const active = data.todos.length - completed
-  const important = data.todos.filter((todo) => todo.important && !todo.done)
-  const linkedProjects = new Set(data.todos.map((todo) => todo.projectId).filter(Boolean)).size
+  const visibleTodos = todos.filter((todo) => todoView === 'done' ? todo.done : !todo.done)
+  const completed = todos.filter((todo) => todo.done).length
+  const active = todos.length - completed
+  const important = todos.filter((todo) => todo.important && !todo.done)
+  const linkedProjects = new Set(todos.map((todo) => todo.projectId).filter(Boolean)).size
 
   const selectDate = (date: Date): void => {
     setSelectedDate(localDateKey(date))
@@ -236,21 +235,9 @@ export function WorkbenchPage(): ReactElement {
   const saveTodoEdit = (): void => {
     const title = editTodoTitle.trim()
     if (!title || !editingTodoId) return
-    updateData((previous) => ({
-      ...previous,
-      todos: previous.todos.map((todo) => {
-        if (todo.id !== editingTodoId) return todo
-        const selectedSession = editSessions.find((session) => session.sessionId === editSessionId)
-        return {
-          ...todo,
-          title,
-          done: editTodoDone,
-          projectId: editProjectId || undefined,
-          sessionId: editSessionId || undefined,
-          sessionTitle: selectedSession?.title || (todo.sessionId === editSessionId ? todo.sessionTitle : undefined)
-        }
-      })
-    }))
+    const current = todos.find((todo) => todo.id === editingTodoId)
+    const selectedSession = editSessions.find((session) => session.sessionId === editSessionId)
+    if (current) void window.todos.update(editingTodoId, { title, done: editTodoDone, projectId: editProjectId || undefined, sessionId: editSessionId || undefined, sessionTitle: selectedSession?.title || (current.sessionId === editSessionId ? current.sessionTitle : undefined) }).then(replaceTodo)
     setEditingTodoId(undefined)
   }
 
@@ -316,7 +303,7 @@ export function WorkbenchPage(): ReactElement {
             <button className="workspace-icon-button workspace-add" type="submit" disabled={!todoTitle.trim()} aria-label="添加待办" title="添加待办"><PlusOutlined /></button>
           </form>
           {visibleTodos.length === 0 ? (
-            <div className="todo-empty"><CalendarOutlined /><span>{data.todos.length ? '这个视图没有待办事项' : '从一件待办开始今天的工作'}</span></div>
+            <div className="todo-empty"><CalendarOutlined /><span>{todos.length ? '这个视图没有待办事项' : '从一件待办开始今天的工作'}</span></div>
           ) : (
             <ul className="todo-list">
               {visibleTodos.map((todo) => {
@@ -338,7 +325,7 @@ export function WorkbenchPage(): ReactElement {
         <aside className="status-panel" aria-labelledby="status-title">
           <span className="workbench-kicker">WORK STATUS</span>
           <h2 id="status-title">工作状态</h2>
-          <div className="status-overview"><strong>{completed}</strong><span>已完成</span><b>/ {data.todos.length}</b></div>
+          <div className="status-overview"><strong>{completed}</strong><span>已完成</span><b>/ {todos.length}</b></div>
           <div className="status-lines"><div><span>待处理</span><b>{active}</b></div><div><span>重点</span><b>{important.length}</b></div><div><span>关联项目</span><b>{linkedProjects}</b></div></div>
           <div className="status-focus"><span>当前重点</span>{important.length ? <ul>{important.slice(0, 3).map((todo) => <li key={todo.id}>{todo.title}</li>)}</ul> : <p>标记待办为重点后会显示在这里</p>}</div>
         </aside>

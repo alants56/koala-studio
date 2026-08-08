@@ -6,7 +6,8 @@ import {
   FolderOpenOutlined,
   AppstoreOutlined,
   MenuFoldOutlined,
-  MenuUnfoldOutlined
+  MenuUnfoldOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons'
 import { useLocation, useNavigate, useOutlet } from 'react-router-dom'
 import type { MenuProps } from 'antd'
@@ -16,13 +17,15 @@ const { Sider, Content } = Layout
 const MENU_ITEMS: MenuProps['items'] = [
   { key: '/workbench', icon: <DashboardOutlined />, label: '工作台' },
   { key: '/claude', icon: <AppstoreOutlined />, label: '插件' },
-  { key: '/projects', icon: <FolderOpenOutlined />, label: '项目' }
+  { key: '/projects', icon: <FolderOpenOutlined />, label: '项目' },
+  { key: '/automations', icon: <ThunderboltOutlined />, label: '自动化' }
 ]
 
 function getSelectedKey(pathname: string): string {
   if (pathname.startsWith('/projects')) return '/projects'
   if (pathname.startsWith('/workbench')) return '/workbench'
   if (pathname.startsWith('/claude')) return '/claude'
+  if (pathname.startsWith('/automations')) return '/automations'
   return '/projects'
 }
 
