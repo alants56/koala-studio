@@ -44,13 +44,9 @@
     "appId": "com.alants56.koala-studio",
     "productName": "Koala Studio",
     "icon": "build/icon",
+    "asar": false,
     "files": [
       "out/**/*"
-    ],
-    "asarUnpack": [
-      "out/mcp/**/*",
-      "node_modules/@agentclientprotocol/**/*",
-      "node_modules/@modelcontextprotocol/**/*"
     ],
     "mac": {
       "identity": null,

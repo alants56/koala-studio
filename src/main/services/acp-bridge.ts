@@ -3,9 +3,6 @@ import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import * as acp from '@agentclientprotocol/sdk'
-
-// ASAR 打包后 spawn 无法读取 archive 内文件，需指向 unpacked 目录
-const unpackedPath = (p: string): string => p.replace('app.asar', 'app.asar.unpacked')
 import type { ClientConnection, SessionNotification } from '@agentclientprotocol/sdk'
 import type {
   AcpSessionInfo,
@@ -44,8 +41,6 @@ export class AcpBridge extends EventEmitter {
   private sessionCwd?: string
   private activeSessionId?: string
   private connectPromise?: Promise<AgentState>
-  /** 临时收集 session/load 回放通知的监听器。 */
-  private sessionUpdateListener?: (notification: SessionNotification) => void
 
   constructor(private readonly options: AcpBridgeOptions = {}) {
     super()
@@ -55,7 +50,7 @@ export class AcpBridge extends EventEmitter {
     return [{
       name: 'koala-automations',
       command: process.execPath,
-      args: [unpackedPath(join(__dirname, '../mcp/mcp/automations-server.js'))],
+      args: [join(__dirname, '../mcp/mcp/automations-server.js')],
       env: [
         { name: 'ELECTRON_RUN_AS_NODE', value: '1' },
         { name: 'KOALA_AUTOMATIONS_FILE', value: automationsFilePath() },
@@ -89,7 +84,7 @@ export class AcpBridge extends EventEmitter {
     this.setState({ status: 'connecting', detail: '正在启动 Claude ACP 适配器…' })
 
     try {
-      const adapterPath = unpackedPath(require.resolve('@agentclientprotocol/claude-agent-acp/dist/index.js'))
+      const adapterPath = require.resolve('@agentclientprotocol/claude-agent-acp/dist/index.js')
       const agentProcess = spawn(process.execPath, [adapterPath], {
         cwd,
         env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
@@ -147,106 +142,36 @@ export class AcpBridge extends EventEmitter {
     }))
   }
 
-  /** 通过 ACP session/load 加载历史会话，收集回放的消息并设为当前会话。 */
+  /** 通过 ACP session/load 加载历史会话，回放消息通过 onMessage 事件流式推送到 UI。 */
   async loadSession(sessionId: string, cwd: string): Promise<LoadedSession> {
     if (!this.connection) throw new Error('请先连接 Claude ACP。')
 
-    const collected: ChatMessage[] = []
-    const attachmentTasks: Promise<void>[] = []
-    let collectedCommands: acp.AvailableCommand[] | undefined
-    const byId = new Map<string, ChatMessage>()
-    const getMessage = (id: string | undefined, role: 'user' | 'assistant', kind: 'text' | 'thinking'): ChatMessage => {
-      const key = id ?? (role === 'assistant' ? 'assistant' : crypto.randomUUID())
-      const existing = byId.get(key)
-      if (existing) return existing
-      const message: ChatMessage = { id: key, role, kind, content: '', createdAt: new Date().toISOString() }
-      byId.set(key, message)
-      collected.push(message)
-      return message
-    }
-    const pushText = (
-      id: string | undefined,
-      role: 'user' | 'assistant',
-      kind: 'text' | 'thinking',
-      text: string
-    ): void => {
-      getMessage(id, role, kind).content += text
-    }
-    const pushImage = (id: string | undefined, role: 'user' | 'assistant', content: acp.ImageContent): void => {
-      const message = getMessage(id, role, 'text')
-      attachmentTasks.push(
-        this.storeImageContent(content).then((attachment) => {
-          message.attachments = [...(message.attachments ?? []), attachment]
-        })
-      )
-    }
+    this.activeSessionId = sessionId
+    this.sessionCwd = cwd
 
-    let resolveDone: (() => void) | undefined
-    const done = new Promise<void>((resolve) => {
-      resolveDone = resolve
+    const response = await this.connection.agent.request(acp.methods.agent.session.load, {
+      sessionId,
+      cwd,
+      mcpServers: this.automationMcpServers()
     })
-
-    this.sessionUpdateListener = (notification) => {
-      if (notification.sessionId !== sessionId) return
-      const update = notification.update
-      // 回放是渐进式送达的；adapter 在回放结束后发送 available_commands_update，作为完成信号
-      if (update.sessionUpdate === 'available_commands_update') {
-        collectedCommands = update.availableCommands
-        resolveDone?.()
-        return
-      }
-      if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text') {
-        pushText(update.messageId ?? undefined, 'assistant', 'text', update.content.text)
-      } else if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'image') {
-        pushImage(update.messageId ?? undefined, 'assistant', update.content)
-      } else if (update.sessionUpdate === 'agent_thought_chunk' && update.content.type === 'text') {
-        // 思考过程：与正文区分 id，避免被按 messageId 合并
-        pushText(
-          update.messageId ? `${update.messageId}:thinking` : undefined,
-          'assistant',
-          'thinking',
-          update.content.text
-        )
-      } else if (update.sessionUpdate === 'user_message_chunk' && update.content.type === 'text') {
-        pushText(update.messageId ?? undefined, 'user', 'text', update.content.text)
-      } else if (update.sessionUpdate === 'user_message_chunk' && update.content.type === 'image') {
-        pushImage(update.messageId ?? undefined, 'user', update.content)
-      } else if (update.sessionUpdate === 'tool_call') {
-        collected.push({
-          id: crypto.randomUUID(),
-          role: 'system',
-          kind: 'tool',
-          title: update.title,
-          content: '',
-          createdAt: new Date().toISOString()
-        })
-      }
-    }
-
-    let response: acp.LoadSessionResponse
-    try {
-      response = await this.connection.agent.request(acp.methods.agent.session.load, { sessionId, cwd, mcpServers: this.automationMcpServers() })
-      // 等待回放完成信号，兜底 5s
-      await Promise.race([done, new Promise((resolve) => setTimeout(resolve, 5000))])
-      await Promise.all(attachmentTasks)
-    } finally {
-      this.sessionUpdateListener = undefined
-    }
 
     const modes = this.toAgentModes(response.modes)
     const model = this.toAgentModel(response.configOptions)
-    this.activeSessionId = sessionId
     const currentModeId = await this.restorePreferredMode(modes, response.modes?.currentModeId)
+
     this.setState({
       ...this.state,
       sessionId,
       modes,
       currentModeId,
       model,
-      commands: this.toAgentCommands(collectedCommands)
+      commands: undefined,
+      usage: undefined
     })
+
     await this.restorePreferredModel(this.state.model)
-    return { sessionId, messages: collected, modes, currentModeId }
+
+    return { sessionId, messages: [], modes, currentModeId }
   }
 
   private toAgentCommands(commands: acp.AvailableCommand[] | undefined): AgentCommand[] | undefined {
@@ -266,7 +191,7 @@ export class AcpBridge extends EventEmitter {
     const modes = this.toAgentModes(response.modes)
     const model = this.toAgentModel(response.configOptions)
     const currentModeId = await this.restorePreferredMode(modes, response.modes?.currentModeId)
-    this.setState({ ...this.state, sessionId: response.sessionId, modes, currentModeId, model })
+    this.setState({ ...this.state, sessionId: response.sessionId, modes, currentModeId, model, usage: undefined })
     await this.restorePreferredModel(this.state.model)
     return { sessionId: response.sessionId, modes, currentModeId }
   }
@@ -374,7 +299,6 @@ export class AcpBridge extends EventEmitter {
   dispose(): void {
     this.activeSessionId = undefined
     this.sessionCwd = undefined
-    this.sessionUpdateListener = undefined
     this.connection?.close()
     this.agentProcess?.kill()
     this.connection = undefined
@@ -382,14 +306,14 @@ export class AcpBridge extends EventEmitter {
     if (this.state.status !== 'error') this.setState({ status: 'disconnected' })
   }
 
-  /** 把 ACP 的 session/update 通知路由到临时监听器或当前会话。 */
+  /** 把 ACP 的 session/update 通知路由到当前会话。 */
   private handleSessionUpdate(notification: SessionNotification): void {
-    if (this.sessionUpdateListener) {
-      this.sessionUpdateListener(notification)
-      return
-    }
     if (!this.activeSessionId || notification.sessionId !== this.activeSessionId) return
     const update = notification.update
+    if (update.sessionUpdate === 'usage_update') {
+      this.setState({ ...this.state, usage: { used: update.used, size: update.size } })
+      return
+    }
     if (update.sessionUpdate === 'available_commands_update') {
       this.setState({ ...this.state, commands: this.toAgentCommands(update.availableCommands) })
       return
@@ -400,6 +324,16 @@ export class AcpBridge extends EventEmitter {
     }
     if (update.sessionUpdate === 'config_option_update') {
       this.setState({ ...this.state, model: this.toAgentModel(update.configOptions) })
+      return
+    }
+    if (update.sessionUpdate === 'user_message_chunk' && update.content.type === 'text') {
+      this.emit('message', {
+        id: update.messageId ?? crypto.randomUUID(),
+        role: 'user',
+        kind: 'text',
+        content: update.content.text,
+        createdAt: new Date().toISOString()
+      } satisfies ChatMessage)
       return
     }
     if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text') {

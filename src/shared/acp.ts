@@ -31,6 +31,11 @@ export interface AgentCommand {
   hint?: string
 }
 
+export interface AgentUsage {
+  used: number
+  size: number
+}
+
 export interface AgentState {
   status: AgentStatus
   sessionId?: string
@@ -40,6 +45,7 @@ export interface AgentState {
   model?: AgentModel
   /** 当前会话可用的 slash 命令，随会话变化。 */
   commands?: AgentCommand[]
+  usage?: AgentUsage
 }
 
 export interface ChatMessage {

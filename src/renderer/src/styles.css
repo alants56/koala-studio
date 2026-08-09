@@ -761,6 +761,16 @@ input {
   white-space: nowrap;
 }
 
+.chat-token-usage {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 4px 16px;
+  cursor: default;
+  white-space: nowrap;
+  text-align: right;
+}
+
 .chat-status {
   display: inline-flex;
   height: 23px;

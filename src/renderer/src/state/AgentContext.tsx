@@ -59,9 +59,9 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
     }
 
     assertAcpApi()
+    setMessages(INITIAL_MESSAGES)
     const loaded = await acp.loadSession(initialSessionId, cwd)
     setSessionId(loaded.sessionId)
-    setMessages(loaded.messages.length > 0 ? loaded.messages : INITIAL_MESSAGES)
   }, [cwd, ensureSession, initialSessionId])
 
   const connect = useCallback(async () => {
@@ -123,9 +123,9 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
 
   const loadSession = useCallback(
     async (id: string) => {
+      setMessages(INITIAL_MESSAGES)
       const loaded = await acp.loadSession(id, cwd)
       setSessionId(loaded.sessionId)
-      setMessages(loaded.messages.length > 0 ? loaded.messages : INITIAL_MESSAGES)
     },
     [cwd]
   )
@@ -140,9 +140,9 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
     const removeState = acp.onState(setState)
     const removeMessage = acp.onMessage((incoming) => {
       setMessages((current) => {
-        // 非 assistant 消息直接追加
-        if (incoming.role !== 'assistant') return [...current, incoming]
-        // assistant 流式消息按 id 合并内容
+        // system 消息直接追加（无 id 合并需求）
+        if (incoming.role === 'system') return [...current, incoming]
+        // user / assistant 流式消息按 id 合并内容
         const existing = current.findIndex((item) => item.id === incoming.id)
         if (existing === -1) return [...current, incoming]
         return current.map((item, index) =>

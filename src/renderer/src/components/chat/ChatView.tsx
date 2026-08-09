@@ -9,6 +9,12 @@ import { ChatComposer } from './ChatComposer'
 import { ConnectingScreen } from './ConnectingScreen'
 import { ChatThread } from './ChatThread'
 
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+  return String(n)
+}
+
 /** 单个项目的协作会话视图：小圆点状态 + 对话线程 + 输入区。 */
 export function ChatView({ project }: { project: Project }): ReactElement {
   const { state, messages, connect, createNewSession } = useAgent()
@@ -90,6 +96,13 @@ export function ChatView({ project }: { project: Project }): ReactElement {
 
       <ChatThread />
       <ChatComposer />
+      {state.usage && (
+        <Tooltip title={`上下文：${state.usage.used.toLocaleString()} / ${state.usage.size.toLocaleString()} tokens`}>
+          <span className="chat-token-usage">
+            {formatTokens(state.usage.used)} / {formatTokens(state.usage.size)}
+          </span>
+        </Tooltip>
+      )}
     </div>
   )
 }
