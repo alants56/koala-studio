@@ -16,7 +16,7 @@ export function ChatThread(): ReactElement {
   return (
     <section
       ref={scrollRef}
-      className="chat-thread flex flex-1 flex-col gap-4 overflow-y-auto"
+      className="chat-thread flex flex-1 flex-col gap-1 overflow-y-auto"
       aria-label="Koala 对话"
     >
       {messages.map((message) => (
