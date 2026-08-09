@@ -25,7 +25,9 @@ import {
   getLastDirectoryPath,
   getPreferredPermissionModeId,
   setLastDirectoryPath,
-  setPreferredPermissionModeId
+  setPreferredPermissionModeId,
+  getPreferredModelId,
+  setPreferredModelId
 } from './services/preferences-store'
 import { attachmentFilePath, importAttachments } from './services/attachment-store'
 
@@ -36,7 +38,9 @@ protocol.registerSchemesAsPrivileged([
 let mainWindow: BrowserWindow | undefined
 const acpBridge = new AcpBridge({
   getPreferredModeId: getPreferredPermissionModeId,
-  setPreferredModeId: setPreferredPermissionModeId
+  setPreferredModeId: setPreferredPermissionModeId,
+  getPreferredModelId: getPreferredModelId,
+  setPreferredModelId: setPreferredModelId
 })
 let automationScheduler: AutomationScheduler | undefined
 let httpMcpProcess: ChildProcess | undefined

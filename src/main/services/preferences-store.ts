@@ -5,6 +5,7 @@ import { join } from 'node:path'
 interface AppPreferences {
   permissionModeId?: string
   lastDirectoryPath?: string
+  preferredModelId?: string
 }
 
 const STORE_FILE = 'preferences.json'
@@ -30,7 +31,9 @@ async function readPreferences(): Promise<AppPreferences> {
       permissionModeId:
         typeof preferences.permissionModeId === 'string' ? preferences.permissionModeId : undefined,
       lastDirectoryPath:
-        typeof preferences.lastDirectoryPath === 'string' ? preferences.lastDirectoryPath : undefined
+        typeof preferences.lastDirectoryPath === 'string' ? preferences.lastDirectoryPath : undefined,
+      preferredModelId:
+        typeof preferences.preferredModelId === 'string' ? preferences.preferredModelId : undefined
     }
   } catch {
     cache = {}
@@ -65,4 +68,12 @@ export async function getLastDirectoryPath(): Promise<string | undefined> {
 
 export async function setLastDirectoryPath(lastDirectoryPath: string): Promise<void> {
   await updatePreferences({ lastDirectoryPath })
+}
+
+export async function getPreferredModelId(): Promise<string | undefined> {
+  return (await readPreferences()).preferredModelId
+}
+
+export async function setPreferredModelId(preferredModelId: string): Promise<void> {
+  await updatePreferences({ preferredModelId })
 }

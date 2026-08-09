@@ -30,6 +30,8 @@ const MAX_EMBEDDED_TEXT_BYTES = 2 * 1024 * 1024
 interface AcpBridgeOptions {
   getPreferredModeId?: () => Promise<string | undefined>
   setPreferredModeId?: (modeId: string) => Promise<void>
+  getPreferredModelId?: () => Promise<string | undefined>
+  setPreferredModelId?: (modelId: string) => Promise<void>
 }
 
 export class AcpBridge extends EventEmitter {
@@ -241,6 +243,7 @@ export class AcpBridge extends EventEmitter {
       model,
       commands: this.toAgentCommands(collectedCommands)
     })
+    await this.restorePreferredModel(this.state.model)
     return { sessionId, messages: collected, modes, currentModeId }
   }
 
@@ -262,6 +265,7 @@ export class AcpBridge extends EventEmitter {
     const model = this.toAgentModel(response.configOptions)
     const currentModeId = await this.restorePreferredMode(modes, response.modes?.currentModeId)
     this.setState({ ...this.state, sessionId: response.sessionId, modes, currentModeId, model })
+    await this.restorePreferredModel(this.state.model)
     return { sessionId: response.sessionId, modes, currentModeId }
   }
 
@@ -325,6 +329,22 @@ export class AcpBridge extends EventEmitter {
       value: modelId
     })
     this.setState({ ...this.state, model: this.toAgentModel(response.configOptions) })
+    await this.options.setPreferredModelId?.(modelId)
+  }
+
+  private async restorePreferredModel(model: AgentModel | undefined): Promise<void> {
+    if (!model || !this.connection || !this.activeSessionId) return
+    const preferredModelId = await this.options.getPreferredModelId?.()
+    if (!preferredModelId || preferredModelId === model.currentValue) return
+    if (!model.options.some((option) => option.value === preferredModelId)) return
+
+    const response = await this.connection.agent.request(acp.methods.agent.session.setConfigOption, {
+      sessionId: this.activeSessionId,
+      configId: model.configId,
+      value: preferredModelId
+    })
+    const restoredModel = this.toAgentModel(response.configOptions)
+    this.setState({ ...this.state, model: restoredModel })
   }
 
   private async restorePreferredMode(
