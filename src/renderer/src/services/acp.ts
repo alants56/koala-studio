@@ -6,6 +6,7 @@ const REQUIRED_METHODS: ReadonlyArray<keyof AcpApi> = [
   'prompt',
   'stop',
   'setMode',
+  'setModel',
   'listSessions',
   'loadSession',
   'createSession',

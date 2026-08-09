@@ -6,6 +6,21 @@ export interface AgentMode {
   description?: string
 }
 
+/** ACP 会话提供的模型选择项。 */
+export interface AgentModelOption {
+  value: string
+  name: string
+  description?: string
+}
+
+/** 当前会话的模型选择器，由 ACP adapter 提供真实可用的模型列表。 */
+export interface AgentModel {
+  configId: string
+  name: string
+  currentValue: string
+  options: AgentModelOption[]
+}
+
 /** Claude Code 的可用 slash 命令（来自 ACP 的 available_commands_update）。 */
 export interface AgentCommand {
   name: string
@@ -20,6 +35,7 @@ export interface AgentState {
   detail?: string
   modes?: AgentMode[]
   currentModeId?: string
+  model?: AgentModel
   /** 当前会话可用的 slash 命令，随会话变化。 */
   commands?: AgentCommand[]
 }
@@ -68,6 +84,7 @@ export interface AcpApi {
   prompt: (request: PromptRequest) => Promise<void>
   stop: () => Promise<void>
   setMode: (modeId: string) => Promise<void>
+  setModel: (modelId: string) => Promise<void>
   /** 通过 ACP session/list 查询 Claude Code 在该目录下的会话记录。 */
   listSessions: (cwd: string) => Promise<AcpSessionInfo[]>
   /** 通过 ACP session/load 加载历史会话，并返回回放的消息。 */

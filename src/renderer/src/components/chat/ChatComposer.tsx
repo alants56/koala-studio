@@ -8,6 +8,7 @@ import {
   EditOutlined,
   FileSearchOutlined,
   CheckOutlined,
+  DownOutlined,
   RobotOutlined,
   SafetyCertificateOutlined,
   StopOutlined,
@@ -175,10 +176,11 @@ function filterCommands(commands: AgentCommand[], query: string): AgentCommand[]
 
 /** 对话输入区：基于 Ant Design X 的 Sender，Enter 发送、加载时显示停止按钮。 */
 export function ChatComposer(): ReactElement {
-  const { state, send, stop, setMode } = useAgent()
+  const { state, send, stop, setMode, setModel } = useAgent()
   const { message } = App.useApp()
   const [prompt, setPrompt] = useState('')
   const [permissionOpen, setPermissionOpen] = useState(false)
+  const [modelOpen, setModelOpen] = useState(false)
   const [activeCommandIndex, setActiveCommandIndex] = useState(0)
   const [dismissedCommandPrompt, setDismissedCommandPrompt] = useState<string>()
 
@@ -207,6 +209,8 @@ export function ChatComposer(): ReactElement {
     [modes]
   )
   const currentMode = modeOptions.find((mode) => mode.value === (state.currentModeId ?? modes[0]?.id))
+  const model = state.model
+  const currentModel = model?.options.find((option) => option.value === model.currentValue)
 
   useEffect(() => {
     setActiveCommandIndex(0)
@@ -218,6 +222,15 @@ export function ChatComposer(): ReactElement {
       setPermissionOpen(false)
     } catch (error) {
       message.error(error instanceof Error ? error.message : '切换 Claude 权限模式失败')
+    }
+  }
+
+  const handleModelChange = async (modelId: string): Promise<void> => {
+    try {
+      await setModel(modelId)
+      setModelOpen(false)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '切换 Claude 模型失败')
     }
   }
 
@@ -281,6 +294,30 @@ export function ChatComposer(): ReactElement {
               <span className="chat-permission-option-description">{mode.description}</span>
             </span>
             {selected && <CheckOutlined className="chat-permission-option-check" />}
+          </button>
+        )
+      })}
+    </div>
+  )
+
+  const modelPanel = model && (
+    <div className="chat-model-panel" role="listbox" aria-label={`${model.name}列表`}>
+      {model.options.map((option) => {
+        const selected = option.value === model.currentValue
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="option"
+            aria-selected={selected}
+            className="chat-model-option"
+            onClick={() => void handleModelChange(option.value)}
+          >
+            <span className="chat-model-option-copy">
+              <span className="chat-model-option-title">{option.name}</span>
+              {option.description && <span className="chat-model-option-description">{option.description}</span>}
+            </span>
+            {selected && <CheckOutlined className="chat-model-option-check" />}
           </button>
         )
       })}
@@ -357,6 +394,28 @@ export function ChatComposer(): ReactElement {
                     aria-expanded={permissionOpen}
                   >
                     {currentMode?.label ?? '权限'}
+                  </Button>
+                </Popover>
+              </div>
+            )}
+            {model && (
+              <div className="chat-model-control">
+                <Popover
+                  placement="topRight"
+                  trigger="click"
+                  open={modelOpen}
+                  onOpenChange={setModelOpen}
+                  content={modelPanel}
+                >
+                  <Button
+                    type="text"
+                    className="chat-model-trigger"
+                    disabled={!ready}
+                    aria-label={`当前${model.name}：${currentModel?.name ?? model.currentValue}`}
+                    aria-expanded={modelOpen}
+                  >
+                    <span>{currentModel?.name ?? model.currentValue}</span>
+                    <DownOutlined aria-hidden="true" />
                   </Button>
                 </Popover>
               </div>

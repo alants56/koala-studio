@@ -1,6 +1,10 @@
 # Koala Studio
 
-基于 Electron、React、Ant Design 与 Agent Client Protocol (ACP) 的 Claude 桌面工作台。
+基于 Electron、React、Ant Design 与 Agent Client Protocol (ACP) 的 Agent Workspace 桌面工作台。
+
+
+> ❗❗❗ 当前项目处于开发中，每天可能会有大量提交，而且有时会不兼容之前的数据格式，建议fork到自己的仓库或本地。
+
 
 ## 开始
 
@@ -57,9 +61,50 @@ Claude 本地资源数据流：`renderer → preload (window.claude) → IPC →
 - `koala_delete_automation`
 - `koala_list_todos`、`koala_get_todo`
 - `koala_create_todo`、`koala_update_todo`、`koala_set_todo_done`
-- `koala_delete_todo`
+- `koala_reorder_todos`、`koala_delete_todo`
+
+待办 MCP 与工作台看板使用相同的数据字段：`columnId` 表示待办类型，`position` 表示类型内从 0 开始的位置。批量移动或排序时使用
+`koala_reorder_todos`，并传入受影响类型内的全部待办及连续位置。
 
 MCP 入口由 `pnpm mcp:build` 生成到 `out/mcp/mcp/automations-server.js`；标准 `pnpm dev` 和 `pnpm build` 都会自动构建它。
+
+### 连接 Koala Studio MCP
+
+只要 Koala Studio 保持运行，应用就会在本机启动一个 Streamable HTTP MCP 服务。将下面的配置添加到支持 HTTP MCP
+的 Agent 客户端，即可在外部管理 Koala Studio 中的自动化和待办。
+
+#### HTTP（推荐）
+
+适用于支持 Streamable HTTP MCP 的客户端，例如 Claude Code、Codex、Cursor、Windsurf 和 VS Code。
+
+```json
+{
+  "mcpServers": {
+    "koala-studio": {
+      "url": "http://127.0.0.1:29736/mcp"
+    }
+  }
+}
+```
+
+#### Claude Code 一行命令
+
+```bash
+claude mcp add --transport http --scope user koala-studio http://127.0.0.1:29736/mcp
+```
+
+连接后可运行 `claude mcp get koala-studio` 查看服务状态。
+
+#### Codex 一行命令
+
+```bash
+codex mcp add koala-studio --url http://127.0.0.1:29736/mcp
+```
+
+连接后可运行 `codex mcp get koala-studio` 查看服务配置。
+
+该服务只监听 `127.0.0.1`，不接受来自局域网的请求，也不需要额外的请求头或鉴权信息；Koala Studio 退出后服务会自动停止。
+应用内 ACP 会话仍使用自动注入的 stdio MCP，无需重复配置。
 
 ## 对话记录（来自 Claude Code）
 

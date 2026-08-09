@@ -1,7 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { join } from 'node:path'
 import type { CreateAutomationInput, UpdateAutomationInput } from '../shared/automations'
-import type { CreateTodoInput, UpdateTodoInput } from '../shared/todos'
+import type { CreateTodoInput, ReorderTodoInput, UpdateTodoInput } from '../shared/todos'
 import type { CreateProjectInput, UpdateProjectInput } from '../shared/projects'
 import { AcpBridge } from './services/acp-bridge'
 import {
@@ -15,9 +16,9 @@ import {
   saveClaudeSkill
 } from './services/claude-resources'
 import { createProject, deleteProject, listProjects, reorderProjects, updateProject } from './services/project-store'
-import { getAutomationStore } from './services/automation-store'
+import { automationsFilePath, getAutomationStore } from './services/automation-store'
 import { AutomationScheduler, executeScheduledAutomation } from './services/automation-scheduler'
-import { getTodoStore } from './services/todo-store'
+import { getTodoStore, todosFilePath } from './services/todo-store'
 import {
   getLastDirectoryPath,
   getPreferredPermissionModeId,
@@ -31,6 +32,29 @@ const acpBridge = new AcpBridge({
   setPreferredModeId: setPreferredPermissionModeId
 })
 let automationScheduler: AutomationScheduler | undefined
+let httpMcpProcess: ChildProcess | undefined
+
+function startHttpMcpServer(): void {
+  const entry = join(__dirname, '../mcp/mcp/automations-server.js')
+  httpMcpProcess = spawn(process.execPath, [entry], {
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+      KOALA_MCP_TRANSPORT: 'http',
+      KOALA_AUTOMATIONS_FILE: automationsFilePath(),
+      KOALA_TODOS_FILE: todosFilePath()
+    },
+    stdio: ['ignore', 'ignore', 'pipe']
+  })
+  httpMcpProcess.stderr?.on('data', (chunk: Buffer) => console.error(`[koala-mcp] ${chunk.toString().trim()}`))
+  httpMcpProcess.on('error', (error) => console.error('无法启动本地 Koala MCP 服务：', error))
+  httpMcpProcess.on('exit', () => { httpMcpProcess = undefined })
+}
+
+function stopHttpMcpServer(): void {
+  httpMcpProcess?.kill()
+  httpMcpProcess = undefined
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -91,6 +115,7 @@ app.whenReady().then(() => {
   ipcMain.handle('acp:prompt', (_, request) => acpBridge.prompt(request))
   ipcMain.handle('acp:stop', () => acpBridge.stop())
   ipcMain.handle('acp:set-mode', (_, modeId: string) => acpBridge.setMode(modeId))
+  ipcMain.handle('acp:set-model', (_, modelId: string) => acpBridge.setModel(modelId))
   ipcMain.handle('acp:list-sessions', async (_event, cwd: string) => {
     // 会话索引查询使用短连接，避免侧栏读取其他项目时切断当前聊天。
     const listingBridge = new AcpBridge()
@@ -122,6 +147,7 @@ app.whenReady().then(() => {
   ipcMain.handle('todos:get', (_event, id: string) => getTodoStore().get(id))
   ipcMain.handle('todos:create', (_event, input: CreateTodoInput) => getTodoStore().create(input))
   ipcMain.handle('todos:update', (_event, id: string, input: UpdateTodoInput) => getTodoStore().update(id, input))
+  ipcMain.handle('todos:reorder', (_event, items: ReorderTodoInput[]) => getTodoStore().reorder(items))
   ipcMain.handle('todos:set-done', (_event, id: string, done: boolean) => getTodoStore().setDone(id, done))
   ipcMain.handle('todos:delete', (_event, id: string) => getTodoStore().delete(id))
 
@@ -140,6 +166,7 @@ app.whenReady().then(() => {
 
   automationScheduler = new AutomationScheduler(getAutomationStore(), executeScheduledAutomation)
   automationScheduler.start()
+  startHttpMcpServer()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -153,4 +180,5 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   automationScheduler?.stop()
   acpBridge.dispose()
+  stopHttpMcpServer()
 })

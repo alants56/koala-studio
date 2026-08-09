@@ -8,6 +8,7 @@ import type {
   AcpSessionInfo,
   AcpSessionResult,
   AgentCommand,
+  AgentModel,
   AgentMode,
   AgentState,
   ChatMessage,
@@ -106,7 +107,7 @@ export class AcpBridge extends EventEmitter {
       this.connection = client.connect(stream)
       await this.connection.agent.request(acp.methods.agent.initialize, {
         protocolVersion: acp.PROTOCOL_VERSION,
-        clientCapabilities: {}
+        clientCapabilities: { session: { configOptions: { boolean: {} } } }
       })
       this.sessionCwd = cwd
       this.setState({ status: 'ready', detail: 'Claude 已连接' })
@@ -205,6 +206,7 @@ export class AcpBridge extends EventEmitter {
     }
 
     const modes = this.toAgentModes(response.modes)
+    const model = this.toAgentModel(response.configOptions)
     this.activeSessionId = sessionId
     const currentModeId = await this.restorePreferredMode(modes, response.modes?.currentModeId)
     this.setState({
@@ -212,6 +214,7 @@ export class AcpBridge extends EventEmitter {
       sessionId,
       modes,
       currentModeId,
+      model,
       commands: this.toAgentCommands(collectedCommands)
     })
     return { sessionId, messages: collected, modes, currentModeId }
@@ -232,8 +235,9 @@ export class AcpBridge extends EventEmitter {
     this.activeSessionId = response.sessionId
     this.sessionCwd = cwd
     const modes = this.toAgentModes(response.modes)
+    const model = this.toAgentModel(response.configOptions)
     const currentModeId = await this.restorePreferredMode(modes, response.modes?.currentModeId)
-    this.setState({ ...this.state, sessionId: response.sessionId, modes, currentModeId })
+    this.setState({ ...this.state, sessionId: response.sessionId, modes, currentModeId, model })
     return { sessionId: response.sessionId, modes, currentModeId }
   }
 
@@ -279,6 +283,22 @@ export class AcpBridge extends EventEmitter {
     })
     this.setState({ ...this.state, currentModeId: modeId })
     await this.options.setPreferredModeId?.(modeId)
+  }
+
+  async setModel(modelId: string): Promise<void> {
+    if (!this.connection || !this.activeSessionId || !this.state.model) {
+      throw new Error('当前会话不支持切换模型。')
+    }
+    if (!this.state.model.options.some((option) => option.value === modelId)) {
+      throw new Error('所选模型不在当前会话的可用列表中。')
+    }
+
+    const response = await this.connection.agent.request(acp.methods.agent.session.setConfigOption, {
+      sessionId: this.activeSessionId,
+      configId: this.state.model.configId,
+      value: modelId
+    })
+    this.setState({ ...this.state, model: this.toAgentModel(response.configOptions) })
   }
 
   private async restorePreferredMode(
@@ -330,6 +350,10 @@ export class AcpBridge extends EventEmitter {
       this.setState({ ...this.state, currentModeId: update.currentModeId })
       return
     }
+    if (update.sessionUpdate === 'config_option_update') {
+      this.setState({ ...this.state, model: this.toAgentModel(update.configOptions) })
+      return
+    }
     if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text') {
       this.emit('message', {
         id: update.messageId ?? 'assistant-stream',
@@ -369,5 +393,22 @@ export class AcpBridge extends EventEmitter {
 
   private toAgentModes(modes: acp.SessionModeState | null | undefined): AgentMode[] | undefined {
     return modes?.availableModes.map((mode) => ({ id: mode.id, name: mode.name, description: mode.description ?? undefined }))
+  }
+
+  private toAgentModel(configOptions: acp.SessionConfigOption[] | null | undefined): AgentModel | undefined {
+    const option = configOptions?.find((candidate) => candidate.category === 'model' && candidate.type === 'select')
+    if (!option || option.type !== 'select') return undefined
+
+    const options = option.options.flatMap((item) => ('options' in item ? item.options : [item]))
+    return {
+      configId: option.id,
+      name: option.name,
+      currentValue: option.currentValue,
+      options: options.map((model) => ({
+        value: model.value,
+        name: model.name,
+        description: model.description ?? undefined
+      }))
+    }
   }
 }

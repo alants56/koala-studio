@@ -11,6 +11,7 @@ const acp: AcpApi = {
   prompt: (request) => ipcRenderer.invoke('acp:prompt', request),
   stop: () => ipcRenderer.invoke('acp:stop'),
   setMode: (modeId) => ipcRenderer.invoke('acp:set-mode', modeId),
+  setModel: (modelId) => ipcRenderer.invoke('acp:set-model', modelId),
   listSessions: (cwd) => ipcRenderer.invoke('acp:list-sessions', cwd),
   loadSession: (sessionId, cwd) => ipcRenderer.invoke('acp:load-session', sessionId, cwd),
   createSession: (cwd) => ipcRenderer.invoke('acp:create-session', cwd),
@@ -61,6 +62,7 @@ const todos: TodosApi = {
   get: (id) => ipcRenderer.invoke('todos:get', id),
   create: (input) => ipcRenderer.invoke('todos:create', input),
   update: (id, input) => ipcRenderer.invoke('todos:update', id, input),
+  reorder: (items) => ipcRenderer.invoke('todos:reorder', items),
   setDone: (id, done) => ipcRenderer.invoke('todos:set-done', id, done),
   delete: (id) => ipcRenderer.invoke('todos:delete', id)
 }

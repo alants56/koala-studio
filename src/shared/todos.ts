@@ -1,8 +1,13 @@
+/** Column ids are stable user-defined identifiers; titles can be renamed independently. */
+export type TodoColumnId = string
+
 export interface TodoItem {
   id: string
   title: string
   done: boolean
   important: boolean
+  columnId: TodoColumnId
+  position: number
   projectId?: string
   sessionId?: string
   sessionTitle?: string
@@ -13,6 +18,8 @@ export interface TodoItem {
 export interface CreateTodoInput {
   title: string
   important?: boolean
+  columnId?: TodoColumnId
+  position?: number
   projectId?: string
   sessionId?: string
   sessionTitle?: string
@@ -22,9 +29,17 @@ export interface UpdateTodoInput {
   title?: string
   done?: boolean
   important?: boolean
+  columnId?: TodoColumnId
+  position?: number
   projectId?: string
   sessionId?: string
   sessionTitle?: string
+}
+
+export interface ReorderTodoInput {
+  id: string
+  columnId: TodoColumnId
+  position: number
 }
 
 export interface TodoListInput {
@@ -50,6 +65,7 @@ export interface TodosApi {
   get: (id: string) => Promise<TodoItem>
   create: (input: CreateTodoInput) => Promise<TodoItem>
   update: (id: string, input: UpdateTodoInput) => Promise<TodoItem>
+  reorder: (items: ReorderTodoInput[]) => Promise<TodoItem[]>
   setDone: (id: string, done: boolean) => Promise<TodoItem>
   delete: (id: string) => Promise<void>
 }
