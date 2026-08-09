@@ -223,9 +223,8 @@ export class AcpBridge extends EventEmitter {
     let response: acp.LoadSessionResponse
     try {
       response = await this.connection.agent.request(acp.methods.agent.session.load, { sessionId, cwd, mcpServers: this.automationMcpServers() })
-      // 等待回放完成信号（兜底 30s），再给最后的 chunk 一点落定时间
-      await Promise.race([done, new Promise((resolve) => setTimeout(resolve, 30000))])
-      await new Promise((resolve) => setTimeout(resolve, 300))
+      // 等待回放完成信号，兜底 5s
+      await Promise.race([done, new Promise((resolve) => setTimeout(resolve, 5000))])
       await Promise.all(attachmentTasks)
     } finally {
       this.sessionUpdateListener = undefined

@@ -5,8 +5,7 @@ import { acp, assertAcpApi } from '@/services/acp'
 import { INITIAL_MESSAGES } from '@/utils/constants'
 import { dispatchSessionActivity } from '@/utils/session-events'
 
-/** 连接加载动画的最短展示时长：连接过快时也保证动画可感知，避免一闪而过。 */
-const MIN_CONNECTING_MS = 800
+const MIN_CONNECTING_MS = 0
 
 interface AgentContextValue {
   /** 当前 ACP 连接状态。 */
