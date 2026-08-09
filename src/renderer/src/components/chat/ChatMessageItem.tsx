@@ -1,6 +1,6 @@
-import type { ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import { Bubble, ThoughtChain } from '@ant-design/x'
-import { BulbOutlined, FileMarkdownOutlined, FileOutlined, FilePdfOutlined, ToolOutlined } from '@ant-design/icons'
+import { BulbOutlined, CheckOutlined, CopyOutlined, FileMarkdownOutlined, FileOutlined, FilePdfOutlined, ToolOutlined } from '@ant-design/icons'
 import { Image } from 'antd'
 import type { ChatAttachment, ChatMessage } from '@/models'
 import { MarkdownMessage } from './MarkdownMessage'
@@ -45,6 +45,55 @@ function MessageContent({ message, inverse = false, streaming = false }: { messa
         </div>
       )}
       {message.content && <MarkdownMessage content={message.content} inverse={inverse} streaming={streaming} />}
+    </div>
+  )
+}
+
+function UserBubble({ message }: { message: ChatMessage }): ReactElement {
+  const [copied, setCopied] = useState(false)
+  const [hovered, setHovered] = useState(false)
+
+  function handleCopy(): void {
+    void navigator.clipboard.writeText(message.content ?? '').then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  return (
+    <div
+      className="flex flex-col items-end gap-1"
+      style={{ maxWidth: MAX_WIDTH, marginLeft: 'auto' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <Bubble
+        placement="end"
+        content={<MessageContent message={message} inverse />}
+        shape="corner"
+        styles={{ content: { background: 'var(--primary)', color: 'var(--on-primary)' } }}
+      />
+      <button
+        type="button"
+        onClick={handleCopy}
+        style={{
+          opacity: hovered ? 1 : 0,
+          transition: 'opacity 0.15s',
+          pointerEvents: hovered ? 'auto' : 'none',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '2px 6px',
+          color: 'var(--muted)',
+          fontSize: 12,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+        }}
+      >
+        {copied ? <CheckOutlined style={{ color: 'var(--success)' }} /> : <CopyOutlined />}
+        {copied ? '已复制' : '复制'}
+      </button>
     </div>
   )
 }
@@ -103,15 +152,7 @@ export function ChatMessageItem({ message, streaming = false }: { message: ChatM
   }
 
   if (message.role === 'user') {
-    return (
-      <Bubble
-        placement="end"
-        content={<MessageContent message={message} inverse />}
-        shape="corner"
-        style={{ maxWidth: MAX_WIDTH }}
-        styles={{ content: { background: 'var(--primary)', color: 'var(--on-primary)' } }}
-      />
-    )
+    return <UserBubble message={message} />
   }
 
   if (message.role === 'system') {

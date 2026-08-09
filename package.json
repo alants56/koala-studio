@@ -41,8 +41,9 @@
     "vite": "^7.3.1"
   },
   "build": {
-    "appId": "com.koala.studio",
+    "appId": "com.alants56.koala-studio",
     "productName": "Koala Studio",
+    "icon": "build/icon",
     "files": [
       "out/**/*"
     ],
