@@ -13,9 +13,11 @@ const acp: AcpApi = {
   stop: () => ipcRenderer.invoke('acp:stop'),
   setMode: (modeId) => ipcRenderer.invoke('acp:set-mode', modeId),
   setModel: (modelId) => ipcRenderer.invoke('acp:set-model', modelId),
+  setEffort: (effortId) => ipcRenderer.invoke('acp:set-effort', effortId),
   listSessions: (cwd) => ipcRenderer.invoke('acp:list-sessions', cwd),
   loadSession: (sessionId, cwd) => ipcRenderer.invoke('acp:load-session', sessionId, cwd),
   createSession: (cwd) => ipcRenderer.invoke('acp:create-session', cwd),
+  respondPermission: (optionId) => ipcRenderer.invoke('acp:respond-permission', optionId),
   onState: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, state: Parameters<typeof listener>[0]) => listener(state)
     ipcRenderer.on('acp:state', handler)

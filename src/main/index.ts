@@ -27,7 +27,9 @@ import {
   setLastDirectoryPath,
   setPreferredPermissionModeId,
   getPreferredModelId,
-  setPreferredModelId
+  setPreferredModelId,
+  getPreferredEffortId,
+  setPreferredEffortId
 } from './services/preferences-store'
 import { attachmentFilePath, importAttachments } from './services/attachment-store'
 
@@ -40,7 +42,9 @@ const acpBridge = new AcpBridge({
   getPreferredModeId: getPreferredPermissionModeId,
   setPreferredModeId: setPreferredPermissionModeId,
   getPreferredModelId: getPreferredModelId,
-  setPreferredModelId: setPreferredModelId
+  setPreferredModelId: setPreferredModelId,
+  getPreferredEffortId: getPreferredEffortId,
+  setPreferredEffortId: setPreferredEffortId
 })
 let automationScheduler: AutomationScheduler | undefined
 let httpMcpProcess: ChildProcess | undefined
@@ -136,6 +140,7 @@ app.whenReady().then(() => {
   ipcMain.handle('acp:stop', () => acpBridge.stop())
   ipcMain.handle('acp:set-mode', (_, modeId: string) => acpBridge.setMode(modeId))
   ipcMain.handle('acp:set-model', (_, modelId: string) => acpBridge.setModel(modelId))
+  ipcMain.handle('acp:set-effort', (_, effortId: string) => acpBridge.setEffort(effortId))
   ipcMain.handle('acp:list-sessions', async (_event, cwd: string) => {
     // 会话索引查询使用短连接，避免侧栏读取其他项目时切断当前聊天。
     const listingBridge = new AcpBridge()
@@ -147,6 +152,7 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('acp:load-session', (_event, sessionId: string, cwd: string) => acpBridge.loadSession(sessionId, cwd))
   ipcMain.handle('acp:create-session', (_event, cwd: string) => acpBridge.createSession(cwd))
+  ipcMain.handle('acp:respond-permission', (_event, optionId: string) => acpBridge.respondPermission(optionId))
 
   ipcMain.handle('projects:list', () => listProjects())
   ipcMain.handle('projects:create', (_event, input: CreateProjectInput) => createProject(input))

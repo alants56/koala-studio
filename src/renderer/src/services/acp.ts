@@ -7,9 +7,11 @@ const REQUIRED_METHODS: ReadonlyArray<keyof AcpApi> = [
   'stop',
   'setMode',
   'setModel',
+  'setEffort',
   'listSessions',
   'loadSession',
   'createSession',
+  'respondPermission',
   'onState',
   'onMessage'
 ]

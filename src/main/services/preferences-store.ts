@@ -6,6 +6,7 @@ interface AppPreferences {
   permissionModeId?: string
   lastDirectoryPath?: string
   preferredModelId?: string
+  preferredEffortId?: string
 }
 
 const STORE_FILE = 'preferences.json'
@@ -33,7 +34,9 @@ async function readPreferences(): Promise<AppPreferences> {
       lastDirectoryPath:
         typeof preferences.lastDirectoryPath === 'string' ? preferences.lastDirectoryPath : undefined,
       preferredModelId:
-        typeof preferences.preferredModelId === 'string' ? preferences.preferredModelId : undefined
+        typeof preferences.preferredModelId === 'string' ? preferences.preferredModelId : undefined,
+      preferredEffortId:
+        typeof preferences.preferredEffortId === 'string' ? preferences.preferredEffortId : undefined
     }
   } catch {
     cache = {}
@@ -76,4 +79,12 @@ export async function getPreferredModelId(): Promise<string | undefined> {
 
 export async function setPreferredModelId(preferredModelId: string): Promise<void> {
   await updatePreferences({ preferredModelId })
+}
+
+export async function getPreferredEffortId(): Promise<string | undefined> {
+  return (await readPreferences()).preferredEffortId
+}
+
+export async function setPreferredEffortId(preferredEffortId: string): Promise<void> {
+  await updatePreferences({ preferredEffortId })
 }

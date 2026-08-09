@@ -23,12 +23,37 @@ export interface AgentModel {
   options: AgentModelOption[]
 }
 
+/** ACP 会话提供的推理强度选择项。 */
+export interface AgentEffortOption {
+  value: string
+  name: string
+}
+
+/** 当前会话的推理强度选择器，仅在模型支持时出现。 */
+export interface AgentEffort {
+  configId: string
+  name: string
+  currentValue: string
+  options: AgentEffortOption[]
+}
+
 /** Claude Code 的可用 slash 命令（来自 ACP 的 available_commands_update）。 */
 export interface AgentCommand {
   name: string
   description: string
   /** 命令所需的参数提示，例如 model 的 "[模型名]"；无参数时省略。 */
   hint?: string
+}
+
+export interface AgentPermissionOption {
+  optionId: string
+  name: string
+  kind: 'allow_once' | 'allow_always' | 'reject_once' | 'reject_always'
+}
+
+export interface AgentPermissionRequest {
+  toolTitle?: string
+  options: AgentPermissionOption[]
 }
 
 export interface AgentUsage {
@@ -43,9 +68,13 @@ export interface AgentState {
   modes?: AgentMode[]
   currentModeId?: string
   model?: AgentModel
+  /** 当前会话的推理强度选择器，仅模型支持时存在。 */
+  effort?: AgentEffort
   /** 当前会话可用的 slash 命令，随会话变化。 */
   commands?: AgentCommand[]
   usage?: AgentUsage
+  /** 当前待确认的权限请求（输入框上方展示）。 */
+  pendingPermission?: AgentPermissionRequest
 }
 
 export interface ChatMessage {
@@ -96,12 +125,15 @@ export interface AcpApi {
   stop: () => Promise<void>
   setMode: (modeId: string) => Promise<void>
   setModel: (modelId: string) => Promise<void>
+  setEffort: (effortId: string) => Promise<void>
   /** 通过 ACP session/list 查询 Claude Code 在该目录下的会话记录。 */
   listSessions: (cwd: string) => Promise<AcpSessionInfo[]>
   /** 通过 ACP session/load 加载历史会话，并返回回放的消息。 */
   loadSession: (sessionId: string, cwd: string) => Promise<LoadedSession>
   /** 通过 ACP session/new 新建一个会话。 */
   createSession: (cwd: string) => Promise<AcpSessionResult>
+  /** 回复当前待确认的权限请求。*/
+  respondPermission: (optionId: string) => Promise<void>
   onState: (listener: (state: AgentState) => void) => () => void
   onMessage: (listener: (message: ChatMessage) => void) => () => void
 }

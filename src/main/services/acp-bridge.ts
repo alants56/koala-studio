@@ -8,6 +8,7 @@ import type {
   AcpSessionInfo,
   AcpSessionResult,
   AgentCommand,
+  AgentEffort,
   AgentModel,
   AgentMode,
   AgentState,
@@ -32,6 +33,8 @@ interface AcpBridgeOptions {
   setPreferredModeId?: (modeId: string) => Promise<void>
   getPreferredModelId?: () => Promise<string | undefined>
   setPreferredModelId?: (modelId: string) => Promise<void>
+  getPreferredEffortId?: () => Promise<string | undefined>
+  setPreferredEffortId?: (effortId: string) => Promise<void>
 }
 
 export class AcpBridge extends EventEmitter {
@@ -41,6 +44,7 @@ export class AcpBridge extends EventEmitter {
   private sessionCwd?: string
   private activeSessionId?: string
   private connectPromise?: Promise<AgentState>
+  private permissionResolve?: (optionId: string | null) => void
 
   constructor(private readonly options: AcpBridgeOptions = {}) {
     super()
@@ -110,7 +114,7 @@ export class AcpBridge extends EventEmitter {
       )
       const client = acp
         .client({ name: 'Koala Studio' })
-        .onRequest(acp.methods.client.session.requestPermission, () => ({ outcome: { outcome: 'cancelled' } }))
+        .onRequest(acp.methods.client.session.requestPermission, (context) => this.handlePermissionRequest(context.params))
         .onNotification(acp.methods.client.session.update, (context) => this.handleSessionUpdate(context.params))
 
       this.connection = client.connect(stream)
@@ -157,6 +161,7 @@ export class AcpBridge extends EventEmitter {
 
     const modes = this.toAgentModes(response.modes)
     const model = this.toAgentModel(response.configOptions)
+    const effort = this.toAgentEffort(response.configOptions)
     const currentModeId = await this.restorePreferredMode(modes, response.modes?.currentModeId)
 
     this.setState({
@@ -165,11 +170,13 @@ export class AcpBridge extends EventEmitter {
       modes,
       currentModeId,
       model,
+      effort,
       commands: undefined,
       usage: undefined
     })
 
     await this.restorePreferredModel(this.state.model)
+    await this.restorePreferredEffort(this.state.effort)
 
     return { sessionId, messages: [], modes, currentModeId }
   }
@@ -190,9 +197,11 @@ export class AcpBridge extends EventEmitter {
     this.sessionCwd = cwd
     const modes = this.toAgentModes(response.modes)
     const model = this.toAgentModel(response.configOptions)
+    const effort = this.toAgentEffort(response.configOptions)
     const currentModeId = await this.restorePreferredMode(modes, response.modes?.currentModeId)
-    this.setState({ ...this.state, sessionId: response.sessionId, modes, currentModeId, model, usage: undefined })
+    this.setState({ ...this.state, sessionId: response.sessionId, modes, currentModeId, model, effort, usage: undefined })
     await this.restorePreferredModel(this.state.model)
+    await this.restorePreferredEffort(this.state.effort)
     return { sessionId: response.sessionId, modes, currentModeId }
   }
 
@@ -255,7 +264,7 @@ export class AcpBridge extends EventEmitter {
       configId: this.state.model.configId,
       value: modelId
     })
-    this.setState({ ...this.state, model: this.toAgentModel(response.configOptions) })
+    this.setState({ ...this.state, model: this.toAgentModel(response.configOptions), effort: this.toAgentEffort(response.configOptions) })
     await this.options.setPreferredModelId?.(modelId)
   }
 
@@ -272,6 +281,37 @@ export class AcpBridge extends EventEmitter {
     })
     const restoredModel = this.toAgentModel(response.configOptions)
     this.setState({ ...this.state, model: restoredModel })
+  }
+
+  private async restorePreferredEffort(effort: AgentEffort | undefined): Promise<void> {
+    if (!effort || !this.connection || !this.activeSessionId) return
+    const preferredEffortId = await this.options.getPreferredEffortId?.()
+    if (!preferredEffortId || preferredEffortId === effort.currentValue) return
+    if (!effort.options.some((option) => option.value === preferredEffortId)) return
+
+    const response = await this.connection.agent.request(acp.methods.agent.session.setConfigOption, {
+      sessionId: this.activeSessionId,
+      configId: effort.configId,
+      value: preferredEffortId
+    })
+    this.setState({ ...this.state, effort: this.toAgentEffort(response.configOptions) })
+  }
+
+  async setEffort(effortId: string): Promise<void> {
+    if (!this.connection || !this.activeSessionId || !this.state.effort) {
+      throw new Error('当前会话不支持切换推理强度。')
+    }
+    if (!this.state.effort.options.some((option) => option.value === effortId)) {
+      throw new Error('所选推理强度不在当前会话的可用列表中。')
+    }
+
+    const response = await this.connection.agent.request(acp.methods.agent.session.setConfigOption, {
+      sessionId: this.activeSessionId,
+      configId: this.state.effort.configId,
+      value: effortId
+    })
+    this.setState({ ...this.state, effort: this.toAgentEffort(response.configOptions) })
+    await this.options.setPreferredEffortId?.(effortId)
   }
 
   private async restorePreferredMode(
@@ -296,6 +336,39 @@ export class AcpBridge extends EventEmitter {
     return preferredModeId
   }
 
+  respondPermission(optionId: string): void {
+    this.permissionResolve?.(optionId)
+    this.permissionResolve = undefined
+  }
+
+  private handlePermissionRequest(params: acp.RequestPermissionRequest): Promise<acp.RequestPermissionResponse> {
+    // Cancel any previously pending request that was never answered
+    this.permissionResolve?.(null)
+
+    return new Promise<acp.RequestPermissionResponse>((resolve) => {
+      this.permissionResolve = (optionId) => {
+        this.setState({ ...this.state, pendingPermission: undefined })
+        if (optionId === null) {
+          resolve({ outcome: { outcome: 'cancelled' } })
+        } else {
+          resolve({ outcome: { outcome: 'selected', optionId } })
+        }
+      }
+
+      this.setState({
+        ...this.state,
+        pendingPermission: {
+          toolTitle: params.toolCall.title ?? undefined,
+          options: params.options.map((option) => ({
+            optionId: option.optionId,
+            name: option.name,
+            kind: option.kind
+          }))
+        }
+      })
+    })
+  }
+
   dispose(): void {
     this.activeSessionId = undefined
     this.sessionCwd = undefined
@@ -303,6 +376,8 @@ export class AcpBridge extends EventEmitter {
     this.agentProcess?.kill()
     this.connection = undefined
     this.agentProcess = undefined
+    this.permissionResolve?.(null)
+    this.permissionResolve = undefined
     if (this.state.status !== 'error') this.setState({ status: 'disconnected' })
   }
 
@@ -443,6 +518,19 @@ export class AcpBridge extends EventEmitter {
         name: model.name,
         description: model.description ?? undefined
       }))
+    }
+  }
+
+  private toAgentEffort(configOptions: acp.SessionConfigOption[] | null | undefined): AgentEffort | undefined {
+    const option = configOptions?.find((candidate) => candidate.category === 'thought_level' && candidate.type === 'select')
+    if (!option || option.type !== 'select') return undefined
+
+    const options = option.options.flatMap((item) => ('options' in item ? item.options : [item]))
+    return {
+      configId: option.id,
+      name: option.name,
+      currentValue: option.currentValue,
+      options: options.map((o) => ({ value: o.value, name: o.name }))
     }
   }
 }

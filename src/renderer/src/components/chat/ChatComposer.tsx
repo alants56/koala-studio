@@ -15,10 +15,11 @@ import {
   SafetyCertificateOutlined,
   SendOutlined,
   StopOutlined,
-  WarningOutlined
+  WarningOutlined,
+  QuestionCircleOutlined
 } from '@ant-design/icons'
 import { useAgent } from '@/state/AgentContext'
-import type { AgentCommand } from '@shared/acp'
+import type { AgentCommand, AgentPermissionOption } from '@shared/acp'
 
 const MAX_ATTACHMENT_COUNT = 10
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
@@ -186,13 +187,21 @@ function filterCommands(commands: AgentCommand[], query: string): AgentCommand[]
     .map((item) => item.command)
 }
 
+const PERMISSION_KIND_LABELS: Record<AgentPermissionOption['kind'], string> = {
+  allow_once: '允许一次',
+  allow_always: '始终允许',
+  reject_once: '拒绝一次',
+  reject_always: '始终拒绝'
+}
+
 /** 对话输入区：基于 Ant Design X 的 Sender，Enter 发送、加载时显示停止按钮。 */
 export function ChatComposer(): ReactElement {
-  const { state, send, stop, setMode, setModel } = useAgent()
+  const { state, send, stop, setMode, setModel, setEffort, respondPermission } = useAgent()
   const { message } = App.useApp()
   const [prompt, setPrompt] = useState('')
   const [permissionOpen, setPermissionOpen] = useState(false)
   const [modelOpen, setModelOpen] = useState(false)
+  const [effortOpen, setEffortOpen] = useState(false)
   const [activeCommandIndex, setActiveCommandIndex] = useState(0)
   const [dismissedCommandPrompt, setDismissedCommandPrompt] = useState<string>()
   const [attachmentItems, setAttachmentItems] = useState<PendingAttachment[]>([])
@@ -228,6 +237,8 @@ export function ChatComposer(): ReactElement {
   const currentMode = modeOptions.find((mode) => mode.value === (state.currentModeId ?? modes[0]?.id))
   const model = state.model
   const currentModel = model?.options.find((option) => option.value === model.currentValue)
+  const effort = state.effort
+  const currentEffort = effort?.options.find((option) => option.value === effort.currentValue)
 
   useEffect(() => {
     setActiveCommandIndex(0)
@@ -258,6 +269,15 @@ export function ChatComposer(): ReactElement {
       setModelOpen(false)
     } catch (error) {
       message.error(error instanceof Error ? error.message : '切换 Claude 模型失败')
+    }
+  }
+
+  const handleEffortChange = async (effortId: string): Promise<void> => {
+    try {
+      await setEffort(effortId)
+      setEffortOpen(false)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '切换推理强度失败')
     }
   }
 
@@ -451,6 +471,35 @@ export function ChatComposer(): ReactElement {
     </div>
   )
 
+  const EFFORT_NAMES: Record<string, string> = {
+    default: 'Default',
+    low: 'Low',
+    medium: 'Medium',
+    high: 'High',
+    ultra: 'Ultra'
+  }
+
+  const effortPanel = effort && (
+    <div className="chat-effort-panel" role="listbox" aria-label="推理强度列表">
+      {effort.options.map((option) => {
+        const selected = option.value === effort.currentValue
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="option"
+            aria-selected={selected}
+            className="chat-effort-option"
+            onClick={() => void handleEffortChange(option.value)}
+          >
+            <span className="chat-effort-option-title">{EFFORT_NAMES[option.value] ?? option.name}</span>
+            {selected && <CheckOutlined className="chat-effort-option-check" />}
+          </button>
+        )
+      })}
+    </div>
+  )
+
   return (
     <div
       className={`chat-composer-wrap${draggingFiles ? ' is-dragging-files' : ''}`}
@@ -460,6 +509,30 @@ export function ChatComposer(): ReactElement {
       }}
       onDrop={handleDrop}
     >
+      {state.pendingPermission && (
+        <div className="chat-permission-request" role="group" aria-label="Claude 权限请求">
+          <div className="chat-permission-request-header">
+            <QuestionCircleOutlined className="chat-permission-request-icon" aria-hidden="true" />
+            <span className="chat-permission-request-title">
+              {state.pendingPermission.toolTitle
+                ? `允许 Claude 执行：${state.pendingPermission.toolTitle}`
+                : 'Claude 请求权限'}
+            </span>
+          </div>
+          <div className="chat-permission-request-options">
+            {state.pendingPermission.options.map((option) => (
+              <button
+                key={option.optionId}
+                type="button"
+                className={`chat-permission-request-option chat-permission-request-option-${option.kind}`}
+                onClick={() => void respondPermission(option.optionId)}
+              >
+                {PERMISSION_KIND_LABELS[option.kind] ?? option.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {commandMenuOpen && (
         <div className="chat-command-menu" role="listbox" aria-label="匹配的命令">
           {filteredCommands.length > 0 ? (
@@ -581,26 +654,53 @@ export function ChatComposer(): ReactElement {
                 </Popover>
               </div>
             )}
-            {model && (
-              <div className="chat-model-control">
-                <Popover
-                  placement="topRight"
-                  trigger="click"
-                  open={modelOpen}
-                  onOpenChange={setModelOpen}
-                  content={modelPanel}
-                >
-                  <Button
-                    type="text"
-                    className="chat-model-trigger"
-                    disabled={!ready}
-                    aria-label={`当前${model.name}：${currentModel?.name ?? model.currentValue}`}
-                    aria-expanded={modelOpen}
-                  >
-                    <span>{currentModel?.name ?? model.currentValue}</span>
-                    <DownOutlined aria-hidden="true" />
-                  </Button>
-                </Popover>
+            {(effort || model) && (
+              <div className="chat-model-group">
+                {effort && (
+                  <div className="chat-effort-control">
+                    <Popover
+                      placement="topRight"
+                      trigger="click"
+                      open={effortOpen}
+                      onOpenChange={setEffortOpen}
+                      content={effortPanel}
+                      title="推理强度"
+                    >
+                      <Button
+                        type="text"
+                        className="chat-effort-trigger"
+                        disabled={!ready}
+                        aria-label={`推理强度：${EFFORT_NAMES[effort.currentValue] ?? currentEffort?.name ?? effort.currentValue}`}
+                        aria-expanded={effortOpen}
+                      >
+                        <span>{EFFORT_NAMES[effort.currentValue] ?? currentEffort?.name ?? effort.currentValue}</span>
+                        <DownOutlined aria-hidden="true" />
+                      </Button>
+                    </Popover>
+                  </div>
+                )}
+                {model && (
+                  <div className="chat-model-control">
+                    <Popover
+                      placement="topRight"
+                      trigger="click"
+                      open={modelOpen}
+                      onOpenChange={setModelOpen}
+                      content={modelPanel}
+                    >
+                      <Button
+                        type="text"
+                        className="chat-model-trigger"
+                        disabled={!ready}
+                        aria-label={`当前${model.name}：${currentModel?.name ?? model.currentValue}`}
+                        aria-expanded={modelOpen}
+                      >
+                        <span>{currentModel?.name ?? model.currentValue}</span>
+                        <DownOutlined aria-hidden="true" />
+                      </Button>
+                    </Popover>
+                  </div>
+                )}
               </div>
             )}
           </div>

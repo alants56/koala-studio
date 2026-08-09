@@ -1010,10 +1010,16 @@ input {
   white-space: nowrap;
 }
 
+.chat-model-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
 .chat-model-control {
   display: inline-flex;
   min-width: 0;
-  margin-left: auto;
 }
 
 .chat-model-trigger.ant-btn {
@@ -1109,6 +1115,91 @@ input {
 .chat-model-option-check {
   color: var(--primary);
   font-size: 16px;
+}
+
+.chat-effort-control {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.chat-effort-trigger.ant-btn {
+  display: inline-flex;
+  min-width: 0;
+  height: 30px;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--surface-soft);
+  box-shadow: none !important;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 9px;
+}
+
+.chat-effort-trigger.ant-btn > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-effort-trigger.ant-btn .anticon {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.chat-effort-trigger.ant-btn:hover,
+.chat-effort-trigger.ant-btn:focus-visible,
+.chat-effort-trigger.ant-btn:active {
+  background: var(--surface-soft);
+  box-shadow: 0 0 0 2px rgb(var(--primary-rgb) / 12%) !important;
+  color: var(--ink);
+  transform: none;
+}
+
+.chat-effort-trigger.ant-btn:disabled {
+  color: var(--muted-soft);
+}
+
+.chat-effort-panel {
+  width: fit-content;
+  min-width: 90px;
+}
+
+.chat-effort-option {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) 18px;
+  gap: 8px;
+  align-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+  padding: 8px 9px;
+  text-align: left;
+}
+
+.chat-effort-option:hover,
+.chat-effort-option:focus-visible {
+  background: var(--surface-soft);
+  outline: 0;
+}
+
+.chat-effort-option-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 560;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-effort-option-check {
+  color: var(--primary);
+  font-size: 14px;
 }
 
 .chat-permission-label {
@@ -2284,6 +2375,94 @@ input {
   font-size: 12px;
 }
 
+/* 输入框上方的权限请求面板。 */
+.chat-permission-request {
+  margin: 0 0 8px;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--canvas);
+  box-shadow: 0 14px 40px rgb(20 20 19 / 12%);
+}
+
+.chat-permission-request-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.chat-permission-request-icon {
+  flex: 0 0 auto;
+  color: var(--accent-amber, #e8a55a);
+  font-size: 14px;
+}
+
+.chat-permission-request-title {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.4;
+}
+
+.chat-permission-request-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chat-permission-request-option {
+  padding: 5px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--body);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.chat-permission-request-option:hover {
+  background: var(--canvas);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.chat-permission-request-option:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.chat-permission-request-option-allow_once,
+.chat-permission-request-option-allow_always {
+  border-color: rgb(93 184 166 / 35%);
+  color: #327f72;
+  background: rgb(93 184 166 / 8%);
+}
+
+.chat-permission-request-option-allow_once:hover,
+.chat-permission-request-option-allow_always:hover {
+  border-color: #327f72;
+  color: #327f72;
+  background: rgb(93 184 166 / 15%);
+}
+
+.chat-permission-request-option-reject_once,
+.chat-permission-request-option-reject_always {
+  border-color: var(--hairline);
+  color: var(--muted);
+  background: transparent;
+}
+
+.chat-permission-request-option-reject_once:hover,
+.chat-permission-request-option-reject_always:hover {
+  border-color: var(--muted);
+  color: var(--body);
+  background: var(--surface-soft);
+}
+
 .chat-history-drawer .ant-drawer-header {
   min-height: 68px;
   padding: 18px 20px 16px;
@@ -2645,6 +2824,23 @@ input {
 
   .chat-model-option-description {
     color: var(--on-dark-soft);
+  }
+
+  .chat-effort-trigger.ant-btn,
+  .chat-effort-trigger.ant-btn:hover,
+  .chat-effort-trigger.ant-btn:focus-visible,
+  .chat-effort-trigger.ant-btn:active {
+    background: var(--surface-dark-soft);
+    color: var(--on-dark-soft);
+  }
+
+  .chat-effort-option:hover,
+  .chat-effort-option:focus-visible {
+    background: var(--surface-dark-elevated);
+  }
+
+  .chat-effort-option-title {
+    color: var(--on-dark);
   }
 
   .chat-permission-select.ant-select {

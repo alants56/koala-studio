@@ -19,6 +19,9 @@ interface AgentContextValue {
   stop: () => Promise<void>
   setMode: (modeId: string) => Promise<void>
   setModel: (modelId: string) => Promise<void>
+  setEffort: (effortId: string) => Promise<void>
+  /** 回复当前待确认的权限请求。 */
+  respondPermission: (optionId: string) => Promise<void>
   /** 查询 Claude Code 在该目录下的会话记录（ACP session/list）。 */
   listSessions: () => Promise<AcpSessionInfo[]>
   /** 加载历史会话（ACP session/load），替换当前消息并设为当前会话。 */
@@ -119,6 +122,14 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
     await acp.setModel(modelId)
   }, [])
 
+  const setEffort = useCallback(async (effortId: string) => {
+    await acp.setEffort(effortId)
+  }, [])
+
+  const respondPermission = useCallback(async (optionId: string) => {
+    await acp.respondPermission(optionId)
+  }, [])
+
   const listSessions = useCallback(async () => acp.listSessions(cwd), [cwd])
 
   const loadSession = useCallback(
@@ -167,8 +178,8 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
   }, [connect])
 
   const value = useMemo<AgentContextValue>(
-    () => ({ state, messages, sessionId, connect, send, stop, setMode, setModel, listSessions, loadSession, createNewSession }),
-    [state, messages, sessionId, connect, send, stop, setMode, setModel, listSessions, loadSession, createNewSession]
+    () => ({ state, messages, sessionId, connect, send, stop, setMode, setModel, setEffort, respondPermission, listSessions, loadSession, createNewSession }),
+    [state, messages, sessionId, connect, send, stop, setMode, setModel, setEffort, respondPermission, listSessions, loadSession, createNewSession]
   )
 
   return <AgentContext.Provider value={value}>{children}</AgentContext.Provider>
