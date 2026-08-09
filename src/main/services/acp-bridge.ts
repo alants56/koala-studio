@@ -3,6 +3,9 @@ import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import * as acp from '@agentclientprotocol/sdk'
+
+// ASAR 打包后 spawn 无法读取 archive 内文件，需指向 unpacked 目录
+const unpackedPath = (p: string): string => p.replace('app.asar', 'app.asar.unpacked')
 import type { ClientConnection, SessionNotification } from '@agentclientprotocol/sdk'
 import type {
   AcpSessionInfo,
@@ -52,7 +55,7 @@ export class AcpBridge extends EventEmitter {
     return [{
       name: 'koala-automations',
       command: process.execPath,
-      args: [join(__dirname, '../mcp/mcp/automations-server.js')],
+      args: [unpackedPath(join(__dirname, '../mcp/mcp/automations-server.js'))],
       env: [
         { name: 'ELECTRON_RUN_AS_NODE', value: '1' },
         { name: 'KOALA_AUTOMATIONS_FILE', value: automationsFilePath() },
@@ -86,7 +89,7 @@ export class AcpBridge extends EventEmitter {
     this.setState({ status: 'connecting', detail: '正在启动 Claude ACP 适配器…' })
 
     try {
-      const adapterPath = require.resolve('@agentclientprotocol/claude-agent-acp/dist/index.js')
+      const adapterPath = unpackedPath(require.resolve('@agentclientprotocol/claude-agent-acp/dist/index.js'))
       const agentProcess = spawn(process.execPath, [adapterPath], {
         cwd,
         env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },

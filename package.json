@@ -47,7 +47,13 @@
     "files": [
       "out/**/*"
     ],
+    "asarUnpack": [
+      "out/mcp/**/*",
+      "node_modules/@agentclientprotocol/**/*",
+      "node_modules/@modelcontextprotocol/**/*"
+    ],
     "mac": {
+      "identity": null,
       "target": [
         "dmg"
       ]
