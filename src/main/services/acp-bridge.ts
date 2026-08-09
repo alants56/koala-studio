@@ -17,6 +17,15 @@ import type {
 } from '../../shared/acp'
 import { automationsFilePath } from './automation-store'
 import { todosFilePath } from './todo-store'
+import {
+  attachmentResourceUri,
+  importAttachment,
+  readAttachment
+} from './attachment-store'
+import type { ChatAttachment } from '../../shared/attachments'
+
+const DIRECT_IMAGE_MIME_TYPES = new Set(['image/gif', 'image/jpeg', 'image/png', 'image/webp'])
+const MAX_EMBEDDED_TEXT_BYTES = 2 * 1024 * 1024
 
 interface AcpBridgeOptions {
   getPreferredModeId?: () => Promise<string | undefined>
@@ -138,23 +147,33 @@ export class AcpBridge extends EventEmitter {
     if (!this.connection) throw new Error('请先连接 Claude ACP。')
 
     const collected: ChatMessage[] = []
+    const attachmentTasks: Promise<void>[] = []
     let collectedCommands: acp.AvailableCommand[] | undefined
     const byId = new Map<string, ChatMessage>()
+    const getMessage = (id: string | undefined, role: 'user' | 'assistant', kind: 'text' | 'thinking'): ChatMessage => {
+      const key = id ?? (role === 'assistant' ? 'assistant' : crypto.randomUUID())
+      const existing = byId.get(key)
+      if (existing) return existing
+      const message: ChatMessage = { id: key, role, kind, content: '', createdAt: new Date().toISOString() }
+      byId.set(key, message)
+      collected.push(message)
+      return message
+    }
     const pushText = (
       id: string | undefined,
       role: 'user' | 'assistant',
       kind: 'text' | 'thinking',
       text: string
     ): void => {
-      const key = id ?? (role === 'assistant' ? 'assistant' : crypto.randomUUID())
-      const existing = byId.get(key)
-      if (existing) {
-        existing.content += text
-      } else {
-        const message: ChatMessage = { id: key, role, kind, content: text, createdAt: new Date().toISOString() }
-        byId.set(key, message)
-        collected.push(message)
-      }
+      getMessage(id, role, kind).content += text
+    }
+    const pushImage = (id: string | undefined, role: 'user' | 'assistant', content: acp.ImageContent): void => {
+      const message = getMessage(id, role, 'text')
+      attachmentTasks.push(
+        this.storeImageContent(content).then((attachment) => {
+          message.attachments = [...(message.attachments ?? []), attachment]
+        })
+      )
     }
 
     let resolveDone: (() => void) | undefined
@@ -173,6 +192,8 @@ export class AcpBridge extends EventEmitter {
       }
       if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text') {
         pushText(update.messageId ?? undefined, 'assistant', 'text', update.content.text)
+      } else if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'image') {
+        pushImage(update.messageId ?? undefined, 'assistant', update.content)
       } else if (update.sessionUpdate === 'agent_thought_chunk' && update.content.type === 'text') {
         // 思考过程：与正文区分 id，避免被按 messageId 合并
         pushText(
@@ -183,6 +204,8 @@ export class AcpBridge extends EventEmitter {
         )
       } else if (update.sessionUpdate === 'user_message_chunk' && update.content.type === 'text') {
         pushText(update.messageId ?? undefined, 'user', 'text', update.content.text)
+      } else if (update.sessionUpdate === 'user_message_chunk' && update.content.type === 'image') {
+        pushImage(update.messageId ?? undefined, 'user', update.content)
       } else if (update.sessionUpdate === 'tool_call') {
         collected.push({
           id: crypto.randomUUID(),
@@ -201,6 +224,7 @@ export class AcpBridge extends EventEmitter {
       // 等待回放完成信号（兜底 30s），再给最后的 chunk 一点落定时间
       await Promise.race([done, new Promise((resolve) => setTimeout(resolve, 30000))])
       await new Promise((resolve) => setTimeout(resolve, 300))
+      await Promise.all(attachmentTasks)
     } finally {
       this.sessionUpdateListener = undefined
     }
@@ -251,13 +275,15 @@ export class AcpBridge extends EventEmitter {
       id: crypto.randomUUID(),
       role: 'user',
       content: request.text,
+      attachments: request.attachments,
       createdAt: new Date().toISOString()
     } satisfies ChatMessage)
 
     try {
+      const prompt = await this.toPromptContent(request)
       await this.connection!.agent.request(acp.methods.agent.session.prompt, {
         sessionId: this.activeSessionId,
-        prompt: [{ type: 'text', text: request.text }]
+        prompt
       })
       this.setState({ ...this.state, status: 'ready', detail: 'Claude 已就绪' })
     } catch (error) {
@@ -362,6 +388,19 @@ export class AcpBridge extends EventEmitter {
         content: update.content.text,
         createdAt: new Date().toISOString()
       } satisfies ChatMessage)
+    } else if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'image') {
+      void this.storeImageContent(update.content).then((attachment) => {
+        this.emit('message', {
+          id: update.messageId ?? 'assistant-stream',
+          role: 'assistant',
+          kind: 'text',
+          content: '',
+          attachments: [attachment],
+          createdAt: new Date().toISOString()
+        } satisfies ChatMessage)
+      }).catch((error: unknown) => {
+        this.emit('message', this.systemMessage(error instanceof Error ? error.message : '无法保存 Claude 返回的图片。'))
+      })
     } else if (update.sessionUpdate === 'agent_thought_chunk' && update.content.type === 'text') {
       this.emit('message', {
         id: `${update.messageId ?? 'assistant-stream'}:thinking`,
@@ -389,6 +428,45 @@ export class AcpBridge extends EventEmitter {
 
   private systemMessage(content: string): ChatMessage {
     return { id: crypto.randomUUID(), role: 'system', content, createdAt: new Date().toISOString() }
+  }
+
+  private async toPromptContent(request: PromptRequest): Promise<acp.ContentBlock[]> {
+    const prompt: acp.ContentBlock[] = []
+    if (request.text.trim()) prompt.push({ type: 'text', text: request.text })
+
+    for (const attachment of request.attachments ?? []) {
+      const data = await readAttachment(attachment)
+      const uri = attachmentResourceUri(attachment)
+      if (attachment.kind === 'image' && DIRECT_IMAGE_MIME_TYPES.has(attachment.mimeType)) {
+        prompt.push({ type: 'image', data: data.toString('base64'), mimeType: attachment.mimeType, uri })
+      } else if (attachment.kind === 'text' && data.length <= MAX_EMBEDDED_TEXT_BYTES) {
+        prompt.push({
+          type: 'resource',
+          resource: { uri, mimeType: attachment.mimeType, text: data.toString('utf8') }
+        })
+      } else {
+        prompt.push({
+          type: 'resource_link',
+          uri,
+          name: attachment.name,
+          mimeType: attachment.mimeType,
+          size: attachment.size
+        })
+      }
+    }
+
+    if (prompt.length === 0) throw new Error('请输入内容或添加附件。')
+    return prompt
+  }
+
+  private async storeImageContent(content: acp.ImageContent): Promise<ChatAttachment> {
+    if (!content.data) throw new Error('图片内容为空，无法保存。')
+    const extension = content.mimeType === 'image/jpeg' ? 'jpg' : content.mimeType.split('/')[1]?.split('+')[0] || 'png'
+    return importAttachment({
+      name: `conversation-image.${extension}`,
+      mimeType: content.mimeType,
+      data: new Uint8Array(Buffer.from(content.data, 'base64'))
+    })
   }
 
   private toAgentModes(modes: acp.SessionModeState | null | undefined): AgentMode[] | undefined {

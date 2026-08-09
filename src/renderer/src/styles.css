@@ -850,9 +850,30 @@ input {
 }
 
 .chat-composer-wrap {
+  position: relative;
   width: min(920px, 100%);
   margin: 0 auto;
   padding: 0 20px 18px;
+}
+
+.chat-file-input {
+  display: none;
+}
+
+.chat-file-drop-hint {
+  position: absolute;
+  z-index: 20;
+  inset: 0 20px 18px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--primary);
+  border-radius: 10px;
+  background: rgb(var(--primary-rgb) / 8%);
+  backdrop-filter: blur(6px);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 650;
+  pointer-events: none;
 }
 
 .chat-composer-wrap .ant-sender {
@@ -877,6 +898,98 @@ input {
   width: 100%;
   justify-content: flex-start;
   color: var(--muted-soft);
+}
+
+.chat-attachment-trigger.ant-btn {
+  height: 30px;
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  padding-inline: 9px;
+}
+
+.chat-attachment-trigger.ant-btn:hover,
+.chat-attachment-trigger.ant-btn:focus-visible {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.chat-attachment-send.ant-btn {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.chat-attachment-send.ant-btn:hover,
+.chat-attachment-send.ant-btn:focus-visible {
+  background: var(--primary-active);
+  color: var(--on-primary);
+}
+
+.chat-attachments {
+  padding: 2px 0 4px;
+}
+
+.chat-message-content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.chat-message-images {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 220px));
+  gap: 6px;
+}
+
+.chat-message-images .ant-image,
+.chat-message-images img {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.chat-message-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chat-message-file {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 280px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 7px 9px;
+}
+
+.chat-message-file span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-message-file:hover {
+  border-color: rgb(var(--primary-rgb) / 35%);
+}
+
+.chat-message-content.is-inverse .chat-message-file {
+  border-color: rgb(255 255 255 / 22%);
+  background: rgb(255 255 255 / 12%);
+  color: var(--on-primary);
 }
 
 .chat-permission-control {

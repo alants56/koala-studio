@@ -10,6 +10,7 @@ export type {
   LoadedSession,
   PromptRequest
 } from '@shared/acp'
+export type { AttachmentImportInput, AttachmentsApi, ChatAttachment, ChatAttachmentKind } from '@shared/attachments'
 export type { CreateProjectInput, Project, ProjectsApi, UpdateProjectInput } from '@shared/projects'
 
 /** 连接状态在 UI 上的展示元信息（antd Badge status + 文案）。 */

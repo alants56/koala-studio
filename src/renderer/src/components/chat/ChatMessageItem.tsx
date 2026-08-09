@@ -1,13 +1,53 @@
 import type { ReactElement } from 'react'
 import { Bubble, ThoughtChain } from '@ant-design/x'
-import { BulbOutlined, ToolOutlined } from '@ant-design/icons'
-import type { ChatMessage } from '@/models'
+import { BulbOutlined, FileMarkdownOutlined, FileOutlined, FilePdfOutlined, ToolOutlined } from '@ant-design/icons'
+import { Image } from 'antd'
+import type { ChatAttachment, ChatMessage } from '@/models'
 import { MarkdownMessage } from './MarkdownMessage'
 
 const MAX_WIDTH = '82%'
 
 /** 思考 / 工具调用的灰色次要文本色。 */
 const SECONDARY = 'rgba(108,106,100,0.95)'
+
+function AttachmentIcon({ attachment }: { attachment: ChatAttachment }): ReactElement {
+  if (attachment.kind === 'pdf') return <FilePdfOutlined />
+  if (attachment.kind === 'text') return <FileMarkdownOutlined />
+  return <FileOutlined />
+}
+
+function MessageContent({ message, inverse = false, streaming = false }: { message: ChatMessage; inverse?: boolean; streaming?: boolean }): ReactElement {
+  const images = message.attachments?.filter((attachment) => attachment.kind === 'image') ?? []
+  const files = message.attachments?.filter((attachment) => attachment.kind !== 'image') ?? []
+  return (
+    <div className={`chat-message-content${inverse ? ' is-inverse' : ''}`}>
+      {images.length > 0 && (
+        <div className="chat-message-images">
+          {images.map((attachment) => (
+            <Image key={attachment.id} src={attachment.url} alt={attachment.name} fallback="" />
+          ))}
+        </div>
+      )}
+      {files.length > 0 && (
+        <div className="chat-message-files">
+          {files.map((attachment) => (
+            <button
+              key={attachment.id}
+              type="button"
+              className="chat-message-file"
+              title={attachment.name}
+              onClick={() => void window.attachments.open(attachment.storageKey)}
+            >
+              <AttachmentIcon attachment={attachment} />
+              <span>{attachment.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {message.content && <MarkdownMessage content={message.content} inverse={inverse} streaming={streaming} />}
+    </div>
+  )
+}
 
 /** 单条对话消息（基于 Ant Design X 渲染）。
  * - 用户消息：右侧气泡，无标签
@@ -66,7 +106,7 @@ export function ChatMessageItem({ message, streaming = false }: { message: ChatM
     return (
       <Bubble
         placement="end"
-        content={<MarkdownMessage content={message.content} inverse />}
+        content={<MessageContent message={message} inverse />}
         shape="corner"
         style={{ maxWidth: MAX_WIDTH }}
         styles={{ content: { background: 'var(--primary)', color: 'var(--on-primary)' } }}
@@ -81,7 +121,7 @@ export function ChatMessageItem({ message, streaming = false }: { message: ChatM
   return (
     <Bubble
       placement="start"
-      content={<MarkdownMessage content={message.content} streaming={streaming} />}
+      content={<MessageContent message={message} streaming={streaming} />}
       variant="borderless"
       style={{ maxWidth: MAX_WIDTH }}
     />

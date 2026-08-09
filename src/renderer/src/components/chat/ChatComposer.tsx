@@ -1,21 +1,33 @@
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
-import { Sender } from '@ant-design/x'
-import { App, Button, Popover } from 'antd'
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
+import { Attachments, Sender } from '@ant-design/x'
+import { App, Button, Popover, type UploadFile } from 'antd'
 import {
   ApiOutlined,
   AppstoreOutlined,
   MacCommandOutlined,
   EditOutlined,
   FileSearchOutlined,
+  LoadingOutlined,
+  PaperClipOutlined,
   CheckOutlined,
   DownOutlined,
   RobotOutlined,
   SafetyCertificateOutlined,
+  SendOutlined,
   StopOutlined,
   WarningOutlined
 } from '@ant-design/icons'
 import { useAgent } from '@/state/AgentContext'
 import type { AgentCommand } from '@shared/acp'
+
+const MAX_ATTACHMENT_COUNT = 10
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+const MAX_TOTAL_ATTACHMENT_BYTES = 50 * 1024 * 1024
+
+interface PendingAttachment extends UploadFile {
+  sourceFile: File
+  previewUrl?: string
+}
 
 interface PermissionModePresentation {
   label: string
@@ -183,6 +195,11 @@ export function ChatComposer(): ReactElement {
   const [modelOpen, setModelOpen] = useState(false)
   const [activeCommandIndex, setActiveCommandIndex] = useState(0)
   const [dismissedCommandPrompt, setDismissedCommandPrompt] = useState<string>()
+  const [attachmentItems, setAttachmentItems] = useState<PendingAttachment[]>([])
+  const [importingAttachments, setImportingAttachments] = useState(false)
+  const [draggingFiles, setDraggingFiles] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const attachmentItemsRef = useRef(attachmentItems)
 
   const ready = state.status === 'ready'
   const loading = state.status === 'working'
@@ -216,6 +233,16 @@ export function ChatComposer(): ReactElement {
     setActiveCommandIndex(0)
   }, [commandQuery, commands])
 
+  useEffect(() => {
+    attachmentItemsRef.current = attachmentItems
+  }, [attachmentItems])
+
+  useEffect(() => () => {
+    attachmentItemsRef.current.forEach((item) => {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+    })
+  }, [])
+
   const handleModeChange = async (modeId: string): Promise<void> => {
     try {
       await setMode(modeId)
@@ -234,11 +261,77 @@ export function ChatComposer(): ReactElement {
     }
   }
 
+  const clearAttachments = (): void => {
+    attachmentItems.forEach((item) => {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+    })
+    setAttachmentItems([])
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const addFiles = (files: File[]): void => {
+    const existing = new Set(attachmentItems.map((item) => `${item.name}:${item.size}:${item.sourceFile.lastModified}`))
+    const next: PendingAttachment[] = []
+    let totalBytes = attachmentItems.reduce((total, item) => total + (item.size ?? 0), 0)
+    let rejected = 0
+
+    for (const file of files) {
+      const signature = `${file.name}:${file.size}:${file.lastModified}`
+      if (existing.has(signature) || attachmentItems.length + next.length >= MAX_ATTACHMENT_COUNT) {
+        rejected += 1
+        continue
+      }
+      if (file.size === 0 || file.size > MAX_ATTACHMENT_BYTES || totalBytes + file.size > MAX_TOTAL_ATTACHMENT_BYTES) {
+        rejected += 1
+        continue
+      }
+      const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
+      next.push({
+        uid: crypto.randomUUID(),
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        status: 'done',
+        thumbUrl: previewUrl,
+        previewUrl,
+        sourceFile: file
+      })
+      existing.add(signature)
+      totalBytes += file.size
+    }
+
+    if (next.length > 0) setAttachmentItems((current) => [...current, ...next])
+    if (rejected > 0) void message.warning(`有 ${rejected} 个文件未添加：最多 10 个，单个不超过 25 MB，总计不超过 50 MB。`)
+  }
+
+  const removeAttachment = (uid: string): void => {
+    setAttachmentItems((current) => current.filter((item) => {
+      if (item.uid !== uid) return true
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+      return false
+    }))
+  }
+
   const handleSubmit = (text: string): void => {
     const trimmed = text.trim()
-    if (!trimmed || !ready) return
-    setPrompt('')
-    void send(trimmed)
+    if ((!trimmed && attachmentItems.length === 0) || !ready || importingAttachments) return
+
+    setImportingAttachments(true)
+    void Promise.all(attachmentItems.map(async (item) => ({
+      name: item.name,
+      mimeType: item.type || '',
+      data: new Uint8Array(await item.sourceFile.arrayBuffer())
+    }))).then(async (files) => {
+      if (!window.attachments?.importFiles) throw new Error('附件桥接尚未加载，请完全退出应用后重新启动。')
+      const attachments = files.length > 0 ? await window.attachments.importFiles(files) : []
+      setPrompt('')
+      clearAttachments()
+      void send(trimmed, attachments).catch((error: unknown) => {
+        void message.error(error instanceof Error ? error.message : '发送消息失败。')
+      })
+    }).catch((error: unknown) => {
+      void message.error(error instanceof Error ? error.message : '无法导入附件。')
+    }).finally(() => setImportingAttachments(false))
   }
 
   const selectCommand = (command: AgentCommand): void => {
@@ -253,6 +346,19 @@ export function ChatComposer(): ReactElement {
   }
 
   const handleComposerKeyDown = (event: KeyboardEvent): void | false => {
+    if (
+      event.key === 'Enter' &&
+      !event.shiftKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.metaKey &&
+      !prompt.trim() &&
+      attachmentItems.length > 0
+    ) {
+      event.preventDefault()
+      handleSubmit('')
+      return false
+    }
     if (!commandMenuOpen) return
 
     if (event.key === 'Escape') {
@@ -275,6 +381,27 @@ export function ChatComposer(): ReactElement {
       selectCommand(filteredCommands[activeCommandIndex] ?? filteredCommands[0])
       return false
     }
+  }
+
+  const handlePaste = (event: ClipboardEvent<HTMLElement>): void => {
+    const files = Array.from(event.clipboardData.files)
+    if (files.length === 0) return
+    event.preventDefault()
+    addFiles(files)
+  }
+
+  const handleDragOver = (event: DragEvent<HTMLDivElement>): void => {
+    if (!event.dataTransfer.types.includes('Files')) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    setDraggingFiles(true)
+  }
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>): void => {
+    if (!event.dataTransfer.types.includes('Files')) return
+    event.preventDefault()
+    setDraggingFiles(false)
+    addFiles(Array.from(event.dataTransfer.files))
   }
 
   const permissionPanel = (
@@ -325,7 +452,14 @@ export function ChatComposer(): ReactElement {
   )
 
   return (
-    <div className="chat-composer-wrap">
+    <div
+      className={`chat-composer-wrap${draggingFiles ? ' is-dragging-files' : ''}`}
+      onDragOver={handleDragOver}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDraggingFiles(false)
+      }}
+      onDrop={handleDrop}
+    >
       {commandMenuOpen && (
         <div className="chat-command-menu" role="listbox" aria-label="匹配的命令">
           {filteredCommands.length > 0 ? (
@@ -362,20 +496,69 @@ export function ChatComposer(): ReactElement {
           )}
         </div>
       )}
+      {draggingFiles && <div className="chat-file-drop-hint">松开即可添加到对话</div>}
+      <input
+        ref={fileInputRef}
+        className="chat-file-input"
+        type="file"
+        multiple
+        onChange={(event) => addFiles(Array.from(event.target.files ?? []))}
+      />
       <Sender
         value={prompt}
         onChange={handlePromptChange}
         onKeyDown={handleComposerKeyDown}
+        onPaste={handlePaste}
         onSubmit={handleSubmit}
         onCancel={() => void stop()}
         loading={loading}
         // 生成时 Sender 会把发送按钮替换为停止按钮；不能禁用整个组件，否则停止按钮也无法点击。
-        disabled={!ready && !loading}
-        readOnly={loading}
-        placeholder="描述你想完成的工作。Enter 发送，Shift + Enter 换行。"
+        disabled={(!ready && !loading) || importingAttachments}
+        readOnly={loading || importingAttachments}
+        placeholder="输入消息，或粘贴 / 拖入图片、PDF、Markdown 等文件。"
         autoSize={{ minRows: 1, maxRows: 6 }}
+        header={
+          <Sender.Header
+            open={attachmentItems.length > 0}
+            closable={false}
+            title={`${attachmentItems.length} 个附件`}
+          >
+            <Attachments
+              className="chat-attachments"
+              items={attachmentItems}
+              overflow="scrollX"
+              beforeUpload={() => false}
+              onRemove={(item) => {
+                removeAttachment(item.uid)
+                return true
+              }}
+            />
+          </Sender.Header>
+        }
+        suffix={(originNode) => {
+          if (loading || prompt.trim() || attachmentItems.length === 0) return originNode
+          return (
+            <Button
+              type="text"
+              className="chat-attachment-send"
+              aria-label="发送附件"
+              icon={importingAttachments ? <LoadingOutlined spin /> : <SendOutlined />}
+              disabled={!ready || importingAttachments}
+              onClick={() => handleSubmit('')}
+            />
+          )
+        }}
         footer={
           <div className="chat-composer-footer flex items-center gap-1.5 text-xs">
+            <Button
+              type="text"
+              className="chat-attachment-trigger"
+              icon={<PaperClipOutlined />}
+              disabled={!ready || loading || importingAttachments}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              添加文件
+            </Button>
             {modes.length > 0 && (
               <div className="chat-permission-control">
                 <Popover

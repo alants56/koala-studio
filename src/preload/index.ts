@@ -4,6 +4,7 @@ import type { ProjectsApi } from '../shared/projects'
 import type { ClaudeApi } from '../shared/claude'
 import type { AutomationsApi } from '../shared/automations'
 import type { TodosApi } from '../shared/todos'
+import type { AttachmentsApi } from '../shared/attachments'
 
 const acp: AcpApi = {
   getState: () => ipcRenderer.invoke('acp:get-state'),
@@ -67,8 +68,14 @@ const todos: TodosApi = {
   delete: (id) => ipcRenderer.invoke('todos:delete', id)
 }
 
+const attachments: AttachmentsApi = {
+  importFiles: (files) => ipcRenderer.invoke('attachments:import', files),
+  open: (storageKey) => ipcRenderer.invoke('attachments:open', storageKey)
+}
+
 contextBridge.exposeInMainWorld('acp', acp)
 contextBridge.exposeInMainWorld('projects', projects)
 contextBridge.exposeInMainWorld('claude', claude)
 contextBridge.exposeInMainWorld('automations', automations)
 contextBridge.exposeInMainWorld('todos', todos)
+contextBridge.exposeInMainWorld('attachments', attachments)

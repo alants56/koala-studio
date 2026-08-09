@@ -1,3 +1,5 @@
+import type { ChatAttachment } from './attachments'
+
 export type AgentStatus = 'disconnected' | 'connecting' | 'ready' | 'working' | 'error'
 
 export interface AgentMode {
@@ -49,11 +51,14 @@ export interface ChatMessage {
   kind?: 'text' | 'thinking' | 'tool'
   /** 工具调用时显示的工具名。 */
   title?: string
+  /** 与消息一同发送或生成的本地附件。 */
+  attachments?: ChatAttachment[]
 }
 
 export interface PromptRequest {
   text: string
   cwd: string
+  attachments?: ChatAttachment[]
 }
 
 /** ACP 会话摘要（来自 Claude Code 的 session/list）。 */

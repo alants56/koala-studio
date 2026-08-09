@@ -5,6 +5,7 @@ import type { ProjectsApi } from '@shared/projects'
 import type { AutomationsApi } from '@shared/automations'
 import type { TodosApi } from '@shared/todos'
 import type { ClaudeApi } from '@shared/claude'
+import type { AttachmentsApi } from '@shared/attachments'
 
 declare global {
   interface Window {
@@ -13,5 +14,6 @@ declare global {
     automations: AutomationsApi
     todos: TodosApi
     claude: ClaudeApi
+    attachments: AttachmentsApi
   }
 }

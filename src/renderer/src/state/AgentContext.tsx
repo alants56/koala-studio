@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import type { AcpSessionInfo, AgentState, ChatMessage } from '@shared/acp'
+import type { ChatAttachment } from '@shared/attachments'
 import { acp, assertAcpApi } from '@/services/acp'
 import { INITIAL_MESSAGES } from '@/utils/constants'
 import { dispatchSessionActivity } from '@/utils/session-events'
@@ -15,7 +16,7 @@ interface AgentContextValue {
   /** 当前激活的 ACP 会话 id。 */
   sessionId?: string
   connect: () => Promise<void>
-  send: (text: string) => Promise<void>
+  send: (text: string, attachments?: ChatAttachment[]) => Promise<void>
   stop: () => Promise<void>
   setMode: (modeId: string) => Promise<void>
   setModel: (modelId: string) => Promise<void>
@@ -92,16 +93,16 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
     }
   }, [cwd, openInitialSession])
 
-  const send = useCallback(async (text: string) => {
+  const send = useCallback(async (text: string, attachments: ChatAttachment[] = []) => {
     if (!sessionId) throw new Error('当前会话尚未就绪。')
     const activity = {
       cwd,
       sessionId,
-      title: text.replace(/\s+/g, ' ').slice(0, 80)
+      title: text.replace(/\s+/g, ' ').trim().slice(0, 80) || attachments.map((item) => item.name).join('、').slice(0, 80)
     }
     dispatchSessionActivity({ ...activity, phase: 'started' })
     try {
-      await acp.prompt({ text, cwd })
+      await acp.prompt({ text, cwd, attachments })
     } finally {
       dispatchSessionActivity({ ...activity, phase: 'completed' })
     }
@@ -146,7 +147,13 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
         const existing = current.findIndex((item) => item.id === incoming.id)
         if (existing === -1) return [...current, incoming]
         return current.map((item, index) =>
-          index === existing ? { ...item, content: item.content + incoming.content } : item
+          index === existing
+            ? {
+                ...item,
+                content: item.content + incoming.content,
+                attachments: [...(item.attachments ?? []), ...(incoming.attachments ?? [])]
+              }
+            : item
         )
       })
     })

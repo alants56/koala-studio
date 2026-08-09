@@ -1,6 +1,8 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import type { AttachmentImportInput } from '../shared/attachments'
 import type { CreateAutomationInput, UpdateAutomationInput } from '../shared/automations'
 import type { CreateTodoInput, ReorderTodoInput, UpdateTodoInput } from '../shared/todos'
 import type { CreateProjectInput, UpdateProjectInput } from '../shared/projects'
@@ -25,6 +27,11 @@ import {
   setLastDirectoryPath,
   setPreferredPermissionModeId
 } from './services/preferences-store'
+import { attachmentFilePath, importAttachments } from './services/attachment-store'
+
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'koala-asset', privileges: { secure: true, standard: true, supportFetchAPI: true, stream: true } }
+])
 
 let mainWindow: BrowserWindow | undefined
 const acpBridge = new AcpBridge({
@@ -110,6 +117,15 @@ async function pickDirectory(): Promise<string | null> {
 }
 
 app.whenReady().then(() => {
+  protocol.handle('koala-asset', (request) => {
+    try {
+      const storageKey = decodeURIComponent(new URL(request.url).pathname.slice(1))
+      return net.fetch(pathToFileURL(attachmentFilePath(storageKey)).toString())
+    } catch {
+      return new Response('Attachment not found', { status: 404 })
+    }
+  })
+
   ipcMain.handle('acp:get-state', () => acpBridge.getState())
   ipcMain.handle('acp:connect', (_, cwd: string) => acpBridge.connect(cwd))
   ipcMain.handle('acp:prompt', (_, request) => acpBridge.prompt(request))
@@ -134,6 +150,12 @@ app.whenReady().then(() => {
   ipcMain.handle('projects:delete', (_event, id: string) => deleteProject(id))
   ipcMain.handle('projects:reorder', (_event, orderedIds: string[]) => reorderProjects(orderedIds))
   ipcMain.handle('projects:pick-directory', () => pickDirectory())
+
+  ipcMain.handle('attachments:import', (_event, files: AttachmentImportInput[]) => importAttachments(files))
+  ipcMain.handle('attachments:open', async (_event, storageKey: string) => {
+    const error = await shell.openPath(attachmentFilePath(storageKey))
+    if (error) throw new Error(error)
+  })
 
   ipcMain.handle('automations:list', (_event, input) => getAutomationStore().list(input))
   ipcMain.handle('automations:get', (_event, id: string) => getAutomationStore().get(id))
