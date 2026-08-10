@@ -472,7 +472,6 @@ export function ChatComposer(): ReactElement {
   )
 
   const EFFORT_NAMES: Record<string, string> = {
-    default: 'Default',
     low: 'Low',
     medium: 'Medium',
     high: 'High',
@@ -516,7 +515,7 @@ export function ChatComposer(): ReactElement {
             <span className="chat-permission-request-title">
               {state.pendingPermission.toolTitle
                 ? `允许 Claude 执行：${state.pendingPermission.toolTitle}`
-                : 'Claude 请求权限'}
+                : `${state.currentAgent === 'pi' ? 'Pi' : 'Claude'} 请求权限`}
             </span>
           </div>
           <div className="chat-permission-request-options">

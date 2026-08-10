@@ -1,12 +1,15 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { delimiter, join } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import * as acp from '@agentclientprotocol/sdk'
 import type { ClientConnection, SessionNotification } from '@agentclientprotocol/sdk'
 import type {
   AcpSessionInfo,
   AcpSessionResult,
+  AgentAdapterId,
   AgentCommand,
   AgentEffort,
   AgentModel,
@@ -28,26 +31,54 @@ import type { ChatAttachment } from '../../shared/attachments'
 const DIRECT_IMAGE_MIME_TYPES = new Set(['image/gif', 'image/jpeg', 'image/png', 'image/webp'])
 const MAX_EMBEDDED_TEXT_BYTES = 2 * 1024 * 1024
 
+function resolvePiCommand(): string | undefined {
+  const pathCandidates = (process.env.PATH ?? '')
+    .split(delimiter)
+    .filter(Boolean)
+    .map((directory) => join(directory, 'pi'))
+  const candidates = [
+    process.env.PI_ACP_PI_COMMAND,
+    ...pathCandidates,
+    join(homedir(), '.npm-global/bin/pi'),
+    join(homedir(), '.local/bin/pi'),
+    join(homedir(), '.bun/bin/pi'),
+    '/opt/homebrew/bin/pi',
+    '/usr/local/bin/pi'
+  ]
+  return candidates.find((candidate): candidate is string => Boolean(candidate && existsSync(candidate)))
+}
+
 interface AcpBridgeOptions {
+  initialAgentId?: AgentAdapterId
   getPreferredModeId?: () => Promise<string | undefined>
   setPreferredModeId?: (modeId: string) => Promise<void>
   getPreferredModelId?: () => Promise<string | undefined>
   setPreferredModelId?: (modelId: string) => Promise<void>
   getPreferredEffortId?: () => Promise<string | undefined>
   setPreferredEffortId?: (effortId: string) => Promise<void>
+  getPreferredAgentId?: () => Promise<string | undefined>
+  setPreferredAgentId?: (agentId: AgentAdapterId) => Promise<void>
 }
 
 export class AcpBridge extends EventEmitter {
   private agentProcess?: ChildProcessWithoutNullStreams
   private connection?: ClientConnection
-  private state: AgentState = { status: 'disconnected' }
+  private currentAgent: AgentAdapterId
+  private agentPreferenceLoaded: boolean
+  private state: AgentState
   private sessionCwd?: string
   private activeSessionId?: string
   private connectPromise?: Promise<AgentState>
+  private connectingCwd?: string
+  private connectingAgent?: AgentAdapterId
+  private connectionGeneration = 0
   private permissionResolve?: (optionId: string | null) => void
 
   constructor(private readonly options: AcpBridgeOptions = {}) {
     super()
+    this.currentAgent = options.initialAgentId ?? 'claude'
+    this.agentPreferenceLoaded = options.initialAgentId !== undefined
+    this.state = { status: 'disconnected', currentAgent: this.currentAgent }
   }
 
   private automationMcpServers(): acp.McpServer[] {
@@ -67,31 +98,74 @@ export class AcpBridge extends EventEmitter {
     return this.state
   }
 
+  async getCurrentAgent(): Promise<AgentAdapterId> {
+    if (!this.agentPreferenceLoaded) {
+      const preferredAgentId = await this.options.getPreferredAgentId?.()
+      if (preferredAgentId === 'claude' || preferredAgentId === 'pi') {
+        this.currentAgent = preferredAgentId
+      }
+      this.agentPreferenceLoaded = true
+      this.setState(this.state)
+    }
+    return this.currentAgent
+  }
+
+  async setAgent(agentId: AgentAdapterId): Promise<void> {
+    if (agentId !== 'claude' && agentId !== 'pi') {
+      throw new Error('不支持所选 Agent。')
+    }
+    if (agentId === await this.getCurrentAgent()) return
+
+    await this.options.setPreferredAgentId?.(agentId)
+    this.dispose()
+    this.currentAgent = agentId
+    this.agentPreferenceLoaded = true
+    this.setState({ status: 'disconnected' })
+  }
+
   async connect(cwd: string): Promise<AgentState> {
+    const agentId = await this.getCurrentAgent()
     // 同一目录已就绪则直接复用；切换工作目录时重启 ACP 适配器
     if ((this.state.status === 'ready' || this.state.status === 'working') && this.sessionCwd === cwd) {
       return this.state
     }
-    if (this.state.status === 'ready' || this.state.status === 'working') {
+    if (this.connectPromise && this.connectingCwd === cwd && this.connectingAgent === agentId) {
+      return this.connectPromise
+    }
+    if (this.agentProcess || this.connection || this.connectPromise) {
       this.dispose()
     }
     // 防止并发触发多次连接（例如 React StrictMode 双调用）
-    if (!this.connectPromise) {
-      this.connectPromise = this.establishConnection(cwd).finally(() => {
+    const generation = ++this.connectionGeneration
+    this.connectingCwd = cwd
+    this.connectingAgent = agentId
+    const connectPromise = this.establishConnection(cwd, agentId, generation).finally(() => {
+      if (this.connectPromise === connectPromise) {
         this.connectPromise = undefined
-      })
-    }
-    return this.connectPromise
+        this.connectingCwd = undefined
+        this.connectingAgent = undefined
+      }
+    })
+    this.connectPromise = connectPromise
+    return connectPromise
   }
 
-  private async establishConnection(cwd: string): Promise<AgentState> {
-    this.setState({ status: 'connecting', detail: '正在启动 Claude ACP 适配器…' })
+  private async establishConnection(cwd: string, agentId: AgentAdapterId, generation: number): Promise<AgentState> {
+    const agentName = agentId === 'pi' ? 'Pi' : 'Claude'
+    this.setState({ status: 'connecting', detail: `正在启动 ${agentName} ACP 适配器…` })
 
     try {
-      const adapterPath = require.resolve('@agentclientprotocol/claude-agent-acp/dist/index.js')
+      const adapterPath = agentId === 'pi'
+        ? require.resolve('pi-acp/dist/index.js')
+        : require.resolve('@agentclientprotocol/claude-agent-acp/dist/index.js')
+      const piCommand = agentId === 'pi' ? resolvePiCommand() : undefined
       const agentProcess = spawn(process.execPath, [adapterPath], {
         cwd,
-        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+        env: {
+          ...process.env,
+          ELECTRON_RUN_AS_NODE: '1',
+          ...(piCommand ? { PI_ACP_PI_COMMAND: piCommand } : {})
+        },
         stdio: ['pipe', 'pipe', 'pipe']
       })
       this.agentProcess = agentProcess
@@ -118,16 +192,24 @@ export class AcpBridge extends EventEmitter {
         .onNotification(acp.methods.client.session.update, (context) => this.handleSessionUpdate(context.params))
 
       this.connection = client.connect(stream)
-      await this.connection.agent.request(acp.methods.agent.initialize, {
+      const connection = this.connection
+      await connection.agent.request(acp.methods.agent.initialize, {
         protocolVersion: acp.PROTOCOL_VERSION,
         clientCapabilities: { session: { configOptions: { boolean: {} } } }
       })
+      if (generation !== this.connectionGeneration || this.agentProcess !== agentProcess) {
+        connection.close()
+        agentProcess.kill()
+        return this.state
+      }
       this.sessionCwd = cwd
-      this.setState({ status: 'ready', detail: 'Claude 已连接' })
-      this.emit('message', this.systemMessage('已连接 Claude ACP。当前会话默认会拒绝需要额外确认的工具权限。'))
+      this.setState({ status: 'ready', detail: `${agentName} 已连接` })
+      this.emit('message', this.systemMessage(`已连接 ${agentName} ACP。`))
     } catch (error) {
-      this.dispose()
-      this.setState({ status: 'error', detail: error instanceof Error ? error.message : '无法连接 Claude ACP。' })
+      if (generation === this.connectionGeneration) {
+        this.dispose()
+        this.setState({ status: 'error', detail: error instanceof Error ? error.message : `无法连接 ${agentName} ACP。` })
+      }
     }
 
     return this.state
@@ -148,7 +230,7 @@ export class AcpBridge extends EventEmitter {
 
   /** 通过 ACP session/load 加载历史会话，回放消息通过 onMessage 事件流式推送到 UI。 */
   async loadSession(sessionId: string, cwd: string): Promise<LoadedSession> {
-    if (!this.connection) throw new Error('请先连接 Claude ACP。')
+    if (!this.connection) throw new Error('请先连接 Agent ACP。')
 
     this.activeSessionId = sessionId
     this.sessionCwd = cwd
@@ -191,7 +273,7 @@ export class AcpBridge extends EventEmitter {
 
   /** 通过 ACP session/new 新建会话并设为当前会话。 */
   async createSession(cwd: string): Promise<AcpSessionResult> {
-    if (!this.connection) throw new Error('请先连接 Claude ACP。')
+    if (!this.connection) throw new Error('请先连接 Agent ACP。')
     const response = await this.connection.agent.request(acp.methods.agent.session.new, { cwd, mcpServers: this.automationMcpServers() })
     this.activeSessionId = response.sessionId
     this.sessionCwd = cwd
@@ -207,10 +289,11 @@ export class AcpBridge extends EventEmitter {
 
   async prompt(request: PromptRequest): Promise<void> {
     if (!this.activeSessionId || this.state.status !== 'ready') {
-      throw new Error('请先连接 Claude ACP。')
+      throw new Error('请先连接 Agent ACP。')
     }
 
-    this.setState({ ...this.state, status: 'working', detail: 'Claude 正在处理…' })
+    const agentName = this.currentAgent === 'pi' ? 'Pi' : 'Claude'
+    this.setState({ ...this.state, status: 'working', detail: `${agentName} 正在处理…` })
     this.emit('message', {
       id: crypto.randomUUID(),
       role: 'user',
@@ -225,10 +308,10 @@ export class AcpBridge extends EventEmitter {
         sessionId: this.activeSessionId,
         prompt
       })
-      this.setState({ ...this.state, status: 'ready', detail: 'Claude 已就绪' })
+      this.setState({ ...this.state, status: 'ready', detail: `${agentName} 已就绪` })
     } catch (error) {
-      this.emit('message', this.systemMessage(error instanceof Error ? error.message : 'Claude 未能完成请求。'))
-      this.setState({ ...this.state, status: 'ready', detail: 'Claude 已就绪' })
+      this.emit('message', this.systemMessage(error instanceof Error ? error.message : `${agentName} 未能完成请求。`))
+      this.setState({ ...this.state, status: 'ready', detail: `${agentName} 已就绪` })
     }
   }
 
@@ -241,7 +324,7 @@ export class AcpBridge extends EventEmitter {
 
   async setMode(modeId: string): Promise<void> {
     if (!this.connection || !this.activeSessionId) {
-      throw new Error('请先连接 Claude ACP。')
+      throw new Error('请先连接 Agent ACP。')
     }
     await this.connection.agent.request(acp.methods.agent.session.setMode, {
       sessionId: this.activeSessionId,
@@ -370,6 +453,7 @@ export class AcpBridge extends EventEmitter {
   }
 
   dispose(): void {
+    this.connectionGeneration += 1
     this.activeSessionId = undefined
     this.sessionCwd = undefined
     this.connection?.close()
@@ -453,8 +537,8 @@ export class AcpBridge extends EventEmitter {
   }
 
   private setState(state: AgentState): void {
-    this.state = state
-    this.emit('state', state)
+    this.state = { ...state, currentAgent: this.currentAgent }
+    this.emit('state', this.state)
   }
 
   private systemMessage(content: string): ChatMessage {

@@ -7,6 +7,7 @@ interface AppPreferences {
   lastDirectoryPath?: string
   preferredModelId?: string
   preferredEffortId?: string
+  preferredAgentId?: string
 }
 
 const STORE_FILE = 'preferences.json'
@@ -36,7 +37,9 @@ async function readPreferences(): Promise<AppPreferences> {
       preferredModelId:
         typeof preferences.preferredModelId === 'string' ? preferences.preferredModelId : undefined,
       preferredEffortId:
-        typeof preferences.preferredEffortId === 'string' ? preferences.preferredEffortId : undefined
+        typeof preferences.preferredEffortId === 'string' ? preferences.preferredEffortId : undefined,
+      preferredAgentId:
+        typeof preferences.preferredAgentId === 'string' ? preferences.preferredAgentId : undefined
     }
   } catch {
     cache = {}
@@ -87,4 +90,12 @@ export async function getPreferredEffortId(): Promise<string | undefined> {
 
 export async function setPreferredEffortId(preferredEffortId: string): Promise<void> {
   await updatePreferences({ preferredEffortId })
+}
+
+export async function getPreferredAgentId(): Promise<string | undefined> {
+  return (await readPreferences()).preferredAgentId
+}
+
+export async function setPreferredAgentId(preferredAgentId: string): Promise<void> {
+  await updatePreferences({ preferredAgentId })
 }

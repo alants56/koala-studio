@@ -1,8 +1,10 @@
 import { useLayoutEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
-import { Button, Layout, Menu, Tooltip } from 'antd'
+import { App, Button, Layout, Menu, Popover, Tooltip } from 'antd'
 import {
+  CheckOutlined,
   CodeOutlined,
   DashboardOutlined,
+  DownOutlined,
   FolderOpenOutlined,
   AppstoreOutlined,
   MenuFoldOutlined,
@@ -11,6 +13,8 @@ import {
 } from '@ant-design/icons'
 import { useLocation, useNavigate, useOutlet } from 'react-router-dom'
 import type { MenuProps } from 'antd'
+import type { AgentAdapterId } from '@shared/acp'
+import { useAgentSelection } from '@/state/AgentSelectionContext'
 import { ProjectNavigation } from './ProjectNavigation'
 
 const { Sider, Content } = Layout
@@ -37,6 +41,9 @@ export function AppLayout(): ReactElement {
   const navigate = useNavigate()
   const outlet = useOutlet()
   const [projectDetailOutlet, setProjectDetailOutlet] = useState<ReactNode>(null)
+  const [agentOpen, setAgentOpen] = useState(false)
+  const { message } = App.useApp()
+  const { currentAgent, switching, setAgent } = useAgentSelection()
 
   const selectedKey = useMemo(() => getSelectedKey(location.pathname), [location.pathname])
   const projectDetailActive = location.pathname.startsWith('/projects/')
@@ -51,6 +58,50 @@ export function AppLayout(): ReactElement {
   const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
     void navigate(key)
   }
+
+  const handleAgentChange = async (agentId: AgentAdapterId): Promise<void> => {
+    if (agentId === currentAgent || switching) {
+      setAgentOpen(false)
+      return
+    }
+
+    const switchPromise = setAgent(agentId)
+    if (projectDetailActive && location.search) {
+      void navigate(location.pathname, { replace: true })
+    }
+
+    try {
+      await switchPromise
+      setAgentOpen(false)
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : '切换 Agent 失败')
+    }
+  }
+
+  const agentPanel = (
+    <div className="koala-agent-panel chat-model-panel" role="listbox" aria-label="Agent 列表">
+      {(['claude', 'pi'] as const).map((agentId) => {
+        const selected = agentId === currentAgent
+        const label = agentId === 'claude' ? 'Claude' : 'Pi'
+        return (
+          <button
+            key={agentId}
+            type="button"
+            role="option"
+            aria-selected={selected}
+            className="chat-model-option"
+            disabled={switching}
+            onClick={() => void handleAgentChange(agentId)}
+          >
+            <span className="chat-model-option-copy">
+              <span className="chat-model-option-title">{label}</span>
+            </span>
+            {selected && <CheckOutlined className="chat-model-option-check" />}
+          </button>
+        )
+      })}
+    </div>
+  )
 
   return (
     <Layout className="koala-shell">
@@ -91,12 +142,30 @@ export function AppLayout(): ReactElement {
         />
         <ProjectNavigation collapsed={collapsed} />
         <div className="koala-sider-foot">
-          {!collapsed && (
-            <span className="chat-composer-attribution flex items-center gap-1.5">
-              <CodeOutlined />
-              Claude-Agent-ACP驱动
-            </span>
-          )}
+          <Popover
+            placement="rightBottom"
+            trigger="click"
+            open={agentOpen}
+            onOpenChange={setAgentOpen}
+            content={agentPanel}
+            title="切换 Agent"
+          >
+            <Button
+              type="text"
+              className={`koala-agent-trigger${collapsed ? ' is-collapsed' : ''}`}
+              icon={<CodeOutlined />}
+              loading={switching}
+              aria-label={`当前 Agent：${currentAgent === 'pi' ? 'Pi' : 'Claude'}`}
+              aria-expanded={agentOpen}
+            >
+              {!collapsed && (
+                <>
+                  <span>{currentAgent === 'pi' ? 'Pi' : 'Claude'}</span>
+                  <DownOutlined className="koala-agent-trigger-chevron" aria-hidden="true" />
+                </>
+              )}
+            </Button>
+          </Popover>
         </div>
       </Sider>
       <Layout className="koala-content-wrap">

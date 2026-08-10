@@ -1,5 +1,7 @@
 import type { ChatAttachment } from './attachments'
 
+export type AgentAdapterId = 'claude' | 'pi'
+
 export type AgentStatus = 'disconnected' | 'connecting' | 'ready' | 'working' | 'error'
 
 export interface AgentMode {
@@ -75,6 +77,8 @@ export interface AgentState {
   usage?: AgentUsage
   /** 当前待确认的权限请求（输入框上方展示）。 */
   pendingPermission?: AgentPermissionRequest
+  /** 当前使用的 ACP 适配器。 */
+  currentAgent?: AgentAdapterId
 }
 
 export interface ChatMessage {
@@ -126,6 +130,8 @@ export interface AcpApi {
   setMode: (modeId: string) => Promise<void>
   setModel: (modelId: string) => Promise<void>
   setEffort: (effortId: string) => Promise<void>
+  /** 切换 ACP 适配器（claude / pi）。 */
+  setAgent: (agentId: AgentAdapterId) => Promise<void>
   /** 通过 ACP session/list 查询 Claude Code 在该目录下的会话记录。 */
   listSessions: (cwd: string) => Promise<AcpSessionInfo[]>
   /** 通过 ACP session/load 加载历史会话，并返回回放的消息。 */

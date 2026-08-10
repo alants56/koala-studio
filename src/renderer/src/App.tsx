@@ -6,23 +6,26 @@ import { ProjectsPage } from '@/pages/projects/ProjectsPage'
 import { ProjectChatPage } from '@/pages/projects/ProjectChatPage'
 import { ClaudeResourcesPage } from '@/pages/claude/ClaudeResourcesPage'
 import { AutomationsPage } from '@/pages/automations/AutomationsPage'
+import { AgentSelectionProvider } from '@/state/AgentSelectionContext'
 import { ProjectsProvider } from '@/state/ProjectsContext'
 
 export function App(): ReactElement {
   return (
-    <ProjectsProvider>
-      <HashRouter>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route index element={<Navigate to="/projects" replace />} />
-            <Route path="/workbench" element={<WorkbenchPage />} />
-            <Route path="/projects" element={<ProjectsPage />} />
-            <Route path="/projects/:projectId" element={<ProjectChatPage />} />
-            <Route path="/claude" element={<ClaudeResourcesPage />} />
-            <Route path="/automations" element={<AutomationsPage />} />
-          </Route>
-        </Routes>
-      </HashRouter>
-    </ProjectsProvider>
+    <AgentSelectionProvider>
+      <ProjectsProvider>
+        <HashRouter>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route index element={<Navigate to="/projects" replace />} />
+              <Route path="/workbench" element={<WorkbenchPage />} />
+              <Route path="/projects" element={<ProjectsPage />} />
+              <Route path="/projects/:projectId" element={<ProjectChatPage />} />
+              <Route path="/claude" element={<ClaudeResourcesPage />} />
+              <Route path="/automations" element={<AutomationsPage />} />
+            </Route>
+          </Routes>
+        </HashRouter>
+      </ProjectsProvider>
+    </AgentSelectionProvider>
   )
 }

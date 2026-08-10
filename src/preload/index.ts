@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AcpApi } from '../shared/acp'
+import type { AcpApi, AgentAdapterId } from '../shared/acp'
 import type { ProjectsApi } from '../shared/projects'
 import type { ClaudeApi } from '../shared/claude'
 import type { AutomationsApi } from '../shared/automations'
@@ -14,6 +14,7 @@ const acp: AcpApi = {
   setMode: (modeId) => ipcRenderer.invoke('acp:set-mode', modeId),
   setModel: (modelId) => ipcRenderer.invoke('acp:set-model', modelId),
   setEffort: (effortId) => ipcRenderer.invoke('acp:set-effort', effortId),
+  setAgent: (agentId: AgentAdapterId) => ipcRenderer.invoke('acp:set-agent', agentId),
   listSessions: (cwd) => ipcRenderer.invoke('acp:list-sessions', cwd),
   loadSession: (sessionId, cwd) => ipcRenderer.invoke('acp:load-session', sessionId, cwd),
   createSession: (cwd) => ipcRenderer.invoke('acp:create-session', cwd),

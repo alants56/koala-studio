@@ -29,7 +29,9 @@ import {
   getPreferredModelId,
   setPreferredModelId,
   getPreferredEffortId,
-  setPreferredEffortId
+  setPreferredEffortId,
+  getPreferredAgentId,
+  setPreferredAgentId
 } from './services/preferences-store'
 import { attachmentFilePath, importAttachments } from './services/attachment-store'
 
@@ -44,7 +46,9 @@ const acpBridge = new AcpBridge({
   getPreferredModelId: getPreferredModelId,
   setPreferredModelId: setPreferredModelId,
   getPreferredEffortId: getPreferredEffortId,
-  setPreferredEffortId: setPreferredEffortId
+  setPreferredEffortId: setPreferredEffortId,
+  getPreferredAgentId: getPreferredAgentId,
+  setPreferredAgentId: setPreferredAgentId
 })
 let automationScheduler: AutomationScheduler | undefined
 let httpMcpProcess: ChildProcess | undefined
@@ -134,16 +138,20 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('acp:get-state', () => acpBridge.getState())
+  ipcMain.handle('acp:get-state', async () => {
+    await acpBridge.getCurrentAgent()
+    return acpBridge.getState()
+  })
   ipcMain.handle('acp:connect', (_, cwd: string) => acpBridge.connect(cwd))
   ipcMain.handle('acp:prompt', (_, request) => acpBridge.prompt(request))
   ipcMain.handle('acp:stop', () => acpBridge.stop())
   ipcMain.handle('acp:set-mode', (_, modeId: string) => acpBridge.setMode(modeId))
   ipcMain.handle('acp:set-model', (_, modelId: string) => acpBridge.setModel(modelId))
   ipcMain.handle('acp:set-effort', (_, effortId: string) => acpBridge.setEffort(effortId))
+  ipcMain.handle('acp:set-agent', (_, agentId: string) => acpBridge.setAgent(agentId as 'claude' | 'pi'))
   ipcMain.handle('acp:list-sessions', async (_event, cwd: string) => {
-    // 会话索引查询使用短连接，避免侧栏读取其他项目时切断当前聊天。
-    const listingBridge = new AcpBridge()
+    // 会话索引查询使用短连接，用主 bridge 当前的 agent 类型，避免侧栏读取其他项目时切断当前聊天。
+    const listingBridge = new AcpBridge({ initialAgentId: await acpBridge.getCurrentAgent() })
     try {
       return await listingBridge.listSessions(cwd)
     } finally {

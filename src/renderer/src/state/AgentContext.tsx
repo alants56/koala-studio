@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { AcpSessionInfo, AgentState, ChatMessage } from '@shared/acp'
 import type { ChatAttachment } from '@shared/attachments'
 import { acp, assertAcpApi } from '@/services/acp'
+import { useAgentSelection } from '@/state/AgentSelectionContext'
 import { INITIAL_MESSAGES } from '@/utils/constants'
 import { dispatchSessionActivity } from '@/utils/session-events'
 
@@ -41,8 +42,10 @@ interface AgentProviderProps {
 }
 
 export function AgentProvider({ cwd, initialSessionId, children }: AgentProviderProps): ReactElement {
+  const { currentAgent } = useAgentSelection()
+  const agentName = currentAgent === 'pi' ? 'Pi' : 'Claude'
   // 进入页面即视为「连接中」，避免首帧先闪现「未连接」
-  const [state, setState] = useState<AgentState>({ status: 'connecting', detail: '正在连接 Claude ACP…' })
+  const [state, setState] = useState<AgentState>({ status: 'connecting', detail: `正在连接 ${agentName} ACP…`, currentAgent })
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES)
   const [sessionId, setSessionId] = useState<string>()
   const connectingRef = useRef(false)
@@ -72,7 +75,7 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
     connectingRef.current = true
     const startedAt = Date.now()
     try {
-      setState({ status: 'connecting', detail: '正在连接 Claude ACP…' })
+      setState({ status: 'connecting', detail: `正在连接 ${agentName} ACP…`, currentAgent })
       assertAcpApi()
       const next = await acp.connect(cwd)
       if (next.status === 'ready') {
@@ -84,16 +87,16 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
           await new Promise((resolve) => setTimeout(resolve, MIN_CONNECTING_MS - elapsed))
         }
         // session/new 会在连接过程中同步权限模式；这里合并状态，避免把 modes 清掉。
-        setState((current) => ({ ...current, status: 'ready', detail: 'Claude 已连接' }))
+        setState((current) => ({ ...current, status: 'ready', detail: `${agentName} 已连接` }))
       } else {
         setState(next)
       }
     } catch (error) {
-      setState({ status: 'error', detail: error instanceof Error ? error.message : '连接 Claude ACP 失败。' })
+      setState({ status: 'error', detail: error instanceof Error ? error.message : `连接 ${agentName} ACP 失败。`, currentAgent })
     } finally {
       connectingRef.current = false
     }
-  }, [cwd, openInitialSession])
+  }, [agentName, currentAgent, cwd, openInitialSession])
 
   const send = useCallback(async (text: string, attachments: ChatAttachment[] = []) => {
     if (!sessionId) throw new Error('当前会话尚未就绪。')

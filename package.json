@@ -23,6 +23,7 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@vitejs/plugin-react": "^5.1.1",
     "antd": "^6.5.3",
+    "pi-acp": "^0.0.33",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.18.2",

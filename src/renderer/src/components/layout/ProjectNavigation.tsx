@@ -9,6 +9,7 @@ import {
 import { Skeleton } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { AcpSessionInfo, Project } from '@/models'
+import { useAgentSelection } from '@/state/AgentSelectionContext'
 import { useProjects } from '@/state/ProjectsContext'
 import { WORKSPACE_PATH } from '@/utils/constants'
 import { subscribeSessionActivity } from '@/utils/session-events'
@@ -27,6 +28,7 @@ interface ProjectNavigationProps {
 /** 侧栏项目树：沿用项目页排序，并为每个可见项目展示最近的会话。 */
 export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactElement | null {
   const { projects, loading } = useProjects()
+  const { revision: agentRevision } = useAgentSelection()
   const location = useLocation()
   const navigate = useNavigate()
   const [showAllProjects, setShowAllProjects] = useState(false)
@@ -36,6 +38,7 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
   const sessionListsRef = useRef(sessionLists)
   const requestVersionsRef = useRef(new Map<string, number>())
   const pendingSessionsRef = useRef(new Map<string, AcpSessionInfo>())
+  const agentRevisionRef = useRef(agentRevision)
 
   const routeParts = location.pathname.split('/')
   const activeProjectId = location.pathname.startsWith('/projects/') ? decodeURIComponent(routeParts[2] ?? '') : undefined
@@ -86,6 +89,18 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
   }, [updateSessionLists])
 
   useEffect(() => {
+    const agentChanged = agentRevisionRef.current !== agentRevision
+    if (agentChanged) {
+      agentRevisionRef.current = agentRevision
+      for (const projectId of requestVersionsRef.current.keys()) {
+        requestVersionsRef.current.set(projectId, (requestVersionsRef.current.get(projectId) ?? 0) + 1)
+      }
+      pendingSessionsRef.current.clear()
+      sessionListsRef.current = {}
+      setSessionLists({})
+      setLiveSelection(undefined)
+    }
+
     const missingProjects = visibleProjects.filter((project) => !sessionListsRef.current[project.id])
     if (missingProjects.length === 0) return
 
@@ -106,7 +121,7 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
         }
       }
     })()
-  }, [refreshProjectSessions, visibleProjectKey])
+  }, [agentRevision, refreshProjectSessions, visibleProjectKey])
 
   useEffect(() => {
     return subscribeSessionActivity((activity) => {
