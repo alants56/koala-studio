@@ -73,6 +73,9 @@ export async function executePiInstruction(
       },
       stdio: ['pipe', 'pipe', 'pipe']
     })
+    // 子进程异常退出后仍可能收到一次写入（如关闭通知），未监听会变成未捕获的 EPIPE 异常。
+    agentProcess.on('error', () => undefined)
+    agentProcess.stdin.on('error', () => undefined)
 
     const stream = acp.ndJsonStream(
       Writable.toWeb(agentProcess.stdin) as WritableStream<Uint8Array>,

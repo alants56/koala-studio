@@ -177,6 +177,9 @@ export class AcpBridge extends EventEmitter {
         stdio: ['pipe', 'pipe', 'pipe']
       })
       this.agentProcess = agentProcess
+      // 子进程异常退出后仍可能收到一次写入（如关闭通知），未监听会变成未捕获的 EPIPE 异常。
+      agentProcess.on('error', () => undefined)
+      agentProcess.stdin.on('error', () => undefined)
       agentProcess.stderr.on('data', (buffer: Buffer) => {
         if (this.agentProcess !== agentProcess) return
         const detail = buffer.toString().trim()
