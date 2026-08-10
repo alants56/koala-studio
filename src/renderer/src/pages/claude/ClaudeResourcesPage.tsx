@@ -29,6 +29,7 @@ import {
   SyncOutlined
 } from '@ant-design/icons'
 import type { ClaudeMcp, ClaudePlugin, ClaudeResources, ClaudeSkill, SaveClaudeMcpInput } from '@shared/claude'
+import { useAgentSelection } from '@/state/AgentSelectionContext'
 
 type ResourceTab = 'skills' | 'plugins' | 'mcps'
 
@@ -62,9 +63,10 @@ function redactMcpConfig(config: Record<string, unknown>): string {
   return JSON.stringify(copy)
 }
 
-/** 管理 ~/.claude 中由当前用户维护的 Skills、插件与 MCP。 */
+/** 管理当前 Agent（claude / pi）本地维护的 Skills、插件与 MCP，切换 Agent 后自动刷新。 */
 export function ClaudeResourcesPage(): ReactElement {
   const { message, modal } = App.useApp()
+  const { currentAgent } = useAgentSelection()
   const [tab, setTab] = useState<ResourceTab>('skills')
   const [resources, setResources] = useState<ClaudeResources>()
   const [loading, setLoading] = useState(true)
@@ -73,18 +75,31 @@ export function ClaudeResourcesPage(): ReactElement {
   const [mcpEditor, setMcpEditor] = useState<ClaudeMcp>()
   const [creatingMcp, setCreatingMcp] = useState(false)
 
+  const isPi = currentAgent === 'pi'
+  const agentLabel = isPi ? 'Pi' : 'Claude'
+  const resourceHome = isPi ? '~/.pi/agent' : '~/.claude'
+
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
-      setResources(await window.claude.list())
+      setResources(await window.claude.list(currentAgent))
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : '无法读取 Claude 本地资源。')
+      void message.error(error instanceof Error ? error.message : '无法读取本地资源。')
     } finally {
       setLoading(false)
     }
-  }, [message])
+  }, [currentAgent, message])
 
+  // 挂载时拉取；切换 Agent 后 currentAgent 变化，自动重新拉取当前 Agent 的资源。
   useEffect(() => { void refresh() }, [refresh])
+
+  // Pi 不支持 MCP：切到 Pi 时收起 MCP 编辑器，避免残留弹窗。
+  useEffect(() => {
+    if (isPi) {
+      setCreatingMcp(false)
+      setMcpEditor(undefined)
+    }
+  }, [isPi])
 
   const counts = useMemo(() => ({
     skills: resources?.skills.length ?? 0,
@@ -94,7 +109,7 @@ export function ClaudeResourcesPage(): ReactElement {
 
   const editSkill = async (skill: ClaudeSkill): Promise<void> => {
     try {
-      setSkillEditor({ id: skill.id, name: skill.name, content: await window.claude.readSkill(skill.id) })
+      setSkillEditor({ id: skill.id, name: skill.name, content: await window.claude.readSkill(currentAgent, skill.id) })
     } catch (error) {
       void message.error(error instanceof Error ? error.message : '无法读取 Skill。')
     }
@@ -103,11 +118,11 @@ export function ClaudeResourcesPage(): ReactElement {
   const removeSkill = (skill: ClaudeSkill): void => {
     modal.confirm({
       title: `删除 Skill「${skill.name}」？`,
-      content: '将移除 ~/.claude/skills 中对应的整个目录，无法恢复。',
+      content: `将移除 ${resourceHome}/skills 中对应的整个目录，无法恢复。`,
       okText: '删除',
       okButtonProps: { danger: true },
       onOk: async () => {
-        await window.claude.removeSkill(skill.id)
+        await window.claude.removeSkill(currentAgent, skill.id)
         void message.success('Skill 已删除')
         await refresh()
       }
@@ -117,7 +132,7 @@ export function ClaudeResourcesPage(): ReactElement {
   const runPluginAction = async (plugin: ClaudePlugin, action: 'enable' | 'disable' | 'update' | 'uninstall'): Promise<void> => {
     setBusyPlugin(`${plugin.id}:${action}`)
     try {
-      await window.claude.pluginAction(action, plugin.id)
+      await window.claude.pluginAction(currentAgent, action, plugin.id)
       void message.success(action === 'uninstall' ? '插件已卸载' : action === 'update' ? '插件已更新' : action === 'enable' ? '插件已启用' : '插件已停用')
       await refresh()
     } catch (error) {
@@ -134,7 +149,7 @@ export function ClaudeResourcesPage(): ReactElement {
       okText: '移除',
       okButtonProps: { danger: true },
       onOk: async () => {
-        await window.claude.removeMcp(mcp.name, mcp.scope, mcp.projectPath)
+        await window.claude.removeMcp(currentAgent, mcp.name, mcp.scope, mcp.projectPath)
         void message.success('MCP 已移除')
         await refresh()
       }
@@ -145,9 +160,9 @@ export function ClaudeResourcesPage(): ReactElement {
     <div className="claude-resources-page">
       <div className="resource-heading">
         <div>
-          <div className="resource-eyebrow"><CodeOutlined /> CLAUDE 本地资源</div>
+          <div className="resource-eyebrow"><CodeOutlined /> {agentLabel.toUpperCase()} 本地资源</div>
           <Typography.Title level={2} className="page-title">插件</Typography.Title>
-          <Typography.Text className="page-subtitle">在一个地方维护本机 Claude Code 的 Skills、插件和 MCP 服务。</Typography.Text>
+          <Typography.Text className="page-subtitle">管理当前 Agent（{agentLabel}）在 {resourceHome} 下的本地资源，切换 Agent 后列表自动跟随更新。</Typography.Text>
         </div>
         <Button icon={<ReloadOutlined />} onClick={() => void refresh()} loading={loading}>刷新</Button>
       </div>
@@ -175,18 +190,18 @@ export function ClaudeResourcesPage(): ReactElement {
           ]}
         />
         {tab === 'skills' && <Button type="primary" icon={<PlusOutlined />} onClick={() => setSkillEditor({ name: '', content: DEFAULT_SKILL })}>新建 Skill</Button>}
-        {tab === 'mcps' && <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreatingMcp(true)}>添加 MCP</Button>}
+        {tab === 'mcps' && !isPi && <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreatingMcp(true)}>添加 MCP</Button>}
       </div>
 
-      {loading ? <ResourceSkeleton /> : tab === 'skills' ? <SkillsList skills={resources?.skills ?? []} onEdit={editSkill} onDelete={removeSkill} /> : null}
-      {!loading && tab === 'plugins' ? <PluginsList plugins={resources?.plugins ?? []} busy={busyPlugin} onAction={runPluginAction} /> : null}
-      {!loading && tab === 'mcps' ? <McpsList mcps={resources?.mcps ?? []} onEdit={setMcpEditor} onDelete={removeMcp} /> : null}
+      {loading ? <ResourceSkeleton /> : tab === 'skills' ? <SkillsList skills={resources?.skills ?? []} resourceHome={resourceHome} onEdit={editSkill} onDelete={removeSkill} /> : null}
+      {!loading && tab === 'plugins' ? <PluginsList plugins={resources?.plugins ?? []} busy={busyPlugin} emptyHint={isPi ? 'Pi 不提供插件机制（插件是 Claude Code 特有的能力）' : undefined} onAction={runPluginAction} /> : null}
+      {!loading && tab === 'mcps' ? <McpsList mcps={resources?.mcps ?? []} emptyHint={isPi ? 'Pi 不支持 MCP 服务（按设计仅提供 Skills）' : undefined} onEdit={setMcpEditor} onDelete={removeMcp} /> : null}
 
       <SkillEditor
         value={skillEditor}
         onCancel={() => setSkillEditor(undefined)}
         onSaved={async (input) => {
-          await window.claude.saveSkill(input)
+          await window.claude.saveSkill(currentAgent, input)
           setSkillEditor(undefined)
           void message.success('Skill 已保存')
           await refresh()
@@ -197,7 +212,7 @@ export function ClaudeResourcesPage(): ReactElement {
         open={creatingMcp || mcpEditor !== undefined}
         onCancel={() => { setCreatingMcp(false); setMcpEditor(undefined) }}
         onSaved={async (input) => {
-          await window.claude.saveMcp(input)
+          await window.claude.saveMcp(currentAgent, input)
           setCreatingMcp(false)
           setMcpEditor(undefined)
           void message.success('MCP 已保存')
@@ -212,19 +227,19 @@ function ResourceSkeleton(): ReactElement {
   return <div className="resource-list"><Skeleton active paragraph={{ rows: 3 }} /><Skeleton active paragraph={{ rows: 3 }} /></div>
 }
 
-function SkillsList({ skills, onEdit, onDelete }: { skills: ClaudeSkill[]; onEdit: (skill: ClaudeSkill) => void; onDelete: (skill: ClaudeSkill) => void }): ReactElement {
+function SkillsList({ skills, resourceHome, onEdit, onDelete }: { skills: ClaudeSkill[]; resourceHome: string; onEdit: (skill: ClaudeSkill) => void; onDelete: (skill: ClaudeSkill) => void }): ReactElement {
   if (!skills.length) return <Empty className="resource-empty" description="还没有本地 Skill" />
   return <div className="resource-list">{skills.map((skill) => (
     <Card className="resource-row" key={skill.id}>
       <span className="resource-symbol skill"><CodeOutlined /></span>
-      <div className="resource-main"><div className="resource-title">{skill.name}</div><div className="resource-description">{skill.description}</div><div className="resource-meta">~/.claude/skills/{skill.id} · 更新于 {formatDate(skill.updatedAt)}</div></div>
+      <div className="resource-main"><div className="resource-title">{skill.name}</div><div className="resource-description">{skill.description}</div><div className="resource-meta">{resourceHome}/skills/{skill.id} · 更新于 {formatDate(skill.updatedAt)}</div></div>
       <Space className="resource-actions"><Tooltip title="编辑 Skill"><Button type="text" icon={<EditOutlined />} onClick={() => void onEdit(skill)} /></Tooltip><Tooltip title="删除 Skill"><Button type="text" danger icon={<DeleteOutlined />} onClick={() => onDelete(skill)} /></Tooltip></Space>
     </Card>
   ))}</div>
 }
 
-function PluginsList({ plugins, busy, onAction }: { plugins: ClaudePlugin[]; busy?: string; onAction: (plugin: ClaudePlugin, action: 'enable' | 'disable' | 'update' | 'uninstall') => void }): ReactElement {
-  if (!plugins.length) return <Empty className="resource-empty" description="没有检测到已安装的 Claude 插件" />
+function PluginsList({ plugins, busy, emptyHint, onAction }: { plugins: ClaudePlugin[]; busy?: string; emptyHint?: string; onAction: (plugin: ClaudePlugin, action: 'enable' | 'disable' | 'update' | 'uninstall') => void }): ReactElement {
+  if (!plugins.length) return <Empty className="resource-empty" description={emptyHint ?? '没有检测到已安装的 Claude 插件'} />
   return <div className="resource-list">{plugins.map((plugin, index) => {
     const isBusy = (action: string): boolean => busy === `${plugin.id}:${action}`
     return <Card className="resource-row" key={`${plugin.id}:${plugin.scope}:${plugin.installPath}:${index}`}>
@@ -239,8 +254,8 @@ function PluginsList({ plugins, busy, onAction }: { plugins: ClaudePlugin[]; bus
   })}</div>
 }
 
-function McpsList({ mcps, onEdit, onDelete }: { mcps: ClaudeMcp[]; onEdit: (mcp: ClaudeMcp) => void; onDelete: (mcp: ClaudeMcp) => void }): ReactElement {
-  if (!mcps.length) return <Empty className="resource-empty" description="还没有配置 MCP 服务" />
+function McpsList({ mcps, emptyHint, onEdit, onDelete }: { mcps: ClaudeMcp[]; emptyHint?: string; onEdit: (mcp: ClaudeMcp) => void; onDelete: (mcp: ClaudeMcp) => void }): ReactElement {
+  if (!mcps.length) return <Empty className="resource-empty" description={emptyHint ?? '还没有配置 MCP 服务'} />
   return <div className="resource-list">{mcps.map((mcp) => (
     <Card className="resource-row" key={mcp.id}>
       <span className="resource-symbol mcp"><ApiOutlined /></span>

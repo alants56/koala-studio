@@ -73,6 +73,14 @@ export class AcpBridge extends EventEmitter {
   private connectingAgent?: AgentAdapterId
   private connectionGeneration = 0
   private permissionResolve?: (optionId: string | null) => void
+  /** 标识当前 prompt，避免异步结束时清理了后续 prompt 的流式状态。 */
+  private activePromptId?: string
+  /** ACP 未提供 messageId 时，用于合并当前连续的助手消息分片。 */
+  private fallbackAssistantMessageId?: string
+  /** session/load 中的无 ID 消息是完整历史消息，不能跨条合并。 */
+  private replayingSession = false
+  /** Pi ACP 的 session/new 响应会预告随后异步推送的启动信息。 */
+  private suppressPiStartupInfo = false
 
   constructor(private readonly options: AcpBridgeOptions = {}) {
     super()
@@ -235,10 +243,13 @@ export class AcpBridge extends EventEmitter {
     this.activeSessionId = sessionId
     this.sessionCwd = cwd
 
+    this.replayingSession = true
     const response = await this.connection.agent.request(acp.methods.agent.session.load, {
       sessionId,
       cwd,
       mcpServers: this.automationMcpServers()
+    }).finally(() => {
+      this.replayingSession = false
     })
 
     const modes = this.toAgentModes(response.modes)
@@ -274,7 +285,10 @@ export class AcpBridge extends EventEmitter {
   /** 通过 ACP session/new 新建会话并设为当前会话。 */
   async createSession(cwd: string): Promise<AcpSessionResult> {
     if (!this.connection) throw new Error('请先连接 Agent ACP。')
+    this.suppressPiStartupInfo = false
     const response = await this.connection.agent.request(acp.methods.agent.session.new, { cwd, mcpServers: this.automationMcpServers() })
+    const startupInfo = (response._meta as { piAcp?: { startupInfo?: unknown } } | undefined)?.piAcp?.startupInfo
+    this.suppressPiStartupInfo = this.currentAgent === 'pi' && typeof startupInfo === 'string' && startupInfo.length > 0
     this.activeSessionId = response.sessionId
     this.sessionCwd = cwd
     const modes = this.toAgentModes(response.modes)
@@ -292,6 +306,7 @@ export class AcpBridge extends EventEmitter {
       throw new Error('请先连接 Agent ACP。')
     }
 
+    const promptId = crypto.randomUUID()
     const agentName = this.currentAgent === 'pi' ? 'Pi' : 'Claude'
     this.setState({ ...this.state, status: 'working', detail: `${agentName} 正在处理…` })
     this.emit('message', {
@@ -304,6 +319,8 @@ export class AcpBridge extends EventEmitter {
 
     try {
       const prompt = await this.toPromptContent(request)
+      this.activePromptId = promptId
+      this.fallbackAssistantMessageId = crypto.randomUUID()
       await this.connection!.agent.request(acp.methods.agent.session.prompt, {
         sessionId: this.activeSessionId,
         prompt
@@ -312,6 +329,11 @@ export class AcpBridge extends EventEmitter {
     } catch (error) {
       this.emit('message', this.systemMessage(error instanceof Error ? error.message : `${agentName} 未能完成请求。`))
       this.setState({ ...this.state, status: 'ready', detail: `${agentName} 已就绪` })
+    } finally {
+      if (this.activePromptId === promptId) {
+        this.activePromptId = undefined
+        this.fallbackAssistantMessageId = undefined
+      }
     }
   }
 
@@ -456,6 +478,10 @@ export class AcpBridge extends EventEmitter {
     this.connectionGeneration += 1
     this.activeSessionId = undefined
     this.sessionCwd = undefined
+    this.activePromptId = undefined
+    this.fallbackAssistantMessageId = undefined
+    this.replayingSession = false
+    this.suppressPiStartupInfo = false
     this.connection?.close()
     this.agentProcess?.kill()
     this.connection = undefined
@@ -485,6 +511,10 @@ export class AcpBridge extends EventEmitter {
       this.setState({ ...this.state, model: this.toAgentModel(update.configOptions) })
       return
     }
+    if (this.suppressPiStartupInfo && update.sessionUpdate === 'agent_message_chunk') {
+      this.suppressPiStartupInfo = false
+      return
+    }
     if (update.sessionUpdate === 'user_message_chunk' && update.content.type === 'text') {
       this.emit('message', {
         id: update.messageId ?? crypto.randomUUID(),
@@ -497,16 +527,17 @@ export class AcpBridge extends EventEmitter {
     }
     if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text') {
       this.emit('message', {
-        id: update.messageId ?? 'assistant-stream',
+        id: this.assistantMessageId(update.messageId),
         role: 'assistant',
         kind: 'text',
         content: update.content.text,
         createdAt: new Date().toISOString()
       } satisfies ChatMessage)
     } else if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'image') {
+      const messageId = this.assistantMessageId(update.messageId)
       void this.storeImageContent(update.content).then((attachment) => {
         this.emit('message', {
-          id: update.messageId ?? 'assistant-stream',
+          id: messageId,
           role: 'assistant',
           kind: 'text',
           content: '',
@@ -518,13 +549,15 @@ export class AcpBridge extends EventEmitter {
       })
     } else if (update.sessionUpdate === 'agent_thought_chunk' && update.content.type === 'text') {
       this.emit('message', {
-        id: `${update.messageId ?? 'assistant-stream'}:thinking`,
+        id: `${this.assistantMessageId(update.messageId)}:thinking`,
         role: 'assistant',
         kind: 'thinking',
         content: update.content.text,
         createdAt: new Date().toISOString()
       } satisfies ChatMessage)
     } else if (update.sessionUpdate === 'tool_call') {
+      // Pi 不提供 messageId；工具后的正文必须另起一条，不能回填到工具前的消息。
+      if (this.activePromptId) this.fallbackAssistantMessageId = crypto.randomUUID()
       this.emit('message', {
         id: crypto.randomUUID(),
         role: 'system',
@@ -534,6 +567,14 @@ export class AcpBridge extends EventEmitter {
         createdAt: new Date().toISOString()
       } satisfies ChatMessage)
     }
+  }
+
+  private assistantMessageId(messageId: string | null | undefined): string {
+    if (messageId) return messageId
+    if (this.replayingSession) return crypto.randomUUID()
+    if (!this.activePromptId) return crypto.randomUUID()
+    this.fallbackAssistantMessageId ??= crypto.randomUUID()
+    return this.fallbackAssistantMessageId
   }
 
   private setState(state: AgentState): void {

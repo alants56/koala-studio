@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { basename, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { shell } from 'electron'
+import type { AgentAdapterId } from '../../shared/acp'
 import type {
   ClaudeMcp,
   ClaudePlugin,
@@ -16,9 +17,7 @@ import type {
 
 const execFileAsync = promisify(execFile)
 const claudeHome = join(homedir(), '.claude')
-const skillsPath = join(claudeHome, 'skills')
-const pluginsPath = join(claudeHome, 'plugins')
-const settingsPath = join(claudeHome, 'settings.json')
+const piHome = join(homedir(), '.pi', 'agent')
 const claudeConfigPath = join(homedir(), '.claude.json')
 
 type JsonObject = Record<string, unknown>
@@ -30,6 +29,35 @@ interface InstalledPluginRecord {
   version?: string
   installedAt?: string
   lastUpdated?: string
+}
+
+/** 每个 Agent 的本地资源根目录映射。 */
+interface AgentHome {
+  /** 安全路径检查的根目录。 */
+  root: string
+  skillsPath: string
+  /** 插件目录，pi 无插件机制时为 undefined。 */
+  pluginsPath?: string
+  settingsPath: string
+  /** MCP 配置文件，pi 不支持 MCP 时为 undefined。 */
+  mcpConfigPath?: string
+}
+
+function agentHomes(agent: AgentAdapterId): AgentHome {
+  if (agent === 'pi') {
+    return { root: piHome, skillsPath: join(piHome, 'skills'), settingsPath: join(piHome, 'settings.json') }
+  }
+  return {
+    root: claudeHome,
+    skillsPath: join(claudeHome, 'skills'),
+    pluginsPath: join(claudeHome, 'plugins'),
+    settingsPath: join(claudeHome, 'settings.json'),
+    mcpConfigPath: claudeConfigPath
+  }
+}
+
+function assertAgent(agent: AgentAdapterId): void {
+  if (agent !== 'claude' && agent !== 'pi') throw new Error('不支持的 Agent 类型。')
 }
 
 function isObject(value: unknown): value is JsonObject {
@@ -58,9 +86,9 @@ function safeId(id: string): string {
   return id
 }
 
-function safeClaudePath(path: string): string {
+function safeClaudePath(path: string, root: string): string {
   const absolute = resolve(path)
-  if (relative(claudeHome, absolute).startsWith('..')) throw new Error('只能打开 Claude 本地目录中的资源。')
+  if (relative(root, absolute).startsWith('..')) throw new Error('只能打开 Agent 本地目录中的资源。')
   return absolute
 }
 
@@ -74,7 +102,8 @@ function descriptionFromSkill(content: string): string {
   return match?.[1]?.trim() ?? '未填写描述'
 }
 
-async function listSkills(): Promise<ClaudeSkill[]> {
+async function listSkills(agent: AgentAdapterId): Promise<ClaudeSkill[]> {
+  const { skillsPath } = agentHomes(agent)
   let entries: import('node:fs').Dirent[]
   try {
     entries = await fs.readdir(skillsPath, { withFileTypes: true })
@@ -96,7 +125,9 @@ async function listSkills(): Promise<ClaudeSkill[]> {
   return skills.filter((skill): skill is ClaudeSkill => skill !== undefined).sort((a, b) => a.name.localeCompare(b.name))
 }
 
-async function listPlugins(): Promise<ClaudePlugin[]> {
+async function listPlugins(agent: AgentAdapterId): Promise<ClaudePlugin[]> {
+  const { pluginsPath, settingsPath } = agentHomes(agent)
+  if (!pluginsPath) return []
   const [installed, settings] = await Promise.all([readJson(join(pluginsPath, 'installed_plugins.json')), readJson(settingsPath)])
   const installedPlugins = isObject(installed.plugins) ? installed.plugins : {}
   const enabledPlugins = isObject(settings.enabledPlugins) ? settings.enabledPlugins : {}
@@ -141,28 +172,41 @@ function mcpsFromConfig(config: JsonObject): ClaudeMcp[] {
   return result.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export async function listClaudeResources(): Promise<ClaudeResources> {
-  const [skills, plugins, config] = await Promise.all([listSkills(), listPlugins(), readJson(claudeConfigPath)])
-  return { skills, plugins, mcps: mcpsFromConfig(config) }
+async function listMcps(agent: AgentAdapterId): Promise<ClaudeMcp[]> {
+  const { mcpConfigPath } = agentHomes(agent)
+  if (!mcpConfigPath) return []
+  const config = await readJson(mcpConfigPath)
+  return mcpsFromConfig(config)
 }
 
-export async function readClaudeSkill(id: string): Promise<string> {
-  return fs.readFile(join(skillsPath, safeId(id), 'SKILL.md'), 'utf8')
+export async function listClaudeResources(agent: AgentAdapterId): Promise<ClaudeResources> {
+  assertAgent(agent)
+  const [skills, plugins, mcps] = await Promise.all([listSkills(agent), listPlugins(agent), listMcps(agent)])
+  return { skills, plugins, mcps }
 }
 
-export async function saveClaudeSkill(input: SaveClaudeSkillInput): Promise<void> {
+export async function readClaudeSkill(agent: AgentAdapterId, id: string): Promise<string> {
+  assertAgent(agent)
+  return fs.readFile(join(agentHomes(agent).skillsPath, safeId(id), 'SKILL.md'), 'utf8')
+}
+
+export async function saveClaudeSkill(agent: AgentAdapterId, input: SaveClaudeSkillInput): Promise<void> {
+  assertAgent(agent)
   const id = safeId(input.id ?? input.name.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, ''))
   if (!input.content.trim()) throw new Error('Skill 内容不能为空。')
-  const targetDirectory = join(skillsPath, id)
+  const targetDirectory = join(agentHomes(agent).skillsPath, id)
   await fs.mkdir(targetDirectory, { recursive: true })
   await fs.writeFile(join(targetDirectory, 'SKILL.md'), input.content.trimEnd() + '\n', 'utf8')
 }
 
-export async function removeClaudeSkill(id: string): Promise<void> {
-  await fs.rm(join(skillsPath, safeId(id)), { recursive: true, force: true })
+export async function removeClaudeSkill(agent: AgentAdapterId, id: string): Promise<void> {
+  assertAgent(agent)
+  await fs.rm(join(agentHomes(agent).skillsPath, safeId(id)), { recursive: true, force: true })
 }
 
-export async function saveClaudeMcp(input: SaveClaudeMcpInput): Promise<void> {
+export async function saveClaudeMcp(agent: AgentAdapterId, input: SaveClaudeMcpInput): Promise<void> {
+  assertAgent(agent)
+  if (agent === 'pi') throw new Error('Pi 不支持 MCP 服务。')
   const name = safeId(input.name)
   if (!isObject(input.config) || Object.keys(input.config).length === 0) throw new Error('MCP 配置不能为空。')
   if (input.scope === 'project' && !input.projectPath?.trim()) throw new Error('项目级 MCP 需要指定项目目录。')
@@ -181,7 +225,9 @@ export async function saveClaudeMcp(input: SaveClaudeMcpInput): Promise<void> {
   await writeJsonAtomic(claudeConfigPath, config)
 }
 
-export async function removeClaudeMcp(name: string, scope: 'user' | 'project', projectPath?: string): Promise<void> {
+export async function removeClaudeMcp(agent: AgentAdapterId, name: string, scope: 'user' | 'project', projectPath?: string): Promise<void> {
+  assertAgent(agent)
+  if (agent === 'pi') throw new Error('Pi 不支持 MCP 服务。')
   const config = await readJson(claudeConfigPath)
   if (scope === 'user' && isObject(config.mcpServers)) delete config.mcpServers[safeId(name)]
   if (scope === 'project' && projectPath && isObject(config.projects) && isObject(config.projects[projectPath])) {
@@ -191,7 +237,9 @@ export async function removeClaudeMcp(name: string, scope: 'user' | 'project', p
   await writeJsonAtomic(claudeConfigPath, config)
 }
 
-export async function runClaudePluginAction(action: ClaudePluginAction, id: string): Promise<void> {
+export async function runClaudePluginAction(agent: AgentAdapterId, action: ClaudePluginAction, id: string): Promise<void> {
+  assertAgent(agent)
+  if (agent === 'pi') throw new Error('Pi 不提供插件机制。')
   if (!['enable', 'disable', 'update', 'uninstall'].includes(action)) throw new Error('不支持的插件操作。')
   if (!/^[\w.-]+@[\w.-]+$/.test(id)) throw new Error('插件标识无效。')
   try {
@@ -202,7 +250,8 @@ export async function runClaudePluginAction(action: ClaudePluginAction, id: stri
   }
 }
 
-export async function revealClaudePath(path: string): Promise<void> {
-  const error = await shell.openPath(safeClaudePath(path))
+export async function revealClaudePath(agent: AgentAdapterId, path: string): Promise<void> {
+  assertAgent(agent)
+  const error = await shell.openPath(safeClaudePath(path, agentHomes(agent).root))
   if (error) throw new Error(error)
 }

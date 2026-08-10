@@ -1,8 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } from 'electron'
-import { spawn, type ChildProcess } from 'node:child_process'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { AttachmentImportInput } from '../shared/attachments'
+import type { AgentAdapterId } from '../shared/acp'
 import type { CreateAutomationInput, UpdateAutomationInput } from '../shared/automations'
 import type { CreateTodoInput, ReorderTodoInput, UpdateTodoInput } from '../shared/todos'
 import type { CreateProjectInput, UpdateProjectInput } from '../shared/projects'
@@ -18,9 +18,9 @@ import {
   saveClaudeSkill
 } from './services/claude-resources'
 import { createProject, deleteProject, listProjects, reorderProjects, updateProject } from './services/project-store'
-import { automationsFilePath, getAutomationStore } from './services/automation-store'
+import { getAutomationStore } from './services/automation-store'
 import { AutomationScheduler, executeScheduledAutomation } from './services/automation-scheduler'
-import { getTodoStore, todosFilePath } from './services/todo-store'
+import { getTodoStore } from './services/todo-store'
 import {
   getLastDirectoryPath,
   getPreferredPermissionModeId,
@@ -51,29 +51,6 @@ const acpBridge = new AcpBridge({
   setPreferredAgentId: setPreferredAgentId
 })
 let automationScheduler: AutomationScheduler | undefined
-let httpMcpProcess: ChildProcess | undefined
-
-function startHttpMcpServer(): void {
-  const entry = join(__dirname, '../mcp/mcp/automations-server.js')
-  httpMcpProcess = spawn(process.execPath, [entry], {
-    env: {
-      ...process.env,
-      ELECTRON_RUN_AS_NODE: '1',
-      KOALA_MCP_TRANSPORT: 'http',
-      KOALA_AUTOMATIONS_FILE: automationsFilePath(),
-      KOALA_TODOS_FILE: todosFilePath()
-    },
-    stdio: ['ignore', 'ignore', 'pipe']
-  })
-  httpMcpProcess.stderr?.on('data', (chunk: Buffer) => console.error(`[koala-mcp] ${chunk.toString().trim()}`))
-  httpMcpProcess.on('error', (error) => console.error('无法启动本地 Koala MCP 服务：', error))
-  httpMcpProcess.on('exit', () => { httpMcpProcess = undefined })
-}
-
-function stopHttpMcpServer(): void {
-  httpMcpProcess?.kill()
-  httpMcpProcess = undefined
-}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -108,6 +85,11 @@ function createWindow(): void {
   } else {
     void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+function parseResourceAgent(value: string): AgentAdapterId {
+  if (value !== 'claude' && value !== 'pi') throw new Error('不支持的 Agent 类型。')
+  return value
 }
 
 /** 打开系统目录选择对话框：支持选择已有文件夹，也支持新建文件夹（macOS createDirectory）。 */
@@ -191,14 +173,14 @@ app.whenReady().then(() => {
   ipcMain.handle('todos:set-done', (_event, id: string, done: boolean) => getTodoStore().setDone(id, done))
   ipcMain.handle('todos:delete', (_event, id: string) => getTodoStore().delete(id))
 
-  ipcMain.handle('claude:list', () => listClaudeResources())
-  ipcMain.handle('claude:read-skill', (_event, id: string) => readClaudeSkill(id))
-  ipcMain.handle('claude:save-skill', (_event, input) => saveClaudeSkill(input))
-  ipcMain.handle('claude:remove-skill', (_event, id: string) => removeClaudeSkill(id))
-  ipcMain.handle('claude:save-mcp', (_event, input) => saveClaudeMcp(input))
-  ipcMain.handle('claude:remove-mcp', (_event, name: string, scope, projectPath?: string) => removeClaudeMcp(name, scope, projectPath))
-  ipcMain.handle('claude:plugin-action', (_event, action, id: string) => runClaudePluginAction(action, id))
-  ipcMain.handle('claude:reveal', (_event, path: string) => revealClaudePath(path))
+  ipcMain.handle('claude:list', (_event, agent: string) => listClaudeResources(parseResourceAgent(agent)))
+  ipcMain.handle('claude:read-skill', (_event, agent: string, id: string) => readClaudeSkill(parseResourceAgent(agent), id))
+  ipcMain.handle('claude:save-skill', (_event, agent: string, input) => saveClaudeSkill(parseResourceAgent(agent), input))
+  ipcMain.handle('claude:remove-skill', (_event, agent: string, id: string) => removeClaudeSkill(parseResourceAgent(agent), id))
+  ipcMain.handle('claude:save-mcp', (_event, agent: string, input) => saveClaudeMcp(parseResourceAgent(agent), input))
+  ipcMain.handle('claude:remove-mcp', (_event, agent: string, name: string, scope, projectPath?: string) => removeClaudeMcp(parseResourceAgent(agent), name, scope, projectPath))
+  ipcMain.handle('claude:plugin-action', (_event, agent: string, action, id: string) => runClaudePluginAction(parseResourceAgent(agent), action, id))
+  ipcMain.handle('claude:reveal', (_event, agent: string, path: string) => revealClaudePath(parseResourceAgent(agent), path))
 
 
   acpBridge.on('state', (state) => mainWindow?.webContents.send('acp:state', state))
@@ -206,7 +188,6 @@ app.whenReady().then(() => {
 
   automationScheduler = new AutomationScheduler(getAutomationStore(), executeScheduledAutomation)
   automationScheduler.start()
-  startHttpMcpServer()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -220,5 +201,4 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   automationScheduler?.stop()
   acpBridge.dispose()
-  stopHttpMcpServer()
 })

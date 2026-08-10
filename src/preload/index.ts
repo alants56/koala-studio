@@ -41,14 +41,14 @@ const projects: ProjectsApi = {
 }
 
 const claude: ClaudeApi = {
-  list: () => ipcRenderer.invoke('claude:list'),
-  readSkill: (id) => ipcRenderer.invoke('claude:read-skill', id),
-  saveSkill: (input) => ipcRenderer.invoke('claude:save-skill', input),
-  removeSkill: (id) => ipcRenderer.invoke('claude:remove-skill', id),
-  saveMcp: (input) => ipcRenderer.invoke('claude:save-mcp', input),
-  removeMcp: (name, scope, projectPath) => ipcRenderer.invoke('claude:remove-mcp', name, scope, projectPath),
-  pluginAction: (action, id) => ipcRenderer.invoke('claude:plugin-action', action, id),
-  reveal: (path) => ipcRenderer.invoke('claude:reveal', path)
+  list: (agent) => ipcRenderer.invoke('claude:list', agent),
+  readSkill: (agent, id) => ipcRenderer.invoke('claude:read-skill', agent, id),
+  saveSkill: (agent, input) => ipcRenderer.invoke('claude:save-skill', agent, input),
+  removeSkill: (agent, id) => ipcRenderer.invoke('claude:remove-skill', agent, id),
+  saveMcp: (agent, input) => ipcRenderer.invoke('claude:save-mcp', agent, input),
+  removeMcp: (agent, name, scope, projectPath) => ipcRenderer.invoke('claude:remove-mcp', agent, name, scope, projectPath),
+  pluginAction: (agent, action, id) => ipcRenderer.invoke('claude:plugin-action', agent, action, id),
+  reveal: (agent, path) => ipcRenderer.invoke('claude:reveal', agent, path)
 }
 
 const automations: AutomationsApi = {
