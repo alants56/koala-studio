@@ -631,7 +631,7 @@ export function ChatComposer(): ReactElement {
             >
               添加文件
             </Button>
-            {modes.length > 0 && (
+            {modes.length > 0 && state.currentAgent !== 'pi' && (
               <div className="chat-permission-control">
                 <Popover
                   placement="topLeft"

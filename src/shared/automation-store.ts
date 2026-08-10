@@ -19,7 +19,11 @@ function inferTriggerDetail(trigger: string): string {
 }
 
 function requiresProjectPath(actionType: Automation['actionType']): boolean {
-  return actionType === 'feature_brief' || actionType === 'claude_prompt'
+  return actionType === 'feature_brief' || actionType === 'claude_prompt' || actionType === 'pi_prompt'
+}
+
+function requiresInstruction(actionType: Automation['actionType']): boolean {
+  return actionType === 'claude_prompt' || actionType === 'pi_prompt'
 }
 
 export class AutomationStore {
@@ -80,7 +84,7 @@ export class AutomationStore {
     }
     if (schedule && !input.actionType) throw new Error('定时任务必须指定可执行动作。')
     if (schedule && requiresProjectPath(input.actionType) && !input.projectPath?.trim()) throw new Error('定时任务需要指定项目文件夹。')
-    if (schedule && input.actionType === 'claude_prompt' && !input.instruction?.trim()) throw new Error('Claude Code 定时任务需要填写自定义指令。')
+    if (schedule && requiresInstruction(input.actionType) && !input.instruction?.trim()) throw new Error('该定时任务需要填写自定义指令。')
     const automation: Automation = {
       id: randomUUID(), name, description: input.description?.trim() || `${input.trigger}时，${input.action}。`,
       state: input.enabled === false ? 'paused' : 'active', trigger: input.trigger.trim(), triggerDetail: input.triggerDetail?.trim() || inferTriggerDetail(input.trigger),
@@ -111,7 +115,7 @@ export class AutomationStore {
     }
     if (updated.schedule && !updated.actionType) throw new Error('定时任务必须指定可执行动作。')
     if (updated.schedule && requiresProjectPath(updated.actionType) && !updated.projectPath?.trim()) throw new Error('定时任务需要指定项目文件夹。')
-    if (updated.schedule && updated.actionType === 'claude_prompt' && !updated.instruction?.trim()) throw new Error('Claude Code 定时任务需要填写自定义指令。')
+    if (updated.schedule && requiresInstruction(updated.actionType) && !updated.instruction?.trim()) throw new Error('该定时任务需要填写自定义指令。')
     items[index] = updated
     await this.writeAll(items)
     return updated
@@ -123,8 +127,8 @@ export class AutomationStore {
       throw new Error('该任务缺少真实执行计划，请重新创建并选择执行时间和项目文件夹。')
     }
     if (enabled && automation.schedule && requiresProjectPath(automation.actionType) && !automation.projectPath?.trim()) throw new Error('该任务缺少项目文件夹。')
-    if (enabled && automation.schedule && automation.actionType === 'claude_prompt' && !automation.instruction?.trim()) {
-      throw new Error('该任务缺少 Claude Code 自定义指令。')
+    if (enabled && automation.schedule && requiresInstruction(automation.actionType) && !automation.instruction?.trim()) {
+      throw new Error('该任务缺少自定义指令。')
     }
     return this.replace({ ...automation, state: enabled ? 'active' : 'paused' })
   }

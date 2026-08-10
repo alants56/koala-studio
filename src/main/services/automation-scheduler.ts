@@ -1,6 +1,7 @@
 import type { Automation, AutomationRunLog, AutomationRunLogLevel } from '../../shared/automations'
 import { AutomationStore } from '../../shared/automation-store'
 import { executeClaudeInstruction } from './claude-automation-executor'
+import { executePiInstruction } from './pi-automation-executor'
 import { generateFeatureBrief, type AutomationExecutionResult } from './feature-brief'
 import { getTodoStore } from './todo-store'
 
@@ -84,7 +85,9 @@ export class AutomationScheduler {
 export async function executeScheduledAutomation(automation: Automation, log: (message: string, level?: AutomationRunLogLevel) => void): Promise<AutomationExecutionResult> {
   if (automation.actionType === 'feature_brief') return generateFeatureBrief(automation.projectPath ?? '', log)
   if (automation.actionType === 'claude_prompt') return executeClaudeInstruction(automation, log)
+  if (automation.actionType === 'pi_prompt') return executePiInstruction(automation, log)
   if (automation.actionType === 'create_high_priority_todo') {
+
     const todo = await getTodoStore().create({ title: automation.name, important: true })
     log(`已创建高优先级待办：${todo.title}`, 'success')
     return {
