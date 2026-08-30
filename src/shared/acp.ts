@@ -63,10 +63,18 @@ export interface AgentUsage {
   size: number
 }
 
+export interface AgentQueuedPrompt {
+  id: string
+  text: string
+  attachmentNames: string[]
+}
+
 export interface AgentState {
   status: AgentStatus
   sessionId?: string
   detail?: string
+  /** 当前 turn 的开始时间戳，用于跨页面恢复执行时长。 */
+  workStartedAt?: number
   modes?: AgentMode[]
   currentModeId?: string
   model?: AgentModel
@@ -79,6 +87,12 @@ export interface AgentState {
   pendingPermission?: AgentPermissionRequest
   /** 当前使用的 ACP 适配器。 */
   currentAgent?: AgentAdapterId
+  /** 当前 ACP 适配器是否支持 turn 引导（ACP 的 _session/steering 扩展）。 */
+  steeringSupported?: boolean
+  /** 当前排队待处理的消息数量（Agent 忙碌时新消息会进入本地 FIFO 队列）。 */
+  queueDepth?: number
+  /** 当前排队消息，供输入框上方展示、删除或调整方向。 */
+  queuedPrompts?: AgentQueuedPrompt[]
 }
 
 export interface ChatMessage {
@@ -106,6 +120,8 @@ export interface AcpSessionInfo {
   title: string
   updatedAt: string
   cwd: string
+  /** 该历史会话中持久化等待处理的消息数量。 */
+  queueDepth?: number
 }
 
 export interface AcpSessionResult {
@@ -126,6 +142,8 @@ export interface AcpApi {
   getState: () => Promise<AgentState>
   connect: (cwd: string) => Promise<AgentState>
   prompt: (request: PromptRequest) => Promise<void>
+  removeQueuedPrompt: (id: string) => Promise<void>
+  steerQueuedPrompt: (id: string) => Promise<void>
   stop: () => Promise<void>
   setMode: (modeId: string) => Promise<void>
   setModel: (modelId: string) => Promise<void>

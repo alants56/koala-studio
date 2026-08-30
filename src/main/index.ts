@@ -34,6 +34,7 @@ import {
   setPreferredAgentId
 } from './services/preferences-store'
 import { attachmentFilePath, importAttachments } from './services/attachment-store'
+import { getQueuedPromptStore } from './services/queued-prompt-store'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'koala-asset', privileges: { secure: true, standard: true, supportFetchAPI: true, stream: true } }
@@ -48,7 +49,8 @@ const acpBridge = new AcpBridge({
   getPreferredEffortId: getPreferredEffortId,
   setPreferredEffortId: setPreferredEffortId,
   getPreferredAgentId: getPreferredAgentId,
-  setPreferredAgentId: setPreferredAgentId
+  setPreferredAgentId: setPreferredAgentId,
+  queuedPromptStore: getQueuedPromptStore()
 })
 let automationScheduler: AutomationScheduler | undefined
 
@@ -126,6 +128,8 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('acp:connect', (_, cwd: string) => acpBridge.connect(cwd))
   ipcMain.handle('acp:prompt', (_, request) => acpBridge.prompt(request))
+  ipcMain.handle('acp:remove-queued-prompt', (_, id: string) => acpBridge.removeQueuedPrompt(id))
+  ipcMain.handle('acp:steer-queued-prompt', (_, id: string) => acpBridge.steerQueuedPrompt(id))
   ipcMain.handle('acp:stop', () => acpBridge.stop())
   ipcMain.handle('acp:set-mode', (_, modeId: string) => acpBridge.setMode(modeId))
   ipcMain.handle('acp:set-model', (_, modelId: string) => acpBridge.setModel(modelId))
@@ -133,9 +137,14 @@ app.whenReady().then(() => {
   ipcMain.handle('acp:set-agent', (_, agentId: string) => acpBridge.setAgent(agentId as 'claude' | 'pi'))
   ipcMain.handle('acp:list-sessions', async (_event, cwd: string) => {
     // 会话索引查询使用短连接，用主 bridge 当前的 agent 类型，避免侧栏读取其他项目时切断当前聊天。
-    const listingBridge = new AcpBridge({ initialAgentId: await acpBridge.getCurrentAgent() })
+    const agentId = await acpBridge.getCurrentAgent()
+    const listingBridge = new AcpBridge({ initialAgentId: agentId })
     try {
-      return await listingBridge.listSessions(cwd)
+      const [sessions, queueCounts] = await Promise.all([
+        listingBridge.listSessions(cwd),
+        getQueuedPromptStore().countBySession(agentId, cwd)
+      ])
+      return sessions.map((session) => ({ ...session, queueDepth: queueCounts.get(session.sessionId) ?? 0 }))
     } finally {
       listingBridge.dispose()
     }

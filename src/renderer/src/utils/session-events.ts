@@ -4,7 +4,6 @@ export interface SessionActivityDetail {
   cwd: string
   sessionId: string
   title: string
-  phase: 'started' | 'completed'
 }
 
 export function dispatchSessionActivity(detail: SessionActivityDetail): void {

@@ -7,6 +7,7 @@ import { useAgent } from '@/state/AgentContext'
 import { STATUS_DETAILS, STATUS_DOT_COLORS } from '@/utils/constants'
 import { ChatComposer } from './ChatComposer'
 import { ConnectingScreen } from './ConnectingScreen'
+import { SessionLoadingScreen } from './SessionLoadingScreen'
 import { ChatThread } from './ChatThread'
 
 function formatTokens(n: number): string {
@@ -17,7 +18,7 @@ function formatTokens(n: number): string {
 
 /** 单个项目的协作会话视图：小圆点状态 + 对话线程 + 输入区。 */
 export function ChatView({ project }: { project: Project }): ReactElement {
-  const { state, messages, connect, createNewSession } = useAgent()
+  const { state, messages, sessionLoading, connect, createNewSession } = useAgent()
   const { message } = App.useApp()
   const location = useLocation()
   const navigate = useNavigate()
@@ -42,6 +43,11 @@ export function ChatView({ project }: { project: Project }): ReactElement {
     } catch (error) {
       message.error(error instanceof Error ? error.message : '新建对话失败')
     }
+  }
+
+  // 加载历史会话期间整页只展示加载动画，回放完成后再显示聊天界面
+  if (sessionLoading) {
+    return <SessionLoadingScreen project={project} />
   }
 
   // 连接期间整页只展示加载动画，连接完成后再显示聊天界面

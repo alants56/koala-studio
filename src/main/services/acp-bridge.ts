@@ -1,8 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { join } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import * as acp from '@agentclientprotocol/sdk'
 import type { ClientConnection, SessionNotification } from '@agentclientprotocol/sdk'
@@ -27,26 +25,11 @@ import {
   readAttachment
 } from './attachment-store'
 import type { ChatAttachment } from '../../shared/attachments'
+import { piAcpEnvironment } from './pi-runtime'
+import type { QueuedPromptStore, StoredQueuedPrompt } from './queued-prompt-store'
 
 const DIRECT_IMAGE_MIME_TYPES = new Set(['image/gif', 'image/jpeg', 'image/png', 'image/webp'])
 const MAX_EMBEDDED_TEXT_BYTES = 2 * 1024 * 1024
-
-function resolvePiCommand(): string | undefined {
-  const pathCandidates = (process.env.PATH ?? '')
-    .split(delimiter)
-    .filter(Boolean)
-    .map((directory) => join(directory, 'pi'))
-  const candidates = [
-    process.env.PI_ACP_PI_COMMAND,
-    ...pathCandidates,
-    join(homedir(), '.npm-global/bin/pi'),
-    join(homedir(), '.local/bin/pi'),
-    join(homedir(), '.bun/bin/pi'),
-    '/opt/homebrew/bin/pi',
-    '/usr/local/bin/pi'
-  ]
-  return candidates.find((candidate): candidate is string => Boolean(candidate && existsSync(candidate)))
-}
 
 interface AcpBridgeOptions {
   initialAgentId?: AgentAdapterId
@@ -58,6 +41,7 @@ interface AcpBridgeOptions {
   setPreferredEffortId?: (effortId: string) => Promise<void>
   getPreferredAgentId?: () => Promise<string | undefined>
   setPreferredAgentId?: (agentId: AgentAdapterId) => Promise<void>
+  queuedPromptStore?: QueuedPromptStore
 }
 
 export class AcpBridge extends EventEmitter {
@@ -75,12 +59,18 @@ export class AcpBridge extends EventEmitter {
   private permissionResolve?: (optionId: string | null) => void
   /** 标识当前 prompt，避免异步结束时清理了后续 prompt 的流式状态。 */
   private activePromptId?: string
+  /** turn 生命周期代次；切换连接时让旧 turn 的 finally 失效。 */
+  private turnGeneration = 0
   /** ACP 未提供 messageId 时，用于合并当前连续的助手消息分片。 */
   private fallbackAssistantMessageId?: string
   /** session/load 中的无 ID 消息是完整历史消息，不能跨条合并。 */
   private replayingSession = false
   /** Pi ACP 的 session/new 响应会预告随后异步推送的启动信息。 */
   private suppressPiStartupInfo = false
+  /** 当前 ACP 适配器是否支持 _session/steering（把消息注入正在进行的 turn）。 */
+  private steeringSupported = false
+  /** 本地 FIFO 队列：Agent 忙碌时的新消息先入队，当前 turn 结束后逐条处理。 */
+  private promptQueue: StoredQueuedPrompt[] = []
 
   constructor(private readonly options: AcpBridgeOptions = {}) {
     super()
@@ -124,6 +114,7 @@ export class AcpBridge extends EventEmitter {
     }
     if (agentId === await this.getCurrentAgent()) return
 
+    await this.preserveAndDetachQueue('切换 Agent，排队消息已保留，切回原会话后会继续处理。')
     await this.options.setPreferredAgentId?.(agentId)
     this.dispose()
     this.currentAgent = agentId
@@ -141,6 +132,7 @@ export class AcpBridge extends EventEmitter {
       return this.connectPromise
     }
     if (this.agentProcess || this.connection || this.connectPromise) {
+      await this.preserveAndDetachQueue('切换项目，排队消息已保留，返回原会话后会继续处理。')
       this.dispose()
     }
     // 防止并发触发多次连接（例如 React StrictMode 双调用）
@@ -166,14 +158,11 @@ export class AcpBridge extends EventEmitter {
       const adapterPath = agentId === 'pi'
         ? require.resolve('pi-acp/dist/index.js')
         : require.resolve('@agentclientprotocol/claude-agent-acp/dist/index.js')
-      const piCommand = agentId === 'pi' ? resolvePiCommand() : undefined
       const agentProcess = spawn(process.execPath, [adapterPath], {
         cwd,
-        env: {
-          ...process.env,
-          ELECTRON_RUN_AS_NODE: '1',
-          ...(piCommand ? { PI_ACP_PI_COMMAND: piCommand } : {})
-        },
+        env: agentId === 'pi'
+          ? piAcpEnvironment()
+          : { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
         stdio: ['pipe', 'pipe', 'pipe']
       })
       this.agentProcess = agentProcess
@@ -204,17 +193,20 @@ export class AcpBridge extends EventEmitter {
 
       this.connection = client.connect(stream)
       const connection = this.connection
-      await connection.agent.request(acp.methods.agent.initialize, {
+      const initializeResponse = await connection.agent.request(acp.methods.agent.initialize, {
         protocolVersion: acp.PROTOCOL_VERSION,
         clientCapabilities: { session: { configOptions: { boolean: {} } } }
       })
+      // 读取 ACP 引导扩展能力：claude-agent-acp 会在 _meta.steering.supported 广告。
+      const steeringMeta = (initializeResponse as unknown as { _meta?: { steering?: { supported?: boolean } } })?._meta?.steering
+      this.steeringSupported = Boolean(steeringMeta?.supported)
       if (generation !== this.connectionGeneration || this.agentProcess !== agentProcess) {
         connection.close()
         agentProcess.kill()
         return this.state
       }
       this.sessionCwd = cwd
-      this.setState({ status: 'ready', detail: `${agentName} 已连接` })
+      this.setState({ status: 'ready', detail: `${agentName} 已连接`, steeringSupported: this.steeringSupported })
       this.emit('message', this.systemMessage(`已连接 ${agentName} ACP。`))
     } catch (error) {
       if (generation === this.connectionGeneration) {
@@ -243,6 +235,7 @@ export class AcpBridge extends EventEmitter {
   async loadSession(sessionId: string, cwd: string): Promise<LoadedSession> {
     if (!this.connection) throw new Error('请先连接 Agent ACP。')
 
+    await this.prepareForSessionChange()
     this.activeSessionId = sessionId
     this.sessionCwd = cwd
 
@@ -273,6 +266,8 @@ export class AcpBridge extends EventEmitter {
 
     await this.restorePreferredModel(this.state.model)
     await this.restorePreferredEffort(this.state.effort)
+    await this.restoreQueue()
+    void this.startQueuedIfIdle()
 
     return { sessionId, messages: [], modes, currentModeId }
   }
@@ -288,6 +283,7 @@ export class AcpBridge extends EventEmitter {
   /** 通过 ACP session/new 新建会话并设为当前会话。 */
   async createSession(cwd: string): Promise<AcpSessionResult> {
     if (!this.connection) throw new Error('请先连接 Agent ACP。')
+    await this.prepareForSessionChange()
     this.suppressPiStartupInfo = false
     const response = await this.connection.agent.request(acp.methods.agent.session.new, { cwd, mcpServers: this.automationMcpServers() })
     const startupInfo = (response._meta as { piAcp?: { startupInfo?: unknown } } | undefined)?.piAcp?.startupInfo
@@ -301,17 +297,86 @@ export class AcpBridge extends EventEmitter {
     this.setState({ ...this.state, sessionId: response.sessionId, modes, currentModeId, model, effort, usage: undefined })
     await this.restorePreferredModel(this.state.model)
     await this.restorePreferredEffort(this.state.effort)
+    await this.restoreQueue()
     return { sessionId: response.sessionId, modes, currentModeId }
   }
 
   async prompt(request: PromptRequest): Promise<void> {
-    if (!this.activeSessionId || this.state.status !== 'ready') {
+    if (!this.activeSessionId || !this.connection) {
+      throw new Error('请先连接 Agent ACP。')
+    }
+    if (this.state.status !== 'ready' && this.state.status !== 'working') {
       throw new Error('请先连接 Agent ACP。')
     }
 
-    const promptId = crypto.randomUUID()
-    const agentName = this.currentAgent === 'pi' ? 'Pi' : 'Claude'
-    this.setState({ ...this.state, status: 'working', detail: `${agentName} 正在处理…` })
+    // Agent 忙碌时先留在输入框上方的本地队列；真正执行或调整方向时再写入对话。
+    if (this.state.status === 'working') {
+      await this.enqueuePrompt(request)
+      return
+    }
+
+    // 空闲：立即作为新一轮任务提交。
+    this.emitUserMessage(request)
+    await this.runTurn(request)
+  }
+
+  async removeQueuedPrompt(id: string): Promise<void> {
+    const index = this.promptQueue.findIndex((item) => item.id === id)
+    if (index < 0) return
+    const previous = [...this.promptQueue]
+    this.promptQueue.splice(index, 1)
+    try {
+      await this.persistQueue()
+    } catch (error) {
+      this.promptQueue = previous
+      throw error
+    }
+    this.updateQueueState()
+  }
+
+  async steerQueuedPrompt(id: string): Promise<void> {
+    const index = this.promptQueue.findIndex((item) => item.id === id)
+    if (index < 0) return
+    const [queued] = this.promptQueue.splice(index, 1)
+    if (!queued) return
+    try {
+      await this.persistQueue()
+    } catch (error) {
+      this.promptQueue.splice(index, 0, queued)
+      throw error
+    }
+    this.updateQueueState()
+    this.emitUserMessage(queued.request)
+    queued.displayed = true
+
+    if (this.state.status !== 'working') {
+      void this.runTurn(queued.request)
+      return
+    }
+
+    if (this.steeringSupported) {
+      const outcome = await this.trySteer(queued.request)
+      if (outcome === 'injected') return
+      if (outcome === 'promptRequired') {
+        this.promptQueue.unshift(queued)
+        try {
+          await this.persistQueue()
+        } catch {
+          this.promptQueue.shift()
+          this.updateQueueState()
+          await this.interruptAndRun(queued.request)
+          return
+        }
+        this.updateQueueState()
+        void this.startQueuedIfIdle()
+        return
+      }
+    }
+
+    await this.interruptAndRun(queued.request)
+  }
+
+  private emitUserMessage(request: PromptRequest): void {
     this.emit('message', {
       id: crypto.randomUUID(),
       role: 'user',
@@ -319,31 +384,232 @@ export class AcpBridge extends EventEmitter {
       attachments: request.attachments,
       createdAt: new Date().toISOString()
     } satisfies ChatMessage)
+  }
+
+  /** 提交一轮完整任务（构造 prompt → session/prompt → 工具循环 → 直至模型产出）。 */
+  private async runTurn(request: PromptRequest): Promise<void> {
+    const promptId = crypto.randomUUID()
+    const turnGeneration = this.turnGeneration
+    const connection = this.connection
+    const sessionId = this.activeSessionId
+    if (!connection || !sessionId) return
+    const agentName = this.currentAgent === 'pi' ? 'Pi' : 'Claude'
+    this.setState({
+      ...this.state,
+      status: 'working',
+      workStartedAt: Date.now(),
+      queueDepth: this.promptQueue.length,
+      queuedPrompts: this.queueState(),
+      detail: `${agentName} 正在处理…`
+    })
 
     try {
-      const prompt = await this.toPromptContent(request)
       this.activePromptId = promptId
+      const prompt = await this.toPromptContent(request)
       this.fallbackAssistantMessageId = crypto.randomUUID()
-      await this.connection!.agent.request(acp.methods.agent.session.prompt, {
-        sessionId: this.activeSessionId,
+      await connection.agent.request(acp.methods.agent.session.prompt, {
+        sessionId,
         prompt
       })
-      this.setState({ ...this.state, status: 'ready', detail: `${agentName} 已就绪` })
     } catch (error) {
-      this.emit('message', this.systemMessage(error instanceof Error ? error.message : `${agentName} 未能完成请求。`))
-      this.setState({ ...this.state, status: 'ready', detail: `${agentName} 已就绪` })
+      if (turnGeneration === this.turnGeneration) {
+        this.emit('message', this.systemMessage(error instanceof Error ? error.message : `${agentName} 未能完成请求。`))
+      }
     } finally {
       if (this.activePromptId === promptId) {
         this.activePromptId = undefined
         this.fallbackAssistantMessageId = undefined
       }
+      if (turnGeneration === this.turnGeneration && this.activeSessionId === sessionId) {
+        void this.finishTurn()
+      }
+    }
+  }
+
+  /** 当前 turn 结束后：若还有排队消息则继续下一轮，否则恢复就绪。 */
+  private async finishTurn(): Promise<void> {
+    const next = this.promptQueue.shift()
+    if (next) {
+      try {
+        await this.persistQueue()
+      } catch (error) {
+        this.promptQueue.unshift(next)
+        this.updateQueueState()
+        this.setState({ ...this.state, status: 'ready', workStartedAt: undefined, detail: '排队消息保存失败，已暂停自动发送。' })
+        this.emit('message', this.systemMessage(error instanceof Error ? error.message : '无法保存排队消息。'))
+        return
+      }
+      this.updateQueueState()
+      if (!next.displayed) this.emitUserMessage(next.request)
+      void this.runTurn(next.request)
+      return
+    }
+    const agentName = this.currentAgent === 'pi' ? 'Pi' : 'Claude'
+    this.setState({
+      ...this.state,
+      status: 'ready',
+      workStartedAt: undefined,
+      queueDepth: 0,
+      queuedPrompts: [],
+      detail: `${agentName} 已就绪`
+    })
+  }
+
+  /** 把消息放入本地 FIFO 队列，当前 turn 结束后按先进先出处理。 */
+  private async enqueuePrompt(request: PromptRequest): Promise<void> {
+    const queued = { id: crypto.randomUUID(), request }
+    this.promptQueue.push(queued)
+    try {
+      await this.persistQueue()
+    } catch (error) {
+      this.promptQueue = this.promptQueue.filter((item) => item.id !== queued.id)
+      throw error
+    }
+    this.updateQueueState()
+    // 竞态兜底：如果此刻已没有活跃 turn（turn 刚好结束），立即启动处理，避免消息悬挂在队列里。
+    void this.startQueuedIfIdle()
+  }
+
+  /** 若没有活跃 turn 且队列非空，立即启动排队的下一条消息。 */
+  private async startQueuedIfIdle(): Promise<void> {
+    if (this.state.status === 'working') return
+    const next = this.promptQueue.shift()
+    if (!next) return
+    try {
+      await this.persistQueue()
+    } catch (error) {
+      this.promptQueue.unshift(next)
+      this.updateQueueState()
+      this.emit('message', this.systemMessage(error instanceof Error ? error.message : '无法保存排队消息。'))
+      return
+    }
+    this.updateQueueState()
+    if (!next.displayed) this.emitUserMessage(next.request)
+    void this.runTurn(next.request)
+  }
+
+  private queueState(): AgentState['queuedPrompts'] {
+    return this.promptQueue.map(({ id, request }) => ({
+      id,
+      text: request.text,
+      attachmentNames: request.attachments?.map((attachment) => attachment.name) ?? []
+    }))
+  }
+
+  private updateQueueState(): void {
+    this.setState({
+      ...this.state,
+      queueDepth: this.promptQueue.length,
+      queuedPrompts: this.queueState()
+    })
+  }
+
+  private async persistQueue(): Promise<void> {
+    if (!this.options.queuedPromptStore || !this.activeSessionId || !this.sessionCwd) return
+    await this.options.queuedPromptStore.replace(
+      this.currentAgent,
+      this.sessionCwd,
+      this.activeSessionId,
+      this.promptQueue
+    )
+  }
+
+  private async restoreQueue(): Promise<void> {
+    if (!this.options.queuedPromptStore || !this.activeSessionId || !this.sessionCwd) {
+      this.promptQueue = []
+    } else {
+      this.promptQueue = await this.options.queuedPromptStore.get(this.currentAgent, this.sessionCwd, this.activeSessionId)
+    }
+    this.updateQueueState()
+  }
+
+  private async preserveAndDetachQueue(notify?: string): Promise<void> {
+    const preserved = this.promptQueue.length
+    if (preserved > 0) await this.persistQueue()
+    this.promptQueue = []
+    if (notify && preserved > 0) this.emit('message', this.systemMessage(`${notify}（共 ${preserved} 条）。`))
+    this.updateQueueState()
+  }
+
+  /** 切换会话前终止旧 turn，并隔离它随后到达的异步收尾。 */
+  private async prepareForSessionChange(): Promise<void> {
+    const previousSessionId = this.activeSessionId
+    await this.preserveAndDetachQueue('切换会话，排队消息已保留，返回后会继续处理。')
+    if (this.state.status === 'working' && this.connection && previousSessionId) {
+      this.turnGeneration += 1
+      this.activePromptId = undefined
+      this.fallbackAssistantMessageId = undefined
+      await this.connection.agent.notify(acp.methods.agent.session.cancel, { sessionId: previousSessionId })
+    }
+    const agentName = this.currentAgent === 'pi' ? 'Pi' : 'Claude'
+    this.setState({ ...this.state, status: 'ready', workStartedAt: undefined, queueDepth: 0, queuedPrompts: [], detail: `${agentName} 已就绪` })
+  }
+
+  /** 主动停止时清空当前会话的排队消息，并同步删除持久化记录。 */
+  private async resetQueue(notify?: string): Promise<void> {
+    const cleared = this.promptQueue.length
+    const previous = [...this.promptQueue]
+    this.promptQueue = []
+    try {
+      await this.persistQueue()
+    } catch (error) {
+      this.promptQueue = previous
+      this.updateQueueState()
+      throw error
+    }
+    if (notify && cleared > 0) this.emit('message', this.systemMessage(`${notify}（共 ${cleared} 条）。`))
+    this.updateQueueState()
+  }
+
+  private async interruptAndRun(request: PromptRequest): Promise<void> {
+    const connection = this.connection
+    const sessionId = this.activeSessionId
+    if (!connection || !sessionId) return
+    this.turnGeneration += 1
+    this.activePromptId = undefined
+    this.fallbackAssistantMessageId = undefined
+    this.setState({ ...this.state, status: 'working', detail: '正在调整任务方向…' })
+    await connection.agent.notify(acp.methods.agent.session.cancel, { sessionId })
+    void this.runTurn(request)
+  }
+
+  /**
+   * 通过 ACP 的 _session/steering 扩展协议，把消息注入到正在进行的 turn 中。
+   * 返回 injected（已注入） / promptRequired（无活跃 turn，需降级） / failed（失败）。
+   */
+  private async trySteer(request: PromptRequest): Promise<'injected' | 'promptRequired' | 'failed'> {
+    const connection = this.connection
+    const sessionId = this.activeSessionId
+    if (!connection || !sessionId) return 'failed'
+    try {
+      const prompt = await this.toPromptContent(request)
+      const response = await connection.agent.request(
+        '_session/steering',
+        { sessionId, prompt, _meta: { steering: { idleBehavior: 'promptRequired' as const } } }
+      ) as { outcome?: string }
+      if (response?.outcome === 'injected') return 'injected'
+      if (response?.outcome === 'promptRequired') {
+        return 'promptRequired'
+      }
+      return 'failed'
+    } catch {
+      return 'failed'
     }
   }
 
   async stop(): Promise<void> {
+    if (this.promptQueue.length > 0) {
+      await this.resetQueue('已清除排队消息')
+    }
     if (this.connection && this.activeSessionId) {
+      const stoppingPromptId = this.activePromptId
+      if (stoppingPromptId) {
+        this.setState({ ...this.state, status: 'working', queueDepth: 0, queuedPrompts: [], detail: '正在停止当前任务…' })
+      }
       await this.connection.agent.notify(acp.methods.agent.session.cancel, { sessionId: this.activeSessionId })
-      this.setState({ ...this.state, status: 'ready', detail: '已停止生成' })
+      if (!stoppingPromptId || this.activePromptId !== stoppingPromptId) {
+        this.setState({ ...this.state, status: 'ready', workStartedAt: undefined, queueDepth: 0, queuedPrompts: [], detail: '已停止生成' })
+      }
     }
   }
 
@@ -479,12 +745,15 @@ export class AcpBridge extends EventEmitter {
 
   dispose(): void {
     this.connectionGeneration += 1
+    this.turnGeneration += 1
     this.activeSessionId = undefined
     this.sessionCwd = undefined
     this.activePromptId = undefined
     this.fallbackAssistantMessageId = undefined
     this.replayingSession = false
     this.suppressPiStartupInfo = false
+    this.promptQueue = []
+    this.steeringSupported = false
     this.connection?.close()
     this.agentProcess?.kill()
     this.connection = undefined

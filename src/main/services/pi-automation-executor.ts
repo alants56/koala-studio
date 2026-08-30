@@ -1,31 +1,12 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { delimiter, join } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import * as acp from '@agentclientprotocol/sdk'
 import type { ClientConnection, SessionNotification } from '@agentclientprotocol/sdk'
 import type { Automation, AutomationRunLogLevel } from '../../shared/automations'
 import type { AutomationExecutionResult } from './feature-brief'
+import { piAcpEnvironment } from './pi-runtime'
 
 const EXECUTION_TIMEOUT_MS = 30 * 60 * 1000
-
-function resolvePiCommand(): string | undefined {
-  const pathCandidates = (process.env.PATH ?? '')
-    .split(delimiter)
-    .filter(Boolean)
-    .map((directory) => join(directory, 'pi'))
-  const candidates = [
-    process.env.PI_ACP_PI_COMMAND,
-    ...pathCandidates,
-    join(homedir(), '.npm-global/bin/pi'),
-    join(homedir(), '.local/bin/pi'),
-    join(homedir(), '.bun/bin/pi'),
-    '/opt/homebrew/bin/pi',
-    '/usr/local/bin/pi'
-  ]
-  return candidates.find((candidate): candidate is string => Boolean(candidate && existsSync(candidate)))
-}
 
 /** Runs one scheduled instruction in an isolated Pi ACP session. */
 export async function executePiInstruction(
@@ -63,14 +44,9 @@ export async function executePiInstruction(
   try {
     log('启动独立 Pi 会话')
     const adapterPath = require.resolve('pi-acp/dist/index.js')
-    const piCommand = resolvePiCommand()
     agentProcess = spawn(process.execPath, [adapterPath], {
       cwd,
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
-        ...(piCommand ? { PI_ACP_PI_COMMAND: piCommand } : {})
-      },
+      env: piAcpEnvironment(),
       stdio: ['pipe', 'pipe', 'pipe']
     })
     // 子进程异常退出后仍可能收到一次写入（如关闭通知），未监听会变成未捕获的 EPIPE 异常。

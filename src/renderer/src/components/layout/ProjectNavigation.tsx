@@ -3,12 +3,13 @@ import {
   DownOutlined,
   FolderOpenOutlined,
   FolderOutlined,
+  LoadingOutlined,
   MessageOutlined,
   UpOutlined
 } from '@ant-design/icons'
 import { Skeleton } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
-import type { AcpSessionInfo, Project } from '@/models'
+import type { AcpSessionInfo, AgentState, Project } from '@/models'
 import { useAgentSelection } from '@/state/AgentSelectionContext'
 import { useProjects } from '@/state/ProjectsContext'
 import { WORKSPACE_PATH } from '@/utils/constants'
@@ -35,6 +36,10 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
   const [expandedSessionLists, setExpandedSessionLists] = useState<Set<string>>(() => new Set())
   const [sessionLists, setSessionLists] = useState<Record<string, SessionListState>>({})
   const [liveSelection, setLiveSelection] = useState<{ projectId: string; sessionId: string }>()
+  /** 正在流式生成的会话 id 集合，用于在侧栏会话行上展示加载圈。 */
+  const [streamingSessionIds, setStreamingSessionIds] = useState<Set<string>>(() => new Set())
+  const streamingSessionIdsRef = useRef<Set<string>>(streamingSessionIds)
+  const activeStreamingSessionIdRef = useRef<string | undefined>(undefined)
   const sessionListsRef = useRef(sessionLists)
   const requestVersionsRef = useRef(new Map<string, number>())
   const pendingSessionsRef = useRef(new Map<string, AcpSessionInfo>())
@@ -54,6 +59,15 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
       sessionListsRef.current = next
       return next
     })
+  }, [])
+
+  /** 标记某个会话是否正在流式生成，驱动侧栏会话行的加载圈。 */
+  const markStreaming = useCallback((sessionId: string, streaming: boolean): void => {
+    const next = new Set(streamingSessionIdsRef.current)
+    if (streaming) next.add(sessionId)
+    else next.delete(sessionId)
+    streamingSessionIdsRef.current = next
+    setStreamingSessionIds(next)
   }, [])
 
   const refreshProjectSessions = useCallback(async (project: Project): Promise<void> => {
@@ -99,6 +113,9 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
       sessionListsRef.current = {}
       setSessionLists({})
       setLiveSelection(undefined)
+      streamingSessionIdsRef.current = new Set()
+      activeStreamingSessionIdRef.current = undefined
+      setStreamingSessionIds(new Set())
     }
 
     const missingProjects = visibleProjects.filter((project) => !sessionListsRef.current[project.id])
@@ -124,17 +141,49 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
   }, [agentRevision, refreshProjectSessions, visibleProjectKey])
 
   useEffect(() => {
+    let active = true
+    const applyState = (state: AgentState): void => {
+      if (!active) return
+      if (state.sessionId && typeof state.queueDepth === 'number') {
+        updateSessionLists((current) => Object.fromEntries(Object.entries(current).map(([projectId, listState]) => [
+          projectId,
+          {
+            ...listState,
+            sessions: listState.sessions.map((session) => session.sessionId === state.sessionId
+              ? { ...session, queueDepth: state.queueDepth }
+              : session)
+          }
+        ])))
+      }
+      const nextSessionId = state.status === 'working' ? state.sessionId : undefined
+      const previousSessionId = activeStreamingSessionIdRef.current
+      if (previousSessionId && previousSessionId !== nextSessionId) {
+        markStreaming(previousSessionId, false)
+        const completedProject = projects.find((project) =>
+          sessionListsRef.current[project.id]?.sessions.some((session) => session.sessionId === previousSessionId)
+          || pendingSessionsRef.current.get(project.id)?.sessionId === previousSessionId
+        )
+        if (completedProject) void refreshProjectSessions(completedProject)
+      }
+      if (nextSessionId) markStreaming(nextSessionId, true)
+      activeStreamingSessionIdRef.current = nextSessionId
+    }
+
+    void window.acp.getState().then(applyState)
+    const removeState = window.acp.onState(applyState)
+    return () => {
+      active = false
+      removeState()
+    }
+  }, [markStreaming, projects, refreshProjectSessions, updateSessionLists])
+
+  useEffect(() => {
     return subscribeSessionActivity((activity) => {
       const activeProject = projects.find((project) => project.id === activeProjectId)
       const project = activeProject && (activeProject.path ?? WORKSPACE_PATH) === activity.cwd
         ? activeProject
         : projects.find((item) => (item.path ?? WORKSPACE_PATH) === activity.cwd)
       if (!project) return
-
-      if (activity.phase === 'completed') {
-        void refreshProjectSessions(project)
-        return
-      }
 
       // 发送开始即显示并选中新会话；同时让更早的列表请求失效，避免旧结果覆盖。
       requestVersionsRef.current.set(project.id, (requestVersionsRef.current.get(project.id) ?? 0) + 1)
@@ -157,7 +206,7 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
       })
       setLiveSelection({ projectId: project.id, sessionId: activity.sessionId })
     })
-  }, [activeProjectId, projects, refreshProjectSessions, updateSessionLists])
+  }, [activeProjectId, projects, updateSessionLists])
 
   useEffect(() => {
     setLiveSelection(undefined)
@@ -231,18 +280,24 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
                   <span className="koala-session-status">暂无会话</span>
                 ) : (
                   <>
-                    {sessions.map((session) => (
-                      <button
-                        type="button"
-                        className={`koala-session-row${projectRouteActive && effectiveActiveSessionId === session.sessionId ? ' is-active' : ''}`}
-                        key={session.sessionId}
-                        onClick={() => void navigate(`/projects/${encodeURIComponent(project.id)}?session=${encodeURIComponent(session.sessionId)}`)}
-                        title={session.title || '未命名会话'}
-                      >
-                        <MessageOutlined />
-                        <span>{session.title || '未命名会话'}</span>
-                      </button>
-                    ))}
+                    {sessions.map((session) => {
+                      const streaming = streamingSessionIds.has(session.sessionId)
+                      const queueDepth = session.queueDepth ?? 0
+                      const sessionTitle = session.title || '未命名会话'
+                      return (
+                        <button
+                          type="button"
+                          className={`koala-session-row${projectRouteActive && effectiveActiveSessionId === session.sessionId ? ' is-active' : ''}${streaming ? ' is-streaming' : ''}`}
+                          key={session.sessionId}
+                          onClick={() => void navigate(`/projects/${encodeURIComponent(project.id)}?session=${encodeURIComponent(session.sessionId)}`)}
+                          title={streaming ? `${sessionTitle}（正在生成）` : queueDepth > 0 ? `${sessionTitle}（${queueDepth} 条排队消息）` : sessionTitle}
+                        >
+                          {streaming ? <LoadingOutlined spin /> : <MessageOutlined />}
+                          <span>{sessionTitle}</span>
+                          {queueDepth > 0 && <span className="koala-session-queue-count">{queueDepth}</span>}
+                        </button>
+                      )
+                    })}
                     {hasMoreSessions && (
                       <button type="button" className="koala-tree-more koala-session-more" onClick={() => toggleSessions(project.id)}>
                         {showAllSessions ? <UpOutlined /> : <DownOutlined />}

@@ -13,10 +13,14 @@ interface AgentContextValue {
   state: AgentState
   /** 当前会话消息列表（assistant 流式消息按 id 合并）。 */
   messages: ChatMessage[]
+  /** 正在加载历史会话（ACP session/load 回放中），页面应展示加载动画。 */
+  sessionLoading: boolean
   /** 当前激活的 ACP 会话 id。 */
   sessionId?: string
   connect: () => Promise<void>
   send: (text: string, attachments?: ChatAttachment[]) => Promise<void>
+  removeQueuedPrompt: (id: string) => Promise<void>
+  steerQueuedPrompt: (id: string) => Promise<void>
   stop: () => Promise<void>
   setMode: (modeId: string) => Promise<void>
   setModel: (modelId: string) => Promise<void>
@@ -47,6 +51,7 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
   // 进入页面即视为「连接中」，避免首帧先闪现「未连接」
   const [state, setState] = useState<AgentState>({ status: 'connecting', detail: `正在连接 ${agentName} ACP…`, currentAgent })
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES)
+  const [sessionLoading, setSessionLoading] = useState(false)
   const [sessionId, setSessionId] = useState<string>()
   const connectingRef = useRef(false)
 
@@ -66,8 +71,13 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
 
     assertAcpApi()
     setMessages(INITIAL_MESSAGES)
-    const loaded = await acp.loadSession(initialSessionId, cwd)
-    setSessionId(loaded.sessionId)
+    setSessionLoading(true)
+    try {
+      const loaded = await acp.loadSession(initialSessionId, cwd)
+      setSessionId(loaded.sessionId)
+    } finally {
+      setSessionLoading(false)
+    }
   }, [cwd, ensureSession, initialSessionId])
 
   const connect = useCallback(async () => {
@@ -105,16 +115,20 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
       sessionId,
       title: text.replace(/\s+/g, ' ').trim().slice(0, 80) || attachments.map((item) => item.name).join('、').slice(0, 80)
     }
-    dispatchSessionActivity({ ...activity, phase: 'started' })
-    try {
-      await acp.prompt({ text, cwd, attachments })
-    } finally {
-      dispatchSessionActivity({ ...activity, phase: 'completed' })
-    }
-  }, [cwd, sessionId])
+    if (state.status !== 'working') dispatchSessionActivity(activity)
+    await acp.prompt({ text, cwd, attachments })
+  }, [cwd, sessionId, state.status])
 
   const stop = useCallback(async () => {
     await acp.stop()
+  }, [])
+
+  const removeQueuedPrompt = useCallback(async (id: string) => {
+    await acp.removeQueuedPrompt(id)
+  }, [])
+
+  const steerQueuedPrompt = useCallback(async (id: string) => {
+    await acp.steerQueuedPrompt(id)
   }, [])
 
   const setMode = useCallback(async (modeId: string) => {
@@ -138,8 +152,13 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
   const loadSession = useCallback(
     async (id: string) => {
       setMessages(INITIAL_MESSAGES)
-      const loaded = await acp.loadSession(id, cwd)
-      setSessionId(loaded.sessionId)
+      setSessionLoading(true)
+      try {
+        const loaded = await acp.loadSession(id, cwd)
+        setSessionId(loaded.sessionId)
+      } finally {
+        setSessionLoading(false)
+      }
     },
     [cwd]
   )
@@ -181,8 +200,8 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
   }, [connect])
 
   const value = useMemo<AgentContextValue>(
-    () => ({ state, messages, sessionId, connect, send, stop, setMode, setModel, setEffort, respondPermission, listSessions, loadSession, createNewSession }),
-    [state, messages, sessionId, connect, send, stop, setMode, setModel, setEffort, respondPermission, listSessions, loadSession, createNewSession]
+    () => ({ state, messages, sessionLoading, sessionId, connect, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission, listSessions, loadSession, createNewSession }),
+    [state, messages, sessionLoading, sessionId, connect, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission, listSessions, loadSession, createNewSession]
   )
 
   return <AgentContext.Provider value={value}>{children}</AgentContext.Provider>

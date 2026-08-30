@@ -357,6 +357,28 @@ input {
   font-size: 12px;
 }
 
+.koala-session-queue-count {
+  min-width: 17px;
+  height: 17px;
+  margin-left: auto;
+  padding-inline: 5px;
+  border-radius: 9px;
+  background: rgb(var(--primary-rgb) / 11%);
+  color: var(--primary-active);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 17px;
+  text-align: center;
+}
+
+.koala-session-row.is-streaming {
+  color: var(--primary-active);
+}
+
+.koala-session-row.is-streaming .anticon {
+  color: var(--primary);
+}
+
 .koala-session-status {
   display: block;
   padding: 5px 8px 7px;
@@ -960,6 +982,133 @@ input {
   width: 100%;
   justify-content: flex-start;
   color: var(--muted-soft);
+}
+
+.chat-queue-list {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.chat-queue-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  min-height: 44px;
+  padding: 5px 7px 5px 13px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--canvas);
+  box-shadow: 0 5px 16px rgb(var(--primary-rgb) / 4%);
+}
+
+.chat-queue-item-icon {
+  margin-right: 11px;
+  color: var(--muted-soft);
+  font-size: 14px;
+}
+
+.chat-queue-item-text {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-queue-steer.ant-btn,
+.chat-queue-remove.ant-btn {
+  height: 32px;
+  border-radius: 7px;
+  color: var(--muted);
+}
+
+.chat-queue-steer.ant-btn {
+  padding-inline: 9px;
+  font-size: 12px;
+}
+
+.chat-queue-remove.ant-btn {
+  width: 32px;
+  padding: 0;
+}
+
+.chat-queue-steer.ant-btn:hover,
+.chat-queue-steer.ant-btn:focus-visible,
+.chat-queue-remove.ant-btn:hover,
+.chat-queue-remove.ant-btn:focus-visible {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.chat-queue-steer.ant-btn:active,
+.chat-queue-remove.ant-btn:active {
+  transform: translateY(1px);
+}
+
+/* 任务执行中的状态条：输入框上方显示当前任务已耗时。 */
+.chat-executing-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 7px 12px;
+  border: 1px solid rgb(var(--primary-rgb) / 25%);
+  border-radius: 8px;
+  background: rgb(var(--primary-rgb) / 8%);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.chat-executing-icon {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.chat-executing-label {
+  font-weight: 550;
+}
+
+.chat-executing-elapsed {
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--canvas);
+  color: var(--primary-active);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 忙碌时输入框右侧的「排队 + 停止」动作。 */
+.chat-busy-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-busy-send.ant-btn,
+.chat-busy-stop.ant-btn {
+  height: 30px;
+  border-radius: 7px;
+  font-size: 12px;
+  padding-inline: 10px;
+}
+
+.chat-busy-send.ant-btn {
+  box-shadow: 0 4px 12px rgb(var(--primary-rgb) / 25%);
+}
+
+.chat-busy-stop.ant-btn {
+  color: var(--error);
+}
+
+.chat-busy-stop.ant-btn:hover,
+.chat-busy-stop.ant-btn:focus-visible {
+  background: rgb(198 69 69 / 10%);
+  color: var(--error);
 }
 
 .chat-attachment-trigger.ant-btn {
@@ -2282,6 +2431,10 @@ input {
   .workspace-bottom-grid { grid-template-columns: minmax(0, 1fr); gap: 25px; }
   .status-panel { min-height: 0; border-top: 1px solid var(--hairline); border-left: 0; padding-top: 22px; padding-left: 0; }
   .todo-add { grid-template-columns: minmax(0, 1fr) 122px 28px; }
+  .chat-composer-wrap { padding-inline: 12px; }
+  .chat-queue-item { grid-template-columns: auto minmax(0, 1fr) auto auto; padding-left: 10px; }
+  .chat-queue-item-icon { margin-right: 8px; }
+  .chat-queue-steer.ant-btn { padding-inline: 7px; }
 }
 
 /* 输入 / 时显示的命令选择菜单。 */
@@ -2796,6 +2949,30 @@ input {
     border-color: var(--surface-dark-elevated);
     background: var(--surface-dark-elevated);
     box-shadow: none;
+  }
+
+  .chat-queue-item {
+    border-color: var(--surface-dark-elevated);
+    background: var(--surface-dark-elevated);
+    box-shadow: none;
+  }
+
+  .chat-queue-item-text {
+    color: var(--on-dark);
+  }
+
+  .chat-queue-item-icon,
+  .chat-queue-steer.ant-btn,
+  .chat-queue-remove.ant-btn {
+    color: var(--on-dark-soft);
+  }
+
+  .chat-queue-steer.ant-btn:hover,
+  .chat-queue-steer.ant-btn:focus-visible,
+  .chat-queue-remove.ant-btn:hover,
+  .chat-queue-remove.ant-btn:focus-visible {
+    background: var(--surface-dark-soft);
+    color: var(--on-dark);
   }
 
   .chat-command-menu {

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Koala Studio · 分层架构图</title>
+<style>
+  :root{
+    --bg:#0f1220; --panel:#151a2e; --panel2:#1b2138; --line:#2a3354;
+    --txt:#e8ecf8; --mut:#9aa6c4; --acc:#6c8cff;
+    --pres:#3d6ef7; --brg:#0ea5a4; --main:#22c55e; --shared:#8b93a8;
+    --mcp:#a855f7; --adp:#f59e0b; --ext:#f472b6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(160deg,#0c0f1d,#12172c 60%,#0f1220);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    padding:36px 28px 56px}
+  .wrap{max-width:1180px;margin:0 auto}
+  header{text-align:center;margin-bottom:30px}
+  header h1{margin:0 0 6px;font-size:26px;font-weight:700;letter-spacing:.5px}
+  header h1 span{color:var(--acc)}
+  header p{margin:0;color:var(--mut);font-size:14px}
+  .sub{margin-top:10px;display:inline-flex;gap:14px;color:var(--mut);font-size:12.5px}
+  .sub b{color:var(--txt);font-weight:600}
+
+  .legend{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin:18px 0 8px}
+  .legend .item{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--mut)}
+  .legend .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+  .layer{display:grid;grid-template-columns:172px 1fr;margin:10px 0;border-radius:14px;
+    border:1px solid var(--line);background:linear-gradient(180deg,var(--panel),var(--panel2));
+    box-shadow:0 8px 22px rgba(0,0,0,.25);overflow:hidden}
+  .lname{padding:16px 14px;border-right:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;gap:6px}
+  .lname .tag{display:inline-block;width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:15px;color:#0b0e1a}
+  .lname h3{margin:0;font-size:14.5px;font-weight:700;line-height:1.3}
+  .lname small{color:var(--mut);font-size:11.5px;line-height:1.4}
+  .lbody{padding:14px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .box{background:#fff;border-radius:10px;padding:10px 13px;color:#0b0e1a;font-size:12.5px;line-height:1.45;
+    border-left:4px solid var(--acc);box-shadow:0 2px 6px rgba(0,0,0,.18);min-width:150px}
+  .box b{display:block;font-size:12.5px}
+  .box small{display:block;color:#445;font-size:11px;margin-top:2px}
+  .pill{border-radius:20px;padding:5px 11px;font-size:12px;border:1px solid var(--line);color:var(--mut)}
+  .plug{border-left-style:dashed}
+  .arrow{text-align:center;color:var(--mut);font-size:15px;line-height:1;margin:-4px 0;position:relative;z-index:1}
+
+  .note{margin-top:22px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+  .note h2{margin:0 0 12px;font-size:16px;color:var(--acc)}
+  .note ol{margin:0;padding-left:20px;color:var(--mut);font-size:13px;line-height:1.9}
+  .note b{color:var(--txt)}
+  .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#0b0e1a;padding:1px 6px;border-radius:5px;font-size:11.5px;color:#a7d3ff}
+  footer{margin-top:26px;text-align:center;color:#5a6580;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Koala Studio <span>· 分层架构图</span></h1>
+    <p>Electron + React + Ant Design 的 AI Agent 桌面工作台，通过 ACP 接入 Claude Code 与 Pi</p>
+    <div class="sub">
+      <span><b>双 Agent</b> Claude / Pi</span>
+      <span><b>通信协议</b> Agent Client Protocol</span>
+      <span><b>数据</b> 本地 JSON</span>
+    </div>
+  </header>
+
+  <div class="legend">
+    <div class="item"><span class="dot" style="background:var(--pres)"></span>表现层</div>
+    <div class="item"><span class="dot" style="background:var(--brg)"></span>桥接层</div>
+    <div class="item"><span class="dot" style="background:var(--main)"></span>主进程层</div>
+    <div class="item"><span class="dot" style="background:var(--shared)"></span>契约层</div>
+    <div class="item"><span class="dot" style="background:var(--mcp)"></span>MCP 集成层</div>
+    <div class="item"><span class="dot" style="background:var(--adp)"></span>Agent 适配层</div>
+    <div class="item"><span class="dot" style="background:var(--ext)"></span>外部系统层</div>
+  </div>
+
+  <!-- ① 表现层 -->
+  <div class="layer">
+    <div class="lname">
+      <span class="tag" style="background:var(--pres)">①</span>
+      <h3>表现层<br>Presentation</h3>
+      <small>React 19 · Ant Design 6 · Tailwind<br>renderer 进程</small>
+    </div>
+    <div class="lbody">
+      <div class="box" style="border-color:var(--pres)"><b>Pages</b><small>Projects / ProjectChat / Claude / Automations / Workbench</small></div>
+      <div class="box" style="border-color:var(--pres)"><b>Components</b><small>ChatView · ChatThread · ChatComposer · MarkdownMessage · AppLayout · ProjectCard</small></div>
+      <div class="box" style="border-color:var(--pres)"><b>State</b><small>AgentContext · ProjectsContext · AgentSelectionContext</small></div>
+      <div class="box" style="border-color:var(--pres)"><b>Router</b><small>/projects /projects/:id /claude /automations /workbench</small></div>
+    </div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <!-- ② 桥接层 -->
+  <div class="layer">
+    <div class="lname">
+      <span class="tag" style="background:var(--brg)">②</span>
+      <h3>桥接层<br>Bridge</h3>
+      <small>contextBridge<br>preload 进程</small>
+    </div>
+    <div class="lbody">
+      <div class="box" style="border-color:var(--brg)"><b>window.acp / .projects / .claude</b><small>interfaceAcpApi · ProjectsApi · ClaudeApi</small></div>
+      <div class="box" style="border-color:var(--brg)"><b>window.automations / .todos / .attachments</b><small>AutomationsApi · TodosApi · AttachmentsApi</small></div>
+      <span class="pill">ipcRenderer.invoke · on</span>
+    </div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <!-- ③ 主进程层 -->
+  <div class="layer">
+    <div class="lname">
+      <span class="tag" style="background:var(--main)">③</span>
+      <h3>主进程层<br>Main Process</h3>
+      <small>Node + Electron<br>main 进程</small>
+    </div>
+    <div class="lbody">
+      <div class="box" style="border-color:var(--main)"><b>IPC Handlers</b><small>acp:* · projects:* · attachments:* · automations:* · todos:* · claude:*</small></div>
+      <div class="box" style="border-color:var(--main)"><b>AcpBridge</b><small>会话生命周期 · 流式消息 · 权限请求 · 排队/steering · 附件</small></div>
+      <div class="box" style="border-color:var(--main)"><b>Stores</b><small>project · automation · todo · attachment · preferences</small></div>
+      <div class="box" style="border-color:var(--main)"><b>Claude Resources</b><small>Skills / 插件 / MCP 配置</small></div>
+      <div class="box" style="border-color:var(--main)"><b>Automation Scheduler</b><small>定时检查 · 到期执行 · 运行记录</small></div>
+      <div class="box" style="border-color:var(--main)"><b>Executors</b><small>claude · pi · feature-brief(git)</small></div>
+      <div class="box" style="border-color:var(--main)"><b>Pi Runtime</b><small>Pi CLI 定位 · 内置 Node PATH</small></div>
+    </div>
+  </div>
+
+  <!-- ④ 契约层 -->
+  <div class="layer">
+    <div class="lname">
+      <span class="tag" style="background:var(--shared)">④</span>
+      <h3>契约层<br>Shared Contracts</h3>
+      <small>src/shared<br>三端共享</small>
+    </div>
+    <div class="lbody">
+      <div class="box plug" style="border-color:var(--shared)"><b>shared/*.ts</b><small>acp · projects · automations · todos · attachments · claude</small></div>
+      <div class="box plug" style="border-color:var(--shared)"><b>AutomationStore / TodoStore</b><small>主进程与 MCP server 复用</small></div>
+      <span class="pill">共享类型 & 业务逻辑</span>
+    </div>
+  </div>
+
+  <!-- ⑤ MCP 集成层 -->
+  <div class="layer">
+    <div class="lname">
+      <span class="tag" style="background:var(--mcp)">⑤</span>
+      <h3>MCP 集成层<br>MCP Integration</h3>
+      <small>src/mcp<br>koala-automations</small>
+    </div>
+    <div class="lbody">
+      <div class="box" style="border-color:var(--mcp)"><b>koala-automations MCP Server</b><small>koala_list/get/create/update/…automation</small></div>
+      <div class="box" style="border-color:var(--mcp)"><b>待办工具</b><small>koala_list/get/create/reorder/set_done/delete_todo</small></div>
+      <span class="pill">stdio · http://127.0.0.1:29736/mcp</span>
+      <span class="pill">注入到 Agent 会话</span>
+    </div>
+  </div>
+  <div class="arrow">◀ ▼ ▶</div>
+
+  <!-- ⑥ Agent 适配层 -->
+  <div class="layer">
+    <div class="lname">
+      <span class="tag" style="background:var(--adp)">⑥</span>
+      <h3>Agent 适配层<br>ACP Client</h3>
+      <small>@agentclientprotocol/sdk<br>子进程 · ndjson stdio</small>
+    </div>
+    <div class="lbody">
+      <div class="box" style="border-color:var(--adp)"><b>ACP Client</b><small>session/prompt · _session/steering · usage · permission</small></div>
+      <div class="box" style="border-color:var(--adp)"><b>Claude Code 适配器</b><small>@agentclientprotocol/claude-agent-acp</small></div>
+      <div class="box" style="border-color:var(--adp)"><b>Pi 适配器</b><small>pi-acp</small></div>
+    </div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <!-- ⑦ 外部系统层 -->
+  <div class="layer">
+    <div class="lname">
+      <span class="tag" style="background:var(--ext)">⑦</span>
+      <h3>外部系统层<br>External Systems</h3>
+      <small>系统 · CLI · 项目</small>
+    </div>
+    <div class="lbody">
+      <div class="box" style="border-color:var(--ext)"><b>用户数据</b><small>~/Library/Application Support/koala-studio/<br>projects.json · automations.json · todos.json</small></div>
+      <div class="box" style="border-color:var(--ext)"><b>Claude Code</b><small>会话存于 ~/.claude · Anthropic SDK</small></div>
+      <div class="box" style="border-color:var(--ext)"><b>Pi CLI</b><small>本地安装与认证</small></div>
+      <div class="box" style="border-color:var(--ext)"><b>用户项目</b><small>git 工作目录</small></div>
+    </div>
+  </div>
+
+  <div class="note">
+    <h2>关键数据流</h2>
+    <ol>
+      <li><b>聊天</b>：渲染端 <span class="code">window.acp.prompt()</span> → preload → <span class="code">acp:prompt</span> → <span class="code">AcpBridge.prompt()</span> → ACP <span class="code">session/prompt</span> → Agent 子进程；<span class="code">session/update</span> 通知反向流回 UI。</li>
+      <li><b>自动化</b>：<span class="code">AutomationScheduler</span> 轮询到期任务 → 执行器拉起独立 Agent 会话完成指令 → 结果写回 <span class="code">automations.json</span> 运行记录。</li>
+      <li><b>Agent 自管理</b>：<span class="code">AcpBridge</span> 在 <span class="code">session/new</span> / <span class="code">session/load</span> 时注入 <span class="code">koala-automations</span> MCP server，让 Agent 可直接读写自动化与待办。</li>
+      <li><b>项目/资源</b>：项目管理、Skills/插件/MCP 管理均经 IPC 落到本地 JSON 或 Claude Code 目录。</li>
+    </ol>
+  </div>
+
+  <footer>Koala Studio v0.1.2 · 分层架构图 · ACP / Electron · by 刘傲的AI实践</footer>
+</div>
+</body>
+</html>

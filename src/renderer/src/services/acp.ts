@@ -4,6 +4,8 @@ const REQUIRED_METHODS: ReadonlyArray<keyof AcpApi> = [
   'getState',
   'connect',
   'prompt',
+  'removeQueuedPrompt',
+  'steerQueuedPrompt',
   'stop',
   'setMode',
   'setModel',

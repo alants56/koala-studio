@@ -10,7 +10,10 @@ import {
   LoadingOutlined,
   PaperClipOutlined,
   CheckOutlined,
+  ClockCircleOutlined,
+  DeleteOutlined,
   DownOutlined,
+  EnterOutlined,
   RobotOutlined,
   SafetyCertificateOutlined,
   SendOutlined,
@@ -194,9 +197,20 @@ const PERMISSION_KIND_LABELS: Record<AgentPermissionOption['kind'], string> = {
   reject_always: '始终拒绝'
 }
 
+/** 把毫秒格式化为 mm:ss / hh:mm:ss。 */
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  const mm = String(minutes).padStart(2, '0')
+  const ss = String(seconds).padStart(2, '0')
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`
+}
+
 /** 对话输入区：基于 Ant Design X 的 Sender，Enter 发送、加载时显示停止按钮。 */
 export function ChatComposer(): ReactElement {
-  const { state, send, stop, setMode, setModel, setEffort, respondPermission } = useAgent()
+  const { state, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission } = useAgent()
   const { message } = App.useApp()
   const [prompt, setPrompt] = useState('')
   const [permissionOpen, setPermissionOpen] = useState(false)
@@ -207,8 +221,10 @@ export function ChatComposer(): ReactElement {
   const [attachmentItems, setAttachmentItems] = useState<PendingAttachment[]>([])
   const [importingAttachments, setImportingAttachments] = useState(false)
   const [draggingFiles, setDraggingFiles] = useState(false)
+  const [pendingQueueActionId, setPendingQueueActionId] = useState<string>()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const attachmentItemsRef = useRef(attachmentItems)
+  const [workElapsed, setWorkElapsed] = useState(0)
 
   const ready = state.status === 'ready'
   const loading = state.status === 'working'
@@ -243,6 +259,19 @@ export function ChatComposer(): ReactElement {
   useEffect(() => {
     setActiveCommandIndex(0)
   }, [commandQuery, commands])
+
+  // 计时起点来自主进程，页面卸载再返回后仍从原任务开始时间继续计算。
+  useEffect(() => {
+    if (!loading) {
+      setWorkElapsed(0)
+      return
+    }
+    const startedAt = state.workStartedAt ?? Date.now()
+    const updateElapsed = (): void => setWorkElapsed(Math.max(0, Date.now() - startedAt))
+    updateElapsed()
+    const timer = window.setInterval(updateElapsed, 1000)
+    return () => window.clearInterval(timer)
+  }, [loading, state.workStartedAt])
 
   useEffect(() => {
     attachmentItemsRef.current = attachmentItems
@@ -334,7 +363,8 @@ export function ChatComposer(): ReactElement {
 
   const handleSubmit = (text: string): void => {
     const trimmed = text.trim()
-    if ((!trimmed && attachmentItems.length === 0) || !ready || importingAttachments) return
+    // Agent 忙碌时也允许发送，新消息统一进入输入框上方的待处理队列。
+    if ((!trimmed && attachmentItems.length === 0) || (!ready && !loading) || importingAttachments) return
 
     setImportingAttachments(true)
     void Promise.all(attachmentItems.map(async (item) => ({
@@ -422,6 +452,18 @@ export function ChatComposer(): ReactElement {
     event.preventDefault()
     setDraggingFiles(false)
     addFiles(Array.from(event.dataTransfer.files))
+  }
+
+  const handleQueueAction = async (id: string, action: 'steer' | 'remove'): Promise<void> => {
+    setPendingQueueActionId(id)
+    try {
+      if (action === 'steer') await steerQueuedPrompt(id)
+      else await removeQueuedPrompt(id)
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : action === 'steer' ? '无法调整任务方向。' : '无法删除排队消息。')
+    } finally {
+      setPendingQueueActionId((current) => current === id ? undefined : current)
+    }
   }
 
   const permissionPanel = (
@@ -576,6 +618,44 @@ export function ChatComposer(): ReactElement {
         multiple
         onChange={(event) => addFiles(Array.from(event.target.files ?? []))}
       />
+      {loading && (
+        <div className="chat-executing-bar" role="status" aria-live="polite">
+          <LoadingOutlined spin className="chat-executing-icon" aria-hidden="true" />
+          <span className="chat-executing-label">正在执行任务</span>
+          <span className="chat-executing-elapsed">已耗时 {formatElapsed(workElapsed)}</span>
+        </div>
+      )}
+      {(state.queuedPrompts?.length ?? 0) > 0 && (
+        <div className="chat-queue-list" aria-label="待处理消息">
+          {state.queuedPrompts?.map((item) => {
+            const displayText = item.text || `附件：${item.attachmentNames.join('、')}`
+            const actionPending = pendingQueueActionId === item.id
+            return (
+              <div className="chat-queue-item" key={item.id}>
+                <ClockCircleOutlined className="chat-queue-item-icon" aria-hidden="true" />
+                <span className="chat-queue-item-text" title={displayText}>{displayText}</span>
+                <Button
+                  type="text"
+                  className="chat-queue-steer"
+                  icon={actionPending ? <LoadingOutlined spin /> : <EnterOutlined />}
+                  disabled={Boolean(pendingQueueActionId)}
+                  onClick={() => void handleQueueAction(item.id, 'steer')}
+                >
+                  调整方向
+                </Button>
+                <Button
+                  type="text"
+                  className="chat-queue-remove"
+                  icon={<DeleteOutlined />}
+                  aria-label={`删除排队消息：${displayText}`}
+                  disabled={Boolean(pendingQueueActionId)}
+                  onClick={() => void handleQueueAction(item.id, 'remove')}
+                />
+              </div>
+            )
+          })}
+        </div>
+      )}
       <Sender
         value={prompt}
         onChange={handlePromptChange}
@@ -583,10 +663,11 @@ export function ChatComposer(): ReactElement {
         onPaste={handlePaste}
         onSubmit={handleSubmit}
         onCancel={() => void stop()}
-        loading={loading}
-        // 生成时 Sender 会把发送按钮替换为停止按钮；不能禁用整个组件，否则停止按钮也无法点击。
+        // 自管按钮：忙碌时仍要能输入并排队，同时保留停止按钮；
+        // 因此不把 loading 交给 Sender（它会独占发送键），改为在 suffix 里渲染两种动作。
+        loading={false}
         disabled={(!ready && !loading) || importingAttachments}
-        readOnly={loading || importingAttachments}
+        readOnly={importingAttachments}
         placeholder="输入消息，或粘贴 / 拖入图片、PDF、Markdown 等文件。"
         autoSize={{ minRows: 1, maxRows: 6 }}
         header={
@@ -608,7 +689,37 @@ export function ChatComposer(): ReactElement {
           </Sender.Header>
         }
         suffix={(originNode) => {
-          if (loading || prompt.trim() || attachmentItems.length === 0) return originNode
+          // Agent 忙碌：新消息默认排队，同时保留停止当前任务的动作。
+          if (loading) {
+            const hasContent = Boolean(prompt.trim()) || attachmentItems.length > 0
+            return (
+              <div className="chat-busy-actions">
+                {hasContent && (
+                  <Button
+                    type="primary"
+                    className="chat-busy-send"
+                    aria-label="将消息加入队列"
+                    icon={<ClockCircleOutlined />}
+                    disabled={importingAttachments}
+                    onClick={() => handleSubmit(prompt)}
+                  >
+                    排队
+                  </Button>
+                )}
+                <Button
+                  type="text"
+                  danger
+                  className="chat-busy-stop"
+                  aria-label="停止当前任务"
+                  icon={<StopOutlined />}
+                  onClick={() => void stop()}
+                >
+                  停止
+                </Button>
+              </div>
+            )
+          }
+          if (prompt.trim() || attachmentItems.length === 0) return originNode
           return (
             <Button
               type="text"
@@ -626,7 +737,7 @@ export function ChatComposer(): ReactElement {
               type="text"
               className="chat-attachment-trigger"
               icon={<PaperClipOutlined />}
-              disabled={!ready || loading || importingAttachments}
+              disabled={(!ready && !loading) || importingAttachments}
               onClick={() => fileInputRef.current?.click()}
             >
               添加文件
