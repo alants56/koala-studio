@@ -59,6 +59,7 @@
   --error: #c64545;
   /* RGB channels of primary, used to build alpha tints */
   --primary-rgb: 204 120 92;
+  --chat-user-bubble: #a9583e;
 }
 
 html,
@@ -355,20 +356,6 @@ input {
 .koala-session-row .anticon {
   flex: 0 0 auto;
   font-size: 12px;
-}
-
-.koala-session-queue-count {
-  min-width: 17px;
-  height: 17px;
-  margin-left: auto;
-  padding-inline: 5px;
-  border-radius: 9px;
-  background: rgb(var(--primary-rgb) / 11%);
-  color: var(--primary-active);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  line-height: 17px;
-  text-align: center;
 }
 
 .koala-session-row.is-streaming {
@@ -807,22 +794,26 @@ input {
   height: 100%;
   min-height: 0;
   flex-direction: column;
+  background:
+    radial-gradient(circle at 88% 0%, rgb(var(--primary-rgb) / 7%), transparent 25%),
+    var(--canvas);
 }
 
 .chat-header {
   display: flex;
-  min-height: 62px;
+  min-height: 70px;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 24px;
   border-bottom: 1px solid var(--hairline-soft);
-  padding: 16px;
+  padding: 16px clamp(24px, 4vw, 44px);
 }
 
 .chat-project-title {
   color: var(--ink) !important;
-  font-size: 18px !important;
-  font-weight: 680 !important;
+  font-size: 19px !important;
+  font-weight: 720 !important;
+  letter-spacing: -0.015em;
 }
 
 .chat-project-path {
@@ -830,7 +821,9 @@ input {
   max-width: 680px;
   overflow: hidden;
   color: var(--muted) !important;
-  font-size: 12px;
+  margin-top: 3px;
+  font-family: "Koala Mono", monospace;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -838,8 +831,9 @@ input {
 .chat-token-usage {
   display: block;
   color: var(--muted);
-  font-size: 12px;
-  padding: 4px 16px;
+  padding: 6px clamp(24px, 4vw, 44px) 8px;
+  font-family: "Koala Mono", monospace;
+  font-size: 10px;
   cursor: default;
   white-space: nowrap;
   text-align: right;
@@ -847,12 +841,13 @@ input {
 
 .chat-status {
   display: inline-flex;
-  height: 23px;
+  height: 22px;
   align-items: center;
   gap: 6px;
   padding: 0 8px;
   border: 1px solid var(--hairline);
-  border-radius: 5px;
+  border-radius: 999px;
+  background: rgb(var(--primary-rgb) / 5%);
   color: var(--muted);
   font-size: 11px;
 }
@@ -873,22 +868,128 @@ input {
 }
 
 .chat-thread {
-  width: min(920px, 100%);
+  width: min(980px, 100%);
   margin: 0 auto;
-  padding: 28px 20px !important;
+  padding: 36px clamp(24px, 5vw, 52px) 28px !important;
   scrollbar-gutter: stable;
+  scroll-behavior: smooth;
 }
 
 .chat-thread .ant-bubble {
-  margin-bottom: 3px;
+  margin-bottom: 12px;
 }
 
 .chat-thread .ant-bubble-content {
+  font-size: 14px;
   line-height: 1.7;
+}
+
+.chat-assistant-message {
+  max-width: min(780px, 84%) !important;
+}
+
+.chat-assistant-message .ant-bubble-content {
+  padding: 2px 0 !important;
+  color: var(--body) !important;
+}
+
+.chat-user-message {
+  position: relative;
+  margin: 4px 0 18px;
+}
+
+.chat-user-message .ant-bubble-content {
+  padding: 11px 14px !important;
+  border-radius: 14px 14px 4px 14px !important;
+  box-shadow: 0 8px 18px rgb(var(--primary-rgb) / 15%);
+  line-height: 1.65;
+}
+
+.chat-user-message > button {
+  margin-right: 2px;
+}
+
+.chat-activity-message {
+  width: min(680px, 82%);
+  margin: 2px 0 12px;
+  padding: 8px 11px 7px;
+  border-left: 2px solid rgb(var(--primary-rgb) / 30%);
+  background: linear-gradient(90deg, rgb(var(--primary-rgb) / 6%), transparent 82%);
+}
+
+.chat-activity-message .ant-thought-chain-item-header {
+  min-height: 24px;
+  font-size: 12px;
+}
+
+.chat-activity-message .ant-thought-chain-item-content {
+  padding-top: 5px;
+  font-size: 12px;
+  line-height: 1.65;
 }
 
 .chat-markdown {
   min-width: 0;
+}
+
+.chat-markdown > :first-child {
+  margin-top: 0;
+}
+
+.chat-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.chat-markdown h1,
+.chat-markdown h2,
+.chat-markdown h3 {
+  margin: 1.35em 0 0.5em;
+  color: var(--ink);
+  font-weight: 720;
+  letter-spacing: -0.012em;
+}
+
+.chat-markdown p,
+.chat-markdown ul,
+.chat-markdown ol,
+.chat-markdown blockquote {
+  margin: 0 0 0.85em;
+}
+
+.chat-markdown blockquote {
+  margin-left: 0;
+  border-inline-start: 2px solid rgb(var(--primary-rgb) / 42%);
+  padding-inline-start: 13px;
+  color: var(--muted);
+}
+
+.chat-markdown pre {
+  margin: 1em 0;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  box-shadow: inset 0 1px rgb(255 255 255 / 55%);
+}
+
+.chat-markdown :not(pre) > code {
+  border-radius: 4px;
+  background: rgb(var(--primary-rgb) / 9%);
+  color: var(--primary-active);
+  padding: 0.12em 0.32em;
+  font-size: 0.9em;
+}
+
+/* 工具调用输出：等宽 + 限高滚动 */
+.chat-tool-output {
+  max-height: 320px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.chat-tool-truncated {
+  color: var(--muted-soft);
+  font-size: 12px;
+  margin-bottom: 4px;
 }
 
 .chat-markdown h1,
@@ -935,9 +1036,9 @@ input {
 
 .chat-composer-wrap {
   position: relative;
-  width: min(920px, 100%);
+  width: min(980px, 100%);
   margin: 0 auto;
-  padding: 0 20px 18px;
+  padding: 0 clamp(24px, 5vw, 52px) 22px;
 }
 
 .chat-file-input {
@@ -962,20 +1063,20 @@ input {
 
 .chat-composer-wrap .ant-sender {
   border: 1px solid var(--hairline);
-  border-radius: 10px;
-  background: var(--canvas);
-  box-shadow: 0 8px 20px rgb(var(--primary-rgb) / 5%);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--canvas) 92%, var(--surface-soft));
+  box-shadow: 0 12px 28px rgb(var(--primary-rgb) / 8%), inset 0 1px rgb(255 255 255 / 72%);
 }
 
 .chat-composer-wrap .ant-sender:focus-within {
-  border-color: var(--hairline);
-  box-shadow: 0 8px 20px rgb(var(--primary-rgb) / 5%);
+  border-color: rgb(var(--primary-rgb) / 48%);
+  box-shadow: 0 12px 28px rgb(var(--primary-rgb) / 9%), inset 0 1px rgb(255 255 255 / 72%);
 }
 
 /* 权限触发器获得焦点时，不要把整个输入框伪装成输入态。 */
 .chat-composer-wrap .ant-sender:has(.ant-sender-input:focus) {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgb(var(--primary-rgb) / 10%);
+  box-shadow: 0 0 0 3px rgb(var(--primary-rgb) / 10%), 0 12px 28px rgb(var(--primary-rgb) / 8%);
 }
 
 .chat-composer-footer {
@@ -1047,39 +1148,33 @@ input {
   transform: translateY(1px);
 }
 
-/* 任务执行中的状态条：输入框上方显示当前任务已耗时。 */
-.chat-executing-bar {
-  display: flex;
+/* 当前 turn 执行时间摘要：位于用户气泡下方、agent 回复上方。 */
+.chat-turn-summary {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 0 8px;
-  padding: 7px 12px;
-  border: 1px solid rgb(var(--primary-rgb) / 25%);
-  border-radius: 8px;
-  background: rgb(var(--primary-rgb) / 8%);
-  color: var(--ink);
-  font-size: 12px;
+  gap: 6px;
+  align-self: flex-start;
+  margin: -3px 0 16px;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: "Koala Mono", monospace;
+  font-size: 10px;
+  line-height: 1;
 }
 
-.chat-executing-icon {
-  flex: 0 0 auto;
-  color: var(--primary);
-}
-
-.chat-executing-label {
+.chat-turn-summary-label {
   font-weight: 550;
-}
-
-.chat-executing-elapsed {
-  margin-left: auto;
-  padding: 1px 8px;
-  border-radius: 6px;
-  background: var(--canvas);
-  color: var(--primary-active);
-  font-size: 11px;
-  font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.chat-turn-summary-arrow {
+  color: var(--primary);
+  font-size: 13px;
+  line-height: 1;
 }
 
 /* 忙碌时输入框右侧的「排队 + 停止」动作。 */
@@ -1130,7 +1225,7 @@ input {
   width: 32px;
   height: 32px;
   place-items: center;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--primary);
   color: var(--on-primary);
 }
@@ -2431,7 +2526,12 @@ input {
   .workspace-bottom-grid { grid-template-columns: minmax(0, 1fr); gap: 25px; }
   .status-panel { min-height: 0; border-top: 1px solid var(--hairline); border-left: 0; padding-top: 22px; padding-left: 0; }
   .todo-add { grid-template-columns: minmax(0, 1fr) 122px 28px; }
-  .chat-composer-wrap { padding-inline: 12px; }
+  .chat-header { padding-inline: 16px; }
+  .chat-thread { padding: 24px 16px 20px !important; }
+  .chat-composer-wrap { padding-inline: 16px; }
+  .chat-assistant-message,
+  .chat-activity-message { max-width: 92% !important; width: 92%; }
+  .chat-user-message { max-width: 88% !important; }
   .chat-queue-item { grid-template-columns: auto minmax(0, 1fr) auto auto; padding-left: 10px; }
   .chat-queue-item-icon { margin-right: 8px; }
   .chat-queue-steer.ant-btn { padding-inline: 7px; }
@@ -2938,6 +3038,40 @@ input {
 
   .chat-header {
     border-color: var(--surface-dark-elevated);
+  }
+
+  .chat-shell {
+    background: var(--surface-dark);
+  }
+
+  .chat-assistant-message .ant-bubble-content {
+    color: var(--on-dark) !important;
+  }
+
+  .chat-activity-message {
+    border-left-color: rgb(var(--primary-rgb) / 38%);
+    background: linear-gradient(90deg, rgb(var(--primary-rgb) / 10%), transparent 82%);
+  }
+
+  .chat-markdown h1,
+  .chat-markdown h2,
+  .chat-markdown h3 {
+    color: var(--on-dark);
+  }
+
+  .chat-markdown pre {
+    border-color: var(--surface-dark-elevated);
+    background: var(--surface-dark-soft);
+    box-shadow: none;
+  }
+
+  .chat-markdown :not(pre) > code {
+    color: #e7a18c;
+    background: rgb(var(--primary-rgb) / 16%);
+  }
+
+  .chat-token-usage {
+    color: var(--on-dark-soft);
   }
 
   .chat-status {

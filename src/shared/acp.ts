@@ -75,6 +75,8 @@ export interface AgentState {
   detail?: string
   /** 当前 turn 的开始时间戳，用于跨页面恢复执行时长。 */
   workStartedAt?: number
+  /** 最近一次完成 turn 的执行秒数（任务结束后仍可展示摘要）。 */
+  lastTurnSeconds?: number
   modes?: AgentMode[]
   currentModeId?: string
   model?: AgentModel
@@ -104,6 +106,16 @@ export interface ChatMessage {
   kind?: 'text' | 'thinking' | 'tool'
   /** 工具调用时显示的工具名。 */
   title?: string
+  /** 工具调用状态（kind 'tool' 专用）。 */
+  toolStatus?: 'pending' | 'in_progress' | 'completed' | 'failed'
+  /** ACP 工具类别（read/edit/execute/fetch…），供 UI 选择展示方式。 */
+  toolKind?: string
+  /** 工具命令退出码（来自 ACP terminal_exit）。 */
+  exitCode?: number
+  /** 工具已执行秒数（来自 Claude 适配器心跳）。 */
+  elapsedSeconds?: number
+  /** 工具输出超长被截断。 */
+  outputTruncated?: boolean
   /** 与消息一同发送或生成的本地附件。 */
   attachments?: ChatAttachment[]
 }

@@ -1,11 +1,11 @@
 import { useState, type ReactElement } from 'react'
 import { Bubble, ThoughtChain } from '@ant-design/x'
-import { BulbOutlined, CheckOutlined, CopyOutlined, FileMarkdownOutlined, FileOutlined, FilePdfOutlined, ToolOutlined } from '@ant-design/icons'
+import { BulbOutlined, CheckCircleOutlined, CheckOutlined, CloseCircleOutlined, CopyOutlined, FileMarkdownOutlined, FileOutlined, FilePdfOutlined, LoadingOutlined, ToolOutlined } from '@ant-design/icons'
 import { Image } from 'antd'
 import type { ChatAttachment, ChatMessage } from '@/models'
 import { MarkdownMessage } from './MarkdownMessage'
 
-const MAX_WIDTH = '82%'
+const MAX_WIDTH = '76%'
 
 /** 思考 / 工具调用的灰色次要文本色。 */
 const SECONDARY = 'rgba(108,106,100,0.95)'
@@ -62,7 +62,7 @@ function UserBubble({ message }: { message: ChatMessage }): ReactElement {
 
   return (
     <div
-      className="flex flex-col items-end gap-1"
+      className="chat-user-message flex flex-col items-end gap-1"
       style={{ maxWidth: MAX_WIDTH, marginLeft: 'auto' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -71,7 +71,7 @@ function UserBubble({ message }: { message: ChatMessage }): ReactElement {
         placement="end"
         content={<MessageContent message={message} inverse />}
         shape="corner"
-        styles={{ content: { background: 'var(--primary)', color: 'var(--on-primary)' } }}
+        styles={{ content: { background: 'var(--chat-user-bubble)', color: 'var(--on-primary)' } }}
       />
       <button
         type="button"
@@ -108,7 +108,7 @@ export function ChatMessageItem({ message, streaming = false }: { message: ChatM
   if (message.kind === 'thinking') {
     return (
       <ThoughtChain
-        className="mr-auto max-w-[82%]"
+        className="chat-activity-message chat-thinking-message mr-auto max-w-[82%]"
         defaultExpandedKeys={[]}
         line={false}
         items={[
@@ -130,21 +130,56 @@ export function ChatMessageItem({ message, streaming = false }: { message: ChatM
   }
 
   if (message.kind === 'tool') {
+    const status = message.toolStatus
+    const running = status === 'pending' || status === 'in_progress'
+    const failed = status === 'failed'
+    const icon = running
+      ? <LoadingOutlined spin />
+      : failed
+        ? <CloseCircleOutlined />
+        : status === 'completed'
+          ? <CheckCircleOutlined />
+          : <ToolOutlined />
+    const toolTitle = message.title ? `：${message.title}` : ''
+    const title = running
+      ? `正在使用工具${toolTitle}`
+      : failed
+        ? `工具调用失败${toolTitle}`
+        : status === 'completed'
+          ? `已使用工具${toolTitle}`
+          : `使用工具${toolTitle}`
+    // 后缀元信息：耗时 / 退出码（非零才提示）
+    const metaParts: string[] = []
+    if (typeof message.elapsedSeconds === 'number') metaParts.push(`${message.elapsedSeconds}s`)
+    if (message.exitCode != null && message.exitCode !== 0) metaParts.push(`退出码 ${message.exitCode}`)
+    const accent = failed ? 'var(--error)' : SECONDARY
     return (
       <ThoughtChain
-        className="mr-auto max-w-[82%]"
+        className="chat-activity-message chat-tool-message mr-auto max-w-[82%]"
+        defaultExpandedKeys={[]}
         line={false}
         items={[
           {
             key: message.id,
-            icon: <ToolOutlined />,
-            title: message.title ? `正在使用工具：${message.title}` : '工具',
-            content: <MarkdownMessage content={message.content} />
+            icon,
+            title: (
+              <span>
+                {title}
+                {metaParts.length > 0 && <span style={{ color: 'var(--muted-soft)' }}> · {metaParts.join(' · ')}</span>}
+              </span>
+            ),
+            collapsible: true,
+            content: message.content ? (
+              <div className="chat-tool-output">
+                {message.outputTruncated && <div className="chat-tool-truncated">输出过长，仅显示末尾。</div>}
+                <MarkdownMessage content={message.content} />
+              </div>
+            ) : undefined
           }
         ]}
         styles={{
-          itemIcon: { color: SECONDARY },
-          itemHeader: { color: SECONDARY },
+          itemIcon: { color: accent },
+          itemHeader: { color: accent },
           itemContent: { color: SECONDARY }
         }}
       />
@@ -161,6 +196,7 @@ export function ChatMessageItem({ message, streaming = false }: { message: ChatM
 
   return (
     <Bubble
+      className="chat-assistant-message"
       placement="start"
       content={<MessageContent message={message} streaming={streaming} />}
       variant="borderless"

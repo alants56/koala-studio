@@ -3,15 +3,20 @@ import { promises as fs } from 'node:fs'
 import { dirname } from 'node:path'
 import type { Automation, AutomationRun, AutomationListInput, AutomationListResult, AutomationRunLog, AutomationRunOutput, CreateAutomationInput, UpdateAutomationInput } from './automations'
 
-const STARTER_AUTOMATIONS: Automation[] = [
+/** 旧版本首启时写入的演示数据（含伪造运行记录）；读取时若发现与种子完全一致的记录会自动清理。 */
+const LEGACY_SEED_AUTOMATIONS: Automation[] = [
   { id: 'daily-brief', name: '每日项目简报', description: '汇总活跃项目的会话进度和待办，生成今天的工作摘要。', state: 'active', trigger: '每天 09:00', triggerDetail: '按计划触发', action: '生成并发送摘要', actionDetail: '通知中心', scope: '全部活跃项目', runs: [{ id: 'run-1', status: 'success', startedAt: '今天 09:00', duration: '14 秒', summary: '已汇总 3 个活跃项目', detail: '摘要已发送到通知中心。' }] },
   { id: 'review-failure', name: '失败运行提醒', description: '任何自动化任务失败时，立即创建一条需要处理的待办。', state: 'active', trigger: '运行失败时', triggerDetail: '事件触发', action: '创建高优先级待办', actionDetail: '工作台', scope: '全部自动化', runs: [{ id: 'run-2', status: 'success', startedAt: '昨天 18:42', duration: '1 秒', summary: '已处理 1 次失败事件', detail: '待办已关联到对应运行记录。' }] },
   { id: 'idle-project', name: '闲置项目跟进', description: '项目连续 7 天没有新消息时，提示确认下一步。', state: 'attention', trigger: '每天 17:30', triggerDetail: '按计划触发', action: '发送跟进提醒', actionDetail: '通知中心', scope: '全部项目', runs: [{ id: 'run-3', status: 'failed', startedAt: '昨天 17:30', duration: '3 秒', summary: '无法读取 1 个项目的会话状态', detail: '请检查该项目的 ACP 连接后重试。' }] },
   { id: 'new-project', name: '新项目初始化', description: '创建项目后自动准备协作上下文和首个待办。', state: 'paused', trigger: '创建项目时', triggerDetail: '事件触发', action: '创建协作清单', actionDetail: '项目工作台', scope: '新建项目', runs: [] }
 ]
 
-function nowLabel(): string {
-  return `今天 ${new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date())}`
+const LEGACY_SEED_JSON = new Map(LEGACY_SEED_AUTOMATIONS.map((seed) => [seed.id, JSON.stringify(seed)]))
+
+/** 只删除与种子内容完全一致的演示记录；用户编辑过的（内容不同）会保留。 */
+function removeLegacySeeds(items: Automation[]): Automation[] {
+  const next = items.filter((item) => LEGACY_SEED_JSON.get(item.id) !== JSON.stringify(item))
+  return next.length === items.length ? items : next
 }
 
 function inferTriggerDetail(trigger: string): string {
@@ -38,11 +43,15 @@ export class AutomationStore {
       if (this.cache && this.cacheMtimeMs === stats.mtimeMs) return this.cache
       const raw = await fs.readFile(this.file, 'utf8')
       const parsed: unknown = JSON.parse(raw)
-      this.cache = Array.isArray(parsed) ? parsed as Automation[] : structuredClone(STARTER_AUTOMATIONS)
+      const items = Array.isArray(parsed) ? parsed as Automation[] : []
+      const cleaned = removeLegacySeeds(items)
+      this.cache = cleaned
       this.cacheMtimeMs = stats.mtimeMs
+      if (cleaned !== items) await this.writeAll(cleaned)
     } catch {
-      this.cache = structuredClone(STARTER_AUTOMATIONS)
-      await this.writeAll(this.cache)
+      // 文件缺失或损坏时返回空列表，不覆盖磁盘上的既有内容。
+      this.cache ??= []
+      this.cacheMtimeMs = undefined
     }
     return this.cache
   }
@@ -133,21 +142,56 @@ export class AutomationStore {
     return this.replace({ ...automation, state: enabled ? 'active' : 'paused' })
   }
 
+  /** 手动测试：只校验执行计划、动作配置和项目文件夹，不启动 Agent、不对外发送通知或写入项目数据。 */
   async runTest(id: string): Promise<Automation> {
     const automation = await this.get(id)
-    const at = new Date().toISOString()
-    const content = `自动化：${automation.name}\n触发条件：${automation.trigger}\n执行动作：${automation.action}\n作用范围：${automation.scope}\n\n测试通过。本次测试不会对外发送通知或写入项目数据。`
-    const run = {
-      id: randomUUID(), status: 'success' as const, startedAt: nowLabel(), duration: '2 秒', summary: `测试运行完成：${automation.action}`,
-      detail: '触发条件、执行动作和作用范围均已通过测试。', output: { title: '测试运行结果', content, format: 'text' as const },
-      logs: [
-        { at, level: 'info' as const, message: '开始测试自动化配置' },
-        { at, level: 'info' as const, message: `检查触发条件：${automation.trigger}` },
-        { at, level: 'info' as const, message: `检查执行动作：${automation.action}` },
-        { at, level: 'success' as const, message: '测试完成，未对外发送通知或写入项目数据' }
-      ]
+    const startedAt = new Date()
+    const logs: AutomationRunLog[] = [{ at: startedAt.toISOString(), level: 'info', message: `开始测试自动化「${automation.name}」` }]
+    let failureMessage: string | undefined
+    const check = (ok: boolean, okMessage: string, failMessage: string): void => {
+      logs.push({ at: new Date().toISOString(), level: ok ? 'info' : 'error', message: ok ? okMessage : failMessage })
+      if (!ok && failureMessage === undefined) failureMessage = failMessage
     }
-    return this.replace({ ...automation, runs: [run, ...automation.runs] })
+
+    if (automation.trigger.trim() === '指定时间') {
+      check(Boolean(automation.schedule), `触发条件：${automation.trigger}`, '指定时间任务缺少执行计划，请编辑并选择执行时间。')
+      if (automation.schedule) {
+        check(!Number.isNaN(new Date(automation.schedule.nextRunAt).getTime()), `计划执行时间：${automation.schedule.nextRunAt}`, '计划执行时间无效。')
+        check(Boolean(automation.actionType), `执行动作：${automation.action}`, '定时任务缺少可执行的动作类型。')
+        if (requiresProjectPath(automation.actionType)) {
+          check(Boolean(automation.projectPath?.trim()), '已配置项目文件夹。', '定时任务缺少项目文件夹。')
+        }
+        if (requiresInstruction(automation.actionType)) {
+          check(Boolean(automation.instruction?.trim()), '已配置自定义指令。', '定时任务缺少自定义指令。')
+        }
+      }
+    } else {
+      logs.push({ at: new Date().toISOString(), level: 'info', message: `触发条件「${automation.trigger}」未配置执行计划，本次仅校验基础字段。` })
+    }
+    if (automation.projectPath?.trim()) {
+      let directoryExists = false
+      try {
+        directoryExists = (await fs.stat(automation.projectPath)).isDirectory()
+      } catch {
+        directoryExists = false
+      }
+      check(directoryExists, `项目文件夹存在：${automation.projectPath}`, `项目文件夹不存在或不可访问：${automation.projectPath}`)
+    }
+
+    const success = failureMessage === undefined
+    logs.push({ at: new Date().toISOString(), level: success ? 'success' : 'error', message: success ? '测试完成，未对外发送通知或写入项目数据。' : `测试未通过：${failureMessage}` })
+    const run: AutomationRun = {
+      id: randomUUID(),
+      status: success ? 'success' : 'failed',
+      startedAt: nowLabelFor(startedAt),
+      duration: durationLabel(Date.now() - startedAt.getTime()),
+      summary: success ? `配置校验通过：${automation.action}` : `测试未通过：${failureMessage}`,
+      detail: success ? '触发条件、执行动作和项目文件夹均已通过校验。本次测试不对外发送通知或写入项目数据。' : failureMessage,
+      logs
+    }
+    const updated: Automation = { ...automation, runs: [run, ...automation.runs] }
+    if (!success && automation.state === 'active') updated.state = 'attention'
+    return this.replace(updated)
   }
 
   async recordExecution(id: string, input: {

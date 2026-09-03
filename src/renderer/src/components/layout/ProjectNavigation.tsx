@@ -12,7 +12,6 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import type { AcpSessionInfo, AgentState, Project } from '@/models'
 import { useAgentSelection } from '@/state/AgentSelectionContext'
 import { useProjects } from '@/state/ProjectsContext'
-import { WORKSPACE_PATH } from '@/utils/constants'
 import { subscribeSessionActivity } from '@/utils/session-events'
 
 const DEFAULT_VISIBLE_COUNT = 5
@@ -28,7 +27,7 @@ interface ProjectNavigationProps {
 
 /** 侧栏项目树：沿用项目页排序，并为每个可见项目展示最近的会话。 */
 export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactElement | null {
-  const { projects, loading } = useProjects()
+  const { projects, loading, defaultWorkspace } = useProjects()
   const { revision: agentRevision } = useAgentSelection()
   const location = useLocation()
   const navigate = useNavigate()
@@ -74,7 +73,7 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
     const requestVersion = (requestVersionsRef.current.get(project.id) ?? 0) + 1
     requestVersionsRef.current.set(project.id, requestVersion)
     try {
-      let sessions = await window.acp.listSessions(project.path ?? WORKSPACE_PATH)
+      let sessions = await window.acp.listSessions(project.path ?? defaultWorkspace)
       if (requestVersionsRef.current.get(project.id) !== requestVersion) return
 
       const pending = pendingSessionsRef.current.get(project.id)
@@ -100,7 +99,7 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
           : { status: 'error', sessions: [] }
       }))
     }
-  }, [updateSessionLists])
+  }, [defaultWorkspace, updateSessionLists])
 
   useEffect(() => {
     const agentChanged = agentRevisionRef.current !== agentRevision
@@ -180,9 +179,9 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
   useEffect(() => {
     return subscribeSessionActivity((activity) => {
       const activeProject = projects.find((project) => project.id === activeProjectId)
-      const project = activeProject && (activeProject.path ?? WORKSPACE_PATH) === activity.cwd
+      const project = activeProject && (activeProject.path ?? defaultWorkspace) === activity.cwd
         ? activeProject
-        : projects.find((item) => (item.path ?? WORKSPACE_PATH) === activity.cwd)
+        : projects.find((item) => (item.path ?? defaultWorkspace) === activity.cwd)
       if (!project) return
 
       // 发送开始即显示并选中新会话；同时让更早的列表请求失效，避免旧结果覆盖。
@@ -206,7 +205,7 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
       })
       setLiveSelection({ projectId: project.id, sessionId: activity.sessionId })
     })
-  }, [activeProjectId, projects, updateSessionLists])
+  }, [activeProjectId, defaultWorkspace, projects, updateSessionLists])
 
   useEffect(() => {
     setLiveSelection(undefined)
@@ -282,7 +281,6 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
                   <>
                     {sessions.map((session) => {
                       const streaming = streamingSessionIds.has(session.sessionId)
-                      const queueDepth = session.queueDepth ?? 0
                       const sessionTitle = session.title || '未命名会话'
                       return (
                         <button
@@ -290,11 +288,10 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
                           className={`koala-session-row${projectRouteActive && effectiveActiveSessionId === session.sessionId ? ' is-active' : ''}${streaming ? ' is-streaming' : ''}`}
                           key={session.sessionId}
                           onClick={() => void navigate(`/projects/${encodeURIComponent(project.id)}?session=${encodeURIComponent(session.sessionId)}`)}
-                          title={streaming ? `${sessionTitle}（正在生成）` : queueDepth > 0 ? `${sessionTitle}（${queueDepth} 条排队消息）` : sessionTitle}
+                          title={streaming ? `${sessionTitle}（正在生成）` : sessionTitle}
                         >
                           {streaming ? <LoadingOutlined spin /> : <MessageOutlined />}
                           <span>{sessionTitle}</span>
-                          {queueDepth > 0 && <span className="koala-session-queue-count">{queueDepth}</span>}
                         </button>
                       )
                     })}

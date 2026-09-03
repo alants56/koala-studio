@@ -5,7 +5,6 @@ import { ChatView } from '@/components/chat/ChatView'
 import { useProjects } from '@/state/ProjectsContext'
 import { AgentProvider } from '@/state/AgentContext'
 import { useAgentSelection } from '@/state/AgentSelectionContext'
-import { WORKSPACE_PATH } from '@/utils/constants'
 
 /** 项目对话页：进入后自动连接 ACP，并通过 ACP 管理 Claude Code 会话记录。 */
 export function ProjectChatPage(): ReactElement {
@@ -13,7 +12,7 @@ export function ProjectChatPage(): ReactElement {
   const [searchParams] = useSearchParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const { getProject, loading } = useProjects()
+  const { getProject, loading, defaultWorkspace } = useProjects()
   const { revision: agentRevision } = useAgentSelection()
   const project = projectId ? getProject(projectId) : undefined
   const routeSessionId = searchParams.get('session') || undefined
@@ -53,7 +52,7 @@ export function ProjectChatPage(): ReactElement {
   const initialSessionId = sessionTarget.projectId === project.id ? sessionTarget.sessionId : undefined
 
   return (
-    <AgentProvider key={`${project.id}:${initialSessionId ?? 'new'}:${agentRevision}`} cwd={project.path ?? WORKSPACE_PATH} initialSessionId={initialSessionId}>
+    <AgentProvider key={`${project.id}:${initialSessionId ?? 'new'}:${agentRevision}`} cwd={project.path ?? defaultWorkspace} initialSessionId={initialSessionId}>
       <ChatView project={project} />
     </AgentProvider>
   )

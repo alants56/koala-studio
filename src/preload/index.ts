@@ -5,6 +5,7 @@ import type { ClaudeApi } from '../shared/claude'
 import type { AutomationsApi } from '../shared/automations'
 import type { TodosApi } from '../shared/todos'
 import type { AttachmentsApi } from '../shared/attachments'
+import type { WorkspaceApi } from '../shared/workspace'
 
 const acp: AcpApi = {
   getState: () => ipcRenderer.invoke('acp:get-state'),
@@ -78,9 +79,14 @@ const attachments: AttachmentsApi = {
   open: (storageKey) => ipcRenderer.invoke('attachments:open', storageKey)
 }
 
+const workspace: WorkspaceApi = {
+  getDefaultWorkspace: () => ipcRenderer.invoke('workspace:get-default')
+}
+
 contextBridge.exposeInMainWorld('acp', acp)
 contextBridge.exposeInMainWorld('projects', projects)
 contextBridge.exposeInMainWorld('claude', claude)
 contextBridge.exposeInMainWorld('automations', automations)
 contextBridge.exposeInMainWorld('todos', todos)
 contextBridge.exposeInMainWorld('attachments', attachments)
+contextBridge.exposeInMainWorld('workspace', workspace)

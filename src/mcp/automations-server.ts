@@ -65,7 +65,7 @@ server.registerTool('koala_set_automation_enabled', {
 }, async ({ id, enabled }) => execute(() => store.setEnabled(id, enabled)))
 
 server.registerTool('koala_test_automation', {
-  title: '测试运行 Koala 自动化', description: '手动测试一条自动化，并记录一次不对外发送通知或写入项目数据的成功运行。', inputSchema: { id: z.string().min(1) },
+  title: '测试运行 Koala 自动化', description: '手动测试一条自动化：校验执行计划、动作配置和项目文件夹是否存在，并记录测试运行结果（可能为失败）。不会对外发送通知或写入项目数据。', inputSchema: { id: z.string().min(1) },
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
 }, async ({ id }) => execute(() => store.runTest(id)))
 

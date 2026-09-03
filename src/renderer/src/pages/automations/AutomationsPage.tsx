@@ -55,7 +55,10 @@ export function AutomationsPage(): ReactElement {
     void window.automations.setEnabled(id, enabled).then((automation) => { replaceAutomation(automation); void message.success(enabled ? '自动化已启用' : '自动化已暂停') }).catch((error: unknown) => void message.error(errorText(error, '无法更新自动化状态。')))
   }
   const run = (automation: Automation): void => {
-    void window.automations.runTest(automation.id).then((updated) => { replaceAutomation(updated); void message.success('测试运行已完成') }).catch(() => void message.error('测试运行失败。'))
+    void window.automations.runTest(automation.id).then((updated) => {
+      replaceAutomation(updated)
+      void (updated.runs[0]?.status === 'failed' ? message.warning('测试未通过，请查看运行结果') : message.success('测试运行已完成'))
+    }).catch(() => void message.error('测试运行失败。'))
   }
   const openRuns = (automation: Automation): void => {
     setSelectedId(automation.id)

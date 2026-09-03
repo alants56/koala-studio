@@ -94,6 +94,11 @@ function parseResourceAgent(value: string): AgentAdapterId {
   return value
 }
 
+/** 项目未指定文件夹时的默认工作区：开发模式用应用所在目录，打包后用用户主目录。 */
+function getDefaultWorkspace(): string {
+  return app.isPackaged ? app.getPath('home') : app.getAppPath()
+}
+
 /** 打开系统目录选择对话框：支持选择已有文件夹，也支持新建文件夹（macOS createDirectory）。 */
 async function pickDirectory(): Promise<string | null> {
   const defaultPath = await getLastDirectoryPath()
@@ -159,6 +164,7 @@ app.whenReady().then(() => {
   ipcMain.handle('projects:delete', (_event, id: string) => deleteProject(id))
   ipcMain.handle('projects:reorder', (_event, orderedIds: string[]) => reorderProjects(orderedIds))
   ipcMain.handle('projects:pick-directory', () => pickDirectory())
+  ipcMain.handle('workspace:get-default', () => getDefaultWorkspace())
 
   ipcMain.handle('attachments:import', (_event, files: AttachmentImportInput[]) => importAttachments(files))
   ipcMain.handle('attachments:open', async (_event, storageKey: string) => {

@@ -197,17 +197,6 @@ const PERMISSION_KIND_LABELS: Record<AgentPermissionOption['kind'], string> = {
   reject_always: '始终拒绝'
 }
 
-/** 把毫秒格式化为 mm:ss / hh:mm:ss。 */
-function formatElapsed(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-  const mm = String(minutes).padStart(2, '0')
-  const ss = String(seconds).padStart(2, '0')
-  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`
-}
-
 /** 对话输入区：基于 Ant Design X 的 Sender，Enter 发送、加载时显示停止按钮。 */
 export function ChatComposer(): ReactElement {
   const { state, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission } = useAgent()
@@ -224,7 +213,6 @@ export function ChatComposer(): ReactElement {
   const [pendingQueueActionId, setPendingQueueActionId] = useState<string>()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const attachmentItemsRef = useRef(attachmentItems)
-  const [workElapsed, setWorkElapsed] = useState(0)
 
   const ready = state.status === 'ready'
   const loading = state.status === 'working'
@@ -259,19 +247,6 @@ export function ChatComposer(): ReactElement {
   useEffect(() => {
     setActiveCommandIndex(0)
   }, [commandQuery, commands])
-
-  // 计时起点来自主进程，页面卸载再返回后仍从原任务开始时间继续计算。
-  useEffect(() => {
-    if (!loading) {
-      setWorkElapsed(0)
-      return
-    }
-    const startedAt = state.workStartedAt ?? Date.now()
-    const updateElapsed = (): void => setWorkElapsed(Math.max(0, Date.now() - startedAt))
-    updateElapsed()
-    const timer = window.setInterval(updateElapsed, 1000)
-    return () => window.clearInterval(timer)
-  }, [loading, state.workStartedAt])
 
   useEffect(() => {
     attachmentItemsRef.current = attachmentItems
@@ -618,13 +593,6 @@ export function ChatComposer(): ReactElement {
         multiple
         onChange={(event) => addFiles(Array.from(event.target.files ?? []))}
       />
-      {loading && (
-        <div className="chat-executing-bar" role="status" aria-live="polite">
-          <LoadingOutlined spin className="chat-executing-icon" aria-hidden="true" />
-          <span className="chat-executing-label">正在执行任务</span>
-          <span className="chat-executing-elapsed">已耗时 {formatElapsed(workElapsed)}</span>
-        </div>
-      )}
       {(state.queuedPrompts?.length ?? 0) > 0 && (
         <div className="chat-queue-list" aria-label="待处理消息">
           {state.queuedPrompts?.map((item) => {

@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom'
 import type { AcpSessionInfo } from '@shared/acp'
 import type { TodoColumnId, TodoItem } from '@shared/todos'
 import { useProjects } from '@/state/ProjectsContext'
-import { WORKSPACE_PATH } from '@/utils/constants'
 
 interface BoardColumn {
   id: TodoColumnId
@@ -90,7 +89,7 @@ function createColumnId(): string {
 /** 工作台：支持排序、跨列流转和项目关联的待办看板。 */
 export function WorkbenchPage(): ReactElement {
   const navigate = useNavigate()
-  const { projects } = useProjects()
+  const { projects, defaultWorkspace } = useProjects()
   const { modal } = App.useApp()
   const hasLoadedRef = useRef(false)
   const cancelColumnEditRef = useRef(false)
@@ -147,11 +146,11 @@ export function WorkbenchPage(): ReactElement {
     if (!project) { setSessionLoadState('idle'); return }
     let cancelled = false
     setSessionLoadState('loading')
-    void window.acp.listSessions(project.path ?? WORKSPACE_PATH)
+    void window.acp.listSessions(project.path ?? defaultWorkspace)
       .then((sessions) => { if (!cancelled) { setTodoSessions(sessions); setSessionLoadState('idle') } })
       .catch(() => { if (!cancelled) setSessionLoadState('error') })
     return () => { cancelled = true }
-  }, [projects, todoProjectId])
+  }, [defaultWorkspace, projects, todoProjectId])
 
   useEffect(() => {
     const project = projects.find((item) => item.id === editProjectId)
@@ -159,11 +158,11 @@ export function WorkbenchPage(): ReactElement {
     if (!project) { setEditSessionLoadState('idle'); return }
     let cancelled = false
     setEditSessionLoadState('loading')
-    void window.acp.listSessions(project.path ?? WORKSPACE_PATH)
+    void window.acp.listSessions(project.path ?? defaultWorkspace)
       .then((sessions) => { if (!cancelled) { setEditSessions(sessions); setEditSessionLoadState('idle') } })
       .catch(() => { if (!cancelled) setEditSessionLoadState('error') })
     return () => { cancelled = true }
-  }, [editProjectId, projects])
+  }, [defaultWorkspace, editProjectId, projects])
 
   const board = useMemo(() => boardFromTodos(todos, columns), [columns, todos])
   const completed = todos.filter((todo) => todo.done).length

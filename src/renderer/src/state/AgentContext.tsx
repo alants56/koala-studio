@@ -173,6 +173,12 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
     const removeState = acp.onState(setState)
     const removeMessage = acp.onMessage((incoming) => {
       setMessages((current) => {
+        // 工具消息由主进程发全量快照（状态/输出随时变化），按 id 整体替换而不是拼接
+        if (incoming.kind === 'tool') {
+          const existing = current.findIndex((item) => item.id === incoming.id)
+          if (existing === -1) return [...current, incoming]
+          return current.map((item, index) => (index === existing ? incoming : item))
+        }
         // system 消息直接追加（无 id 合并需求）
         if (incoming.role === 'system') return [...current, incoming]
         // user / assistant 流式消息按 id 合并内容

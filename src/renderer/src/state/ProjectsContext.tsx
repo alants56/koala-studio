@@ -5,6 +5,8 @@ import { projectsApi } from '@/services/projects'
 interface ProjectsContextValue {
   projects: Project[]
   loading: boolean
+  /** 默认工作区目录（主进程注入）：项目未指定文件夹时用作 ACP 会话 cwd。 */
+  defaultWorkspace: string
   refresh: () => Promise<void>
   createProject: (input: CreateProjectInput) => Promise<Project>
   updateProject: (id: string, input: UpdateProjectInput) => Promise<Project>
@@ -20,14 +22,21 @@ const ProjectsContext = createContext<ProjectsContextValue | null>(null)
 
 export function ProjectsProvider({ children }: { children: ReactNode }): ReactElement {
   const [projects, setProjects] = useState<Project[]>([])
+  const [defaultWorkspace, setDefaultWorkspace] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     void (async () => {
       try {
-        const list = await projectsApi.list()
-        if (!cancelled) setProjects(list)
+        const [list, workspace] = await Promise.all([
+          projectsApi.list(),
+          window.workspace.getDefaultWorkspace().catch(() => '')
+        ])
+        if (!cancelled) {
+          setProjects(list)
+          setDefaultWorkspace(workspace)
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -81,8 +90,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }): ReactEl
   )
 
   const value = useMemo(
-    () => ({ projects, loading, refresh, createProject, updateProject, deleteProject, reorderProjects, getProject, searchProjects }),
-    [projects, loading, refresh, createProject, updateProject, deleteProject, reorderProjects, getProject, searchProjects]
+    () => ({ projects, loading, defaultWorkspace, refresh, createProject, updateProject, deleteProject, reorderProjects, getProject, searchProjects }),
+    [projects, loading, defaultWorkspace, refresh, createProject, updateProject, deleteProject, reorderProjects, getProject, searchProjects]
   )
 
   return <ProjectsContext.Provider value={value}>{children}</ProjectsContext.Provider>

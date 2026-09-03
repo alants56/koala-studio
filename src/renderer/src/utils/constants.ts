@@ -1,8 +1,5 @@
 import type { AgentStatus, ChatMessage, StatusMeta } from '@/models'
 
-/** ACP 会话工作目录。后续可由主进程注入，先作为常量放在这里。 */
-export const WORKSPACE_PATH = '/Users/liuao/work/Agent/koala-studio'
-
 export const INITIAL_MESSAGES: ChatMessage[] = [
   {
     id: 'welcome',

@@ -30,6 +30,31 @@ import type { QueuedPromptStore, StoredQueuedPrompt } from './queued-prompt-stor
 
 const DIRECT_IMAGE_MIME_TYPES = new Set(['image/gif', 'image/jpeg', 'image/png', 'image/webp'])
 const MAX_EMBEDDED_TEXT_BYTES = 2 * 1024 * 1024
+/** 工具输出缓冲上限（超出保留尾部，避免超长输出拖垮渲染）。 */
+const MAX_TOOL_OUTPUT_CHARS = 50_000
+
+/** 工具调用的累积状态：tool_call / tool_call_update / terminal _meta 汇聚到一个条目。 */
+interface ToolCallEntry {
+  toolCallId: string
+  title: string
+  kind: string
+  status: 'pending' | 'in_progress' | 'completed' | 'failed'
+  /** content 块扁平化后的 markdown（tool_call_update 携带 content 时整体替换）。 */
+  contentText: string
+  /** terminal_output 累积的终端输出缓冲。 */
+  terminal: string
+  exitCode?: number
+  elapsedSeconds?: number
+  truncated: boolean
+  createdAt: string
+}
+
+/** 适配器在 tool_call / tool_call_update._meta 上附加的扩展数据。 */
+interface ToolCallMeta {
+  terminal_output?: { terminal_id?: string; data?: string }
+  terminal_exit?: { terminal_id?: string; exit_code?: number | null }
+  claudeCode?: { toolResponse?: { elapsedTimeSeconds?: number } }
+}
 
 interface AcpBridgeOptions {
   initialAgentId?: AgentAdapterId
@@ -71,6 +96,8 @@ export class AcpBridge extends EventEmitter {
   private steeringSupported = false
   /** 本地 FIFO 队列：Agent 忙碌时的新消息先入队，当前 turn 结束后逐条处理。 */
   private promptQueue: StoredQueuedPrompt[] = []
+  /** 当前会话的工具调用累积状态（toolCallId → 条目），切换会话时清空。 */
+  private toolCalls = new Map<string, ToolCallEntry>()
 
   constructor(private readonly options: AcpBridgeOptions = {}) {
     super()
@@ -195,7 +222,12 @@ export class AcpBridge extends EventEmitter {
       const connection = this.connection
       const initializeResponse = await connection.agent.request(acp.methods.agent.initialize, {
         protocolVersion: acp.PROTOCOL_VERSION,
-        clientCapabilities: { session: { configOptions: { boolean: {} } } }
+        // _meta.terminal_output：声明后两个适配器的 bash 输出统一走 _meta.terminal_output，
+        // 并附带 terminal_exit 退出码（SDK 的 ClientCapabilities 类型尚未收录 _meta）。
+        clientCapabilities: {
+          session: { configOptions: { boolean: {} } },
+          _meta: { terminal_output: true }
+        } as acp.ClientCapabilities
       })
       // 读取 ACP 引导扩展能力：claude-agent-acp 会在 _meta.steering.supported 广告。
       const steeringMeta = (initializeResponse as unknown as { _meta?: { steering?: { supported?: boolean } } })?._meta?.steering
@@ -398,6 +430,7 @@ export class AcpBridge extends EventEmitter {
       ...this.state,
       status: 'working',
       workStartedAt: Date.now(),
+      lastTurnSeconds: undefined,
       queueDepth: this.promptQueue.length,
       queuedPrompts: this.queueState(),
       detail: `${agentName} 正在处理…`
@@ -426,8 +459,16 @@ export class AcpBridge extends EventEmitter {
     }
   }
 
+  /** 解析当前 turn 的执行秒数：无活跃 turn 时沿用上次结果，避免停止/切换时把摘要清掉。 */
+  private computeTurnSeconds(): number | undefined {
+    if (this.state.workStartedAt == null) return this.state.lastTurnSeconds
+    return Math.max(0, Math.round((Date.now() - this.state.workStartedAt) / 1000))
+  }
+
   /** 当前 turn 结束后：若还有排队消息则继续下一轮，否则恢复就绪。 */
   private async finishTurn(): Promise<void> {
+    // 中断的 turn 可能没等到适配器的终态更新，先兜底收尾工具调用展示。
+    this.finalizeToolCalls()
     const next = this.promptQueue.shift()
     if (next) {
       try {
@@ -449,6 +490,7 @@ export class AcpBridge extends EventEmitter {
       ...this.state,
       status: 'ready',
       workStartedAt: undefined,
+      lastTurnSeconds: this.computeTurnSeconds(),
       queueDepth: 0,
       queuedPrompts: [],
       detail: `${agentName} 已就绪`
@@ -535,6 +577,8 @@ export class AcpBridge extends EventEmitter {
   private async prepareForSessionChange(): Promise<void> {
     const previousSessionId = this.activeSessionId
     await this.preserveAndDetachQueue('切换会话，排队消息已保留，返回后会继续处理。')
+    // 工具调用状态属于上一个会话，切换后按新会话重新累积。
+    this.toolCalls.clear()
     if (this.state.status === 'working' && this.connection && previousSessionId) {
       this.turnGeneration += 1
       this.activePromptId = undefined
@@ -542,7 +586,7 @@ export class AcpBridge extends EventEmitter {
       await this.connection.agent.notify(acp.methods.agent.session.cancel, { sessionId: previousSessionId })
     }
     const agentName = this.currentAgent === 'pi' ? 'Pi' : 'Claude'
-    this.setState({ ...this.state, status: 'ready', workStartedAt: undefined, queueDepth: 0, queuedPrompts: [], detail: `${agentName} 已就绪` })
+    this.setState({ ...this.state, status: 'ready', workStartedAt: undefined, lastTurnSeconds: undefined, queueDepth: 0, queuedPrompts: [], detail: `${agentName} 已就绪` })
   }
 
   /** 主动停止时清空当前会话的排队消息，并同步删除持久化记录。 */
@@ -608,7 +652,7 @@ export class AcpBridge extends EventEmitter {
       }
       await this.connection.agent.notify(acp.methods.agent.session.cancel, { sessionId: this.activeSessionId })
       if (!stoppingPromptId || this.activePromptId !== stoppingPromptId) {
-        this.setState({ ...this.state, status: 'ready', workStartedAt: undefined, queueDepth: 0, queuedPrompts: [], detail: '已停止生成' })
+        this.setState({ ...this.state, status: 'ready', workStartedAt: undefined, lastTurnSeconds: this.computeTurnSeconds(), queueDepth: 0, queuedPrompts: [], detail: '已停止生成' })
       }
     }
   }
@@ -753,6 +797,7 @@ export class AcpBridge extends EventEmitter {
     this.replayingSession = false
     this.suppressPiStartupInfo = false
     this.promptQueue = []
+    this.toolCalls.clear()
     this.steeringSupported = false
     this.connection?.close()
     this.agentProcess?.kill()
@@ -787,14 +832,32 @@ export class AcpBridge extends EventEmitter {
       this.suppressPiStartupInfo = false
       return
     }
-    if (update.sessionUpdate === 'user_message_chunk' && update.content.type === 'text') {
-      this.emit('message', {
-        id: update.messageId ?? crypto.randomUUID(),
-        role: 'user',
-        kind: 'text',
-        content: update.content.text,
-        createdAt: new Date().toISOString()
-      } satisfies ChatMessage)
+    if (update.sessionUpdate === 'user_message_chunk') {
+      if (update.content.type === 'text') {
+        this.emit('message', {
+          id: update.messageId ?? crypto.randomUUID(),
+          role: 'user',
+          kind: 'text',
+          content: update.content.text,
+          createdAt: new Date().toISOString()
+        } satisfies ChatMessage)
+      } else if (update.content.type === 'image') {
+        // 回放历史会话时，用户消息中的图片会以 image 块送达；存到本地附件后
+        // 以同一 messageId 发消息，由渲染层与同 id 的文本合并成一条用户气泡。
+        const messageId = update.messageId ?? crypto.randomUUID()
+        void this.storeImageContent(update.content).then((attachment) => {
+          this.emit('message', {
+            id: messageId,
+            role: 'user',
+            kind: 'text',
+            content: '',
+            attachments: [attachment],
+            createdAt: new Date().toISOString()
+          } satisfies ChatMessage)
+        }).catch((error: unknown) => {
+          this.emit('message', this.systemMessage(error instanceof Error ? error.message : '无法保存历史会话中的图片。'))
+        })
+      }
       return
     }
     if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text') {
@@ -827,17 +890,12 @@ export class AcpBridge extends EventEmitter {
         content: update.content.text,
         createdAt: new Date().toISOString()
       } satisfies ChatMessage)
-    } else if (update.sessionUpdate === 'tool_call') {
+    } else if (update.sessionUpdate === 'tool_call' || update.sessionUpdate === 'tool_call_update') {
       // Pi 不提供 messageId；工具后的正文必须另起一条，不能回填到工具前的消息。
-      if (this.activePromptId) this.fallbackAssistantMessageId = crypto.randomUUID()
-      this.emit('message', {
-        id: crypto.randomUUID(),
-        role: 'system',
-        kind: 'tool',
-        title: update.title,
-        content: '',
-        createdAt: new Date().toISOString()
-      } satisfies ChatMessage)
+      if (update.sessionUpdate === 'tool_call' && this.activePromptId) this.fallbackAssistantMessageId = crypto.randomUUID()
+      const entry = this.upsertToolCall(update)
+      this.applyToolCallMeta(entry, update._meta as ToolCallMeta | undefined)
+      this.emitToolMessage(entry)
     }
   }
 
@@ -847,6 +905,100 @@ export class AcpBridge extends EventEmitter {
     if (!this.activePromptId) return crypto.randomUUID()
     this.fallbackAssistantMessageId ??= crypto.randomUUID()
     return this.fallbackAssistantMessageId
+  }
+
+  /** tool_call / tool_call_update 汇入累积条目；update 先于 tool_call 到达时自建条目（防御回放乱序）。 */
+  private upsertToolCall(update: acp.ToolCall | acp.ToolCallUpdate): ToolCallEntry {
+    let entry = this.toolCalls.get(update.toolCallId)
+    if (!entry) {
+      entry = {
+        toolCallId: update.toolCallId,
+        title: update.title ?? '工具',
+        kind: update.kind ?? 'other',
+        status: 'pending',
+        contentText: '',
+        terminal: '',
+        truncated: false,
+        createdAt: new Date().toISOString()
+      }
+      this.toolCalls.set(update.toolCallId, entry)
+    }
+    if (update.title) entry.title = update.title
+    if (update.kind) entry.kind = update.kind
+    if (update.status) entry.status = update.status
+    // content 按协议语义整体替换
+    if (update.content) entry.contentText = this.flattenToolContent(update.content)
+    return entry
+  }
+
+  /** 应用适配器在 _meta 上附加的终端输出 / 退出码 / 耗时心跳。 */
+  private applyToolCallMeta(entry: ToolCallEntry, meta: ToolCallMeta | undefined): void {
+    if (!meta) return
+    const output = meta.terminal_output?.data
+    if (typeof output === 'string' && output.length > 0) {
+      // claude 完成时一次性全量推送（替换）；pi 执行中按增量推送（追加）。
+      entry.terminal = this.currentAgent === 'claude' ? output : entry.terminal + output
+      if (entry.terminal.length > MAX_TOOL_OUTPUT_CHARS) {
+        entry.terminal = entry.terminal.slice(-MAX_TOOL_OUTPUT_CHARS)
+        entry.truncated = true
+      }
+    }
+    const exitCode = meta.terminal_exit?.exit_code
+    if (typeof exitCode === 'number') entry.exitCode = exitCode
+    const elapsed = meta.claudeCode?.toolResponse?.elapsedTimeSeconds
+    if (typeof elapsed === 'number') entry.elapsedSeconds = elapsed
+  }
+
+  /** 把 ACP 工具内容块扁平化为 markdown：文本原样、diff 转围栏；terminal 块无正文（输出走 _meta）。 */
+  private flattenToolContent(content: acp.ToolCallContent[]): string {
+    const parts: string[] = []
+    for (const block of content) {
+      if (block.type === 'content' && block.content.type === 'text') {
+        parts.push(block.content.text)
+      } else if (block.type === 'diff') {
+        parts.push(this.renderDiffBlock(block))
+      }
+    }
+    return parts.join('\n\n')
+  }
+
+  /** diff 块转 +/- 行的 diff 围栏，交给 MarkdownMessage 着色渲染。 */
+  private renderDiffBlock(block: { path: string; oldText?: string | null; newText: string }): string {
+    const removed = (block.oldText ?? '').split('\n').filter((line) => line.length > 0).map((line) => `- ${line}`)
+    const added = block.newText.split('\n').map((line) => `+ ${line}`)
+    return ['```diff', `--- ${block.path}`, `+++ ${block.path}`, ...removed, ...added, '```'].join('\n')
+  }
+
+  /** 发送工具调用的全量快照消息；id 稳定为 tool:{toolCallId}，renderer 按 id 整体替换。 */
+  private emitToolMessage(entry: ToolCallEntry): void {
+    const parts: string[] = []
+    if (entry.truncated) parts.push('> 输出过长，仅保留末尾部分。')
+    if (entry.contentText) parts.push(entry.contentText)
+    // 四反引号围栏，避免终端输出内含 ``` 时提前闭合
+    if (entry.terminal) parts.push(['````', entry.terminal, '````'].join('\n'))
+    this.emit('message', {
+      id: `tool:${entry.toolCallId}`,
+      role: 'system',
+      kind: 'tool',
+      title: entry.title,
+      content: parts.join('\n\n'),
+      toolStatus: entry.status,
+      toolKind: entry.kind,
+      ...(entry.exitCode !== undefined ? { exitCode: entry.exitCode } : {}),
+      ...(entry.elapsedSeconds !== undefined ? { elapsedSeconds: entry.elapsedSeconds } : {}),
+      outputTruncated: entry.truncated || undefined,
+      createdAt: entry.createdAt
+    } satisfies ChatMessage)
+  }
+
+  /** turn 结束时给仍未收到终态的工具调用补一个完成快照，避免界面停留加载状态。 */
+  private finalizeToolCalls(): void {
+    for (const entry of this.toolCalls.values()) {
+      if (entry.status === 'pending' || entry.status === 'in_progress') {
+        entry.status = 'completed'
+        this.emitToolMessage(entry)
+      }
+    }
   }
 
   private setState(state: AgentState): void {
