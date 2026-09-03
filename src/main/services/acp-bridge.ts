@@ -100,6 +100,8 @@ export class AcpBridge extends EventEmitter {
   private promptQueue: StoredQueuedPrompt[] = []
   /** 当前会话的工具调用累积状态（toolCallId → 条目），切换会话时清空。 */
   private toolCalls = new Map<string, ToolCallEntry>()
+  /** 会话切换操作代次；较早的 session/load 完成后不得覆盖最后一次选择。 */
+  private sessionChangeGeneration = 0
 
   constructor(private readonly options: AcpBridgeOptions = {}) {
     super()
@@ -270,6 +272,7 @@ export class AcpBridge extends EventEmitter {
     if (!this.connection) throw new Error('请先连接 Agent ACP。')
 
     await this.prepareForSessionChange()
+    const sessionChangeGeneration = this.sessionChangeGeneration
     this.activeSessionId = sessionId
     this.sessionCwd = cwd
 
@@ -279,8 +282,14 @@ export class AcpBridge extends EventEmitter {
       cwd,
       mcpServers: this.automationMcpServers()
     }).finally(() => {
-      this.replayingSession = false
+      // 并发加载时，较早请求的 finally 不能结束较新会话的回放状态。
+      if (sessionChangeGeneration === this.sessionChangeGeneration) this.replayingSession = false
     })
+
+    // 用户在加载期间又切换了会话；丢弃这次加载的状态更新。
+    if (sessionChangeGeneration !== this.sessionChangeGeneration || this.activeSessionId !== sessionId) {
+      return { sessionId, messages: [] }
+    }
 
     const modes = this.toAgentModes(response.modes)
     const model = this.toAgentModel(response.configOptions)
@@ -318,8 +327,12 @@ export class AcpBridge extends EventEmitter {
   async createSession(cwd: string): Promise<AcpSessionResult> {
     if (!this.connection) throw new Error('请先连接 Agent ACP。')
     await this.prepareForSessionChange()
+    const sessionChangeGeneration = this.sessionChangeGeneration
     this.suppressPiStartupInfo = false
     const response = await this.connection.agent.request(acp.methods.agent.session.new, { cwd, mcpServers: this.automationMcpServers() })
+    if (sessionChangeGeneration !== this.sessionChangeGeneration) {
+      return { sessionId: response.sessionId }
+    }
     const startupInfo = (response._meta as { piAcp?: { startupInfo?: unknown } } | undefined)?.piAcp?.startupInfo
     this.suppressPiStartupInfo = this.currentAgent === 'pi' && typeof startupInfo === 'string' && startupInfo.length > 0
     this.activeSessionId = response.sessionId
@@ -588,18 +601,23 @@ export class AcpBridge extends EventEmitter {
     this.updateQueueState()
   }
 
-  /** 切换会话前终止旧 turn，并隔离它随后到达的异步收尾。 */
+  /**
+   * 切换会话时只隔离当前 UI 路由，不终止旧 turn。
+   *
+   * ACP 连接可以同时承载多个 session。切换历史会话不应影响原会话的
+   * 后台生成；旧 session 的通知会因 activeSessionId 检查被暂时忽略，
+   * 用户切回时仍可通过 session/load 看到完整结果。
+   */
   private async prepareForSessionChange(): Promise<void> {
-    const previousSessionId = this.activeSessionId
+    this.sessionChangeGeneration += 1
     await this.preserveAndDetachQueue('切换会话，排队消息已保留，返回后会继续处理。')
     // 工具调用状态属于上一个会话，切换后按新会话重新累积。
     this.toolCalls.clear()
-    if (this.state.status === 'working' && this.connection && previousSessionId) {
-      this.turnGeneration += 1
-      this.activePromptId = undefined
-      this.fallbackAssistantMessageId = undefined
-      await this.connection.agent.notify(acp.methods.agent.session.cancel, { sessionId: previousSessionId })
-    }
+    // 让旧 turn 的 finally 不得改写新会话状态，但不要 cancel 旧 session。
+    // 这样切换会话不会中断原本正在执行的请求。
+    this.turnGeneration += 1
+    this.activePromptId = undefined
+    this.fallbackAssistantMessageId = undefined
     const agentName = this.currentAgent === 'pi' ? 'Pi' : 'Claude'
     this.setState({ ...this.state, status: 'ready', workStartedAt: undefined, lastTurnSeconds: undefined, queueDepth: 0, queuedPrompts: [], detail: `${agentName} 已就绪` })
   }
@@ -805,6 +823,7 @@ export class AcpBridge extends EventEmitter {
   dispose(): void {
     this.connectionGeneration += 1
     this.turnGeneration += 1
+    this.sessionChangeGeneration += 1
     this.activeSessionId = undefined
     this.sessionCwd = undefined
     this.activePromptId = undefined

@@ -11,6 +11,8 @@ const MIN_CONNECTING_MS = 0
 interface AgentContextValue {
   /** 当前 ACP 连接状态。 */
   state: AgentState
+  /** ACP 会话工作目录（用于解析对话中引用的文件路径）。 */
+  cwd: string
   /** 当前会话消息列表（assistant 流式消息按 id 合并）。 */
   messages: ChatMessage[]
   /** 正在加载历史会话（ACP session/load 回放中），页面应展示加载动画。 */
@@ -207,8 +209,8 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
   }, [connect])
 
   const value = useMemo<AgentContextValue>(
-    () => ({ state, messages, sessionLoading, sessionId, connect, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission, listSessions, loadSession, createNewSession }),
-    [state, messages, sessionLoading, sessionId, connect, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission, listSessions, loadSession, createNewSession]
+    () => ({ state, cwd, messages, sessionLoading, sessionId, connect, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission, listSessions, loadSession, createNewSession }),
+    [state, cwd, messages, sessionLoading, sessionId, connect, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission, listSessions, loadSession, createNewSession]
   )
 
   return <AgentContext.Provider value={value}>{children}</AgentContext.Provider>
