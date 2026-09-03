@@ -4,7 +4,9 @@ import { BulbOutlined, CheckCircleOutlined, CheckOutlined, CloseCircleOutlined, 
 import { Image } from 'antd'
 import type { ChatAttachment, ChatMessage } from '@/models'
 import { formatMessageTime } from '@/utils/format'
+import { useAgent } from '@/state/AgentContext'
 import { MarkdownMessage } from './MarkdownMessage'
+import { FileContextMenu } from './FileContextMenu'
 
 const MAX_WIDTH = '76%'
 
@@ -17,7 +19,7 @@ function AttachmentIcon({ attachment }: { attachment: ChatAttachment }): ReactEl
   return <FileOutlined />
 }
 
-function MessageContent({ message, inverse = false, streaming = false }: { message: ChatMessage; inverse?: boolean; streaming?: boolean }): ReactElement {
+function MessageContent({ message, inverse = false, streaming = false, cwd }: { message: ChatMessage; inverse?: boolean; streaming?: boolean; cwd?: string }): ReactElement {
   const images = message.attachments?.filter((attachment) => attachment.kind === 'image') ?? []
   const files = message.attachments?.filter((attachment) => attachment.kind !== 'image') ?? []
   return (
@@ -32,20 +34,21 @@ function MessageContent({ message, inverse = false, streaming = false }: { messa
       {files.length > 0 && (
         <div className="chat-message-files">
           {files.map((attachment) => (
-            <button
-              key={attachment.id}
-              type="button"
-              className="chat-message-file"
-              title={attachment.name}
-              onClick={() => void window.attachments.open(attachment.storageKey)}
-            >
-              <AttachmentIcon attachment={attachment} />
-              <span>{attachment.name}</span>
-            </button>
+            <FileContextMenu key={attachment.id} storageKey={attachment.storageKey}>
+              <button
+                type="button"
+                className="chat-message-file"
+                title={attachment.name}
+                onClick={() => void window.attachments.open(attachment.storageKey)}
+              >
+                <AttachmentIcon attachment={attachment} />
+                <span>{attachment.name}</span>
+              </button>
+            </FileContextMenu>
           ))}
         </div>
       )}
-      {message.content && <MarkdownMessage content={message.content} inverse={inverse} streaming={streaming} />}
+      {message.content && <MarkdownMessage content={message.content} inverse={inverse} streaming={streaming} cwd={cwd} />}
     </div>
   )
 }
@@ -55,7 +58,7 @@ export function MessageTimestamp({ iso }: { iso: string }): ReactElement {
   return <span className="chat-message-time">{formatMessageTime(iso)}</span>
 }
 
-function UserBubble({ message }: { message: ChatMessage }): ReactElement {
+function UserBubble({ message, cwd }: { message: ChatMessage; cwd?: string }): ReactElement {
   const [copied, setCopied] = useState(false)
   const [hovered, setHovered] = useState(false)
 
@@ -75,7 +78,7 @@ function UserBubble({ message }: { message: ChatMessage }): ReactElement {
     >
       <Bubble
         placement="end"
-        content={<MessageContent message={message} inverse />}
+        content={<MessageContent message={message} inverse cwd={cwd} />}
         shape="corner"
         styles={{ content: { background: 'var(--chat-user-bubble)', color: 'var(--chat-user-text)' } }}
       />
@@ -114,6 +117,7 @@ function UserBubble({ message }: { message: ChatMessage }): ReactElement {
  * - 系统消息：居中 System 气泡
  */
 export function ChatMessageItem({ message, streaming = false }: { message: ChatMessage; streaming?: boolean }): ReactElement {
+  const { cwd } = useAgent()
   if (message.kind === 'thinking') {
     return (
       <ThoughtChain
@@ -125,7 +129,7 @@ export function ChatMessageItem({ message, streaming = false }: { message: ChatM
             key: message.id,
             icon: <BulbOutlined />,
             title: '思考',
-            content: <MarkdownMessage content={message.content} />,
+            content: <MarkdownMessage content={message.content} cwd={cwd} />,
             collapsible: true
           }
         ]}
@@ -181,7 +185,7 @@ export function ChatMessageItem({ message, streaming = false }: { message: ChatM
             content: message.content ? (
               <div className="chat-tool-output">
                 {message.outputTruncated && <div className="chat-tool-truncated">输出过长，仅显示末尾。</div>}
-                <MarkdownMessage content={message.content} />
+                <MarkdownMessage content={message.content} cwd={cwd} />
               </div>
             ) : undefined
           }
@@ -196,18 +200,18 @@ export function ChatMessageItem({ message, streaming = false }: { message: ChatM
   }
 
   if (message.role === 'user') {
-    return <UserBubble message={message} />
+    return <UserBubble message={message} cwd={cwd} />
   }
 
   if (message.role === 'system') {
-    return <Bubble.System content={<MarkdownMessage content={message.content} />} />
+    return <Bubble.System content={<MarkdownMessage content={message.content} cwd={cwd} />} />
   }
 
   return (
     <div className="chat-assistant-message" style={{ maxWidth: MAX_WIDTH }}>
       <Bubble
         placement="start"
-        content={<MessageContent message={message} streaming={streaming} />}
+        content={<MessageContent message={message} streaming={streaming} cwd={cwd} />}
         variant="borderless"
       />
       {message.finishedAt && (

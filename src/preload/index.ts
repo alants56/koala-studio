@@ -5,6 +5,7 @@ import type { ClaudeApi } from '../shared/claude'
 import type { AutomationsApi } from '../shared/automations'
 import type { TodosApi } from '../shared/todos'
 import type { AttachmentsApi } from '../shared/attachments'
+import type { FileActionsApi } from '../shared/files'
 import type { WorkspaceApi } from '../shared/workspace'
 
 const acp: AcpApi = {
@@ -76,7 +77,15 @@ const todos: TodosApi = {
 
 const attachments: AttachmentsApi = {
   importFiles: (files) => ipcRenderer.invoke('attachments:import', files),
-  open: (storageKey) => ipcRenderer.invoke('attachments:open', storageKey)
+  listOpenWithApps: (storageKey) => ipcRenderer.invoke('attachments:list-open-with-apps', storageKey),
+  open: (storageKey, applicationPath) => ipcRenderer.invoke('attachments:open', storageKey, applicationPath),
+  reveal: (storageKey) => ipcRenderer.invoke('attachments:reveal', storageKey)
+}
+
+const files: FileActionsApi = {
+  listOpenWithApps: (cwd, path) => ipcRenderer.invoke('files:list-open-with-apps', cwd, path),
+  open: (cwd, path, applicationPath) => ipcRenderer.invoke('files:open', cwd, path, applicationPath),
+  reveal: (cwd, path) => ipcRenderer.invoke('files:reveal', cwd, path)
 }
 
 const workspace: WorkspaceApi = {
@@ -89,4 +98,5 @@ contextBridge.exposeInMainWorld('claude', claude)
 contextBridge.exposeInMainWorld('automations', automations)
 contextBridge.exposeInMainWorld('todos', todos)
 contextBridge.exposeInMainWorld('attachments', attachments)
+contextBridge.exposeInMainWorld('files', files)
 contextBridge.exposeInMainWorld('workspace', workspace)

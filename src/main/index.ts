@@ -1,5 +1,8 @@
-import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } from 'electron'
-import { join } from 'node:path'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, net, protocol, shell } from 'electron'
+import { basename, join, resolve } from 'node:path'
+import { execFile } from 'node:child_process'
+import { readdir } from 'node:fs/promises'
+import { promisify } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import type { AttachmentImportInput } from '../shared/attachments'
 import type { AgentAdapterId } from '../shared/acp'
@@ -35,6 +38,59 @@ import {
 } from './services/preferences-store'
 import { attachmentFilePath, importAttachments } from './services/attachment-store'
 import { getQueuedPromptStore } from './services/queued-prompt-store'
+
+const execFileAsync = promisify(execFile)
+const openWithAppsCache = new Map<string, Promise<OpenWithApp[]>>()
+
+interface OpenWithApp { name: string; path: string; icon?: string }
+
+async function applicationIcon(appPath: string, preferredIconFile?: string): Promise<string | undefined> {
+  const resourcesPath = join(appPath, 'Contents', 'Resources')
+  try {
+    const files = await readdir(resourcesPath)
+    const preferredName = preferredIconFile?.toLowerCase().endsWith('.icns') ? preferredIconFile : preferredIconFile ? `${preferredIconFile}.icns` : undefined
+    const iconFile = files.find((file) => file === preferredName) ?? files.find((file) => file.toLowerCase().endsWith('.icns'))
+    if (iconFile) {
+      const image = nativeImage.createFromPath(join(resourcesPath, iconFile))
+      if (!image.isEmpty()) return image.resize({ width: 32, height: 32 }).toDataURL()
+    }
+  } catch {}
+  return app.getFileIcon(appPath, { size: 'small' }).then((image) => image.toDataURL()).catch(() => undefined)
+}
+
+async function listOpenWithApps(filePath: string): Promise<OpenWithApp[]> {
+  const extension = basename(filePath).split('.').pop()?.toLowerCase() || ''
+  const cached = openWithAppsCache.get(extension)
+  if (cached) return cached
+  const request = discoverOpenWithApps(filePath, extension)
+  openWithAppsCache.set(extension, request)
+  return request
+}
+
+async function discoverOpenWithApps(filePath: string, extension: string): Promise<OpenWithApp[]> {
+  if (process.platform !== 'darwin') return []
+  const roots = ['/Applications', '/System/Applications', join(process.env.HOME || '', 'Applications')].filter(Boolean)
+  let appPaths: string[] = []
+  try {
+    const result = await execFileAsync('find', [...roots, '-maxdepth', '2', '-type', 'd', '-name', '*.app', '-prune', '-print'], { maxBuffer: 1024 * 1024 })
+    appPaths = result.stdout.split('\n').map((item) => item.trim()).filter(Boolean)
+  } catch {
+    return []
+  }
+  const apps: OpenWithApp[] = []
+  for (const appPath of appPaths.slice(0, 200)) {
+    try {
+      const plist = await execFileAsync('plutil', ['-convert', 'json', '-o', '-', `${appPath}/Contents/Info.plist`], { maxBuffer: 256 * 1024 })
+      const info = JSON.parse(plist.stdout) as { CFBundleDisplayName?: string; CFBundleName?: string; CFBundleIconFile?: string; CFBundleDocumentTypes?: Array<{ CFBundleTypeExtensions?: string[] }> }
+      const supported = info.CFBundleDocumentTypes?.some((type) => type.CFBundleTypeExtensions?.some((item) => item === '*' || item.toLowerCase() === extension))
+      if (!supported) continue
+      const name = info.CFBundleDisplayName || info.CFBundleName || basename(appPath, '.app')
+      const icon = await applicationIcon(appPath, info.CFBundleIconFile)
+      apps.push({ name, path: appPath, icon })
+    } catch {}
+  }
+  return apps.sort((left, right) => left.name.localeCompare(right.name))
+}
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'koala-asset', privileges: { secure: true, standard: true, supportFetchAPI: true, stream: true } }
@@ -167,9 +223,31 @@ app.whenReady().then(() => {
   ipcMain.handle('workspace:get-default', () => getDefaultWorkspace())
 
   ipcMain.handle('attachments:import', (_event, files: AttachmentImportInput[]) => importAttachments(files))
-  ipcMain.handle('attachments:open', async (_event, storageKey: string) => {
-    const error = await shell.openPath(attachmentFilePath(storageKey))
+  ipcMain.handle('attachments:list-open-with-apps', (_event, storageKey: string) => listOpenWithApps(attachmentFilePath(storageKey)))
+  ipcMain.handle('attachments:open', async (_event, storageKey: string, applicationPath?: string) => {
+    const filePath = attachmentFilePath(storageKey)
+    if (applicationPath) {
+      await execFileAsync('open', ['-a', applicationPath, filePath])
+      return
+    }
+    const error = await shell.openPath(filePath)
     if (error) throw new Error(error)
+  })
+  ipcMain.handle('attachments:reveal', (_event, storageKey: string) => {
+    shell.showItemInFolder(attachmentFilePath(storageKey))
+  })
+  ipcMain.handle('files:list-open-with-apps', (_event, cwd: string, path: string) => listOpenWithApps(resolve(cwd, path)))
+  ipcMain.handle('files:open', async (_event, cwd: string, path: string, applicationPath?: string) => {
+    const filePath = resolve(cwd, path)
+    if (applicationPath) {
+      await execFileAsync('open', ['-a', applicationPath, filePath])
+      return
+    }
+    const error = await shell.openPath(filePath)
+    if (error) throw new Error(error)
+  })
+  ipcMain.handle('files:reveal', (_event, cwd: string, path: string) => {
+    shell.showItemInFolder(resolve(cwd, path))
   })
 
   ipcMain.handle('automations:list', (_event, input) => getAutomationStore().list(input))

@@ -1067,6 +1067,42 @@ input {
   font-size: 0.9em;
 }
 
+/* 正文中被识别为文件路径的行内代码：可右键打开 / 在 Finder 中定位 */
+.chat-file-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 0.12em 0.32em;
+  font-family: "Koala Mono", "JetBrains Mono", monospace;
+  font-size: 0.9em;
+  color: var(--primary-active);
+  background: rgb(var(--primary-rgb) / 9%);
+  cursor: pointer;
+}
+
+.chat-file-ref:hover {
+  border-color: rgb(var(--primary-rgb) / 35%);
+  background: rgb(var(--primary-rgb) / 14%);
+}
+
+.file-open-with-app-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.chat-markdown-inverse .chat-file-ref {
+  color: var(--on-primary);
+  background: rgb(255 255 255 / 18%);
+}
+
+.chat-markdown-inverse .chat-file-ref:hover {
+  border-color: rgb(255 255 255 / 40%);
+  background: rgb(255 255 255 / 26%);
+}
+
 /* 工具调用输出：等宽 + 限高滚动 */
 .chat-tool-output {
   max-height: 320px;

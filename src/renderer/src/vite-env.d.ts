@@ -6,6 +6,7 @@ import type { AutomationsApi } from '@shared/automations'
 import type { TodosApi } from '@shared/todos'
 import type { ClaudeApi } from '@shared/claude'
 import type { AttachmentsApi } from '@shared/attachments'
+import type { FileActionsApi } from '@shared/files'
 import type { WorkspaceApi } from '@shared/workspace'
 
 declare global {
@@ -16,6 +17,7 @@ declare global {
     todos: TodosApi
     claude: ClaudeApi
     attachments: AttachmentsApi
+    files: FileActionsApi
     workspace: WorkspaceApi
   }
 }
