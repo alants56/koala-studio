@@ -104,6 +104,8 @@ export interface ChatMessage {
   createdAt: string
   /** 消息类型：普通文本 / 思考过程 / 工具调用。 */
   kind?: 'text' | 'thinking' | 'tool'
+  /** 助手正文消息完成生成的时间戳，用于计算该轮（turn）的总耗时。 */
+  finishedAt?: string
   /** 工具调用时显示的工具名。 */
   title?: string
   /** 工具调用状态（kind 'tool' 专用）。 */

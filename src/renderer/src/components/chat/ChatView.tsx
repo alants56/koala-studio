@@ -74,12 +74,10 @@ export function ChatView({ project }: { project: Project }): ReactElement {
                 }}
               >
                 <span className="chat-status-dot" style={{ background: STATUS_DOT_COLORS[state.status] }} />
-                {status.label}
               </span>
             </Tooltip>
             <Typography.Title level={4} className="chat-project-title" style={{ margin: 0 }}>{project.name}</Typography.Title>
           </div>
-          {project.path && <Typography.Text className="chat-project-path">{project.path}</Typography.Text>}
         </div>
         <Space size={2}>
           {hasConversationContent && (

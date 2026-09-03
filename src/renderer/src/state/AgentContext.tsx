@@ -189,7 +189,8 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
             ? {
                 ...item,
                 content: item.content + incoming.content,
-                attachments: [...(item.attachments ?? []), ...(incoming.attachments ?? [])]
+                attachments: [...(item.attachments ?? []), ...(incoming.attachments ?? [])],
+                finishedAt: incoming.finishedAt ?? item.finishedAt
               }
             : item
         )

@@ -3,6 +3,7 @@ import { Bubble, ThoughtChain } from '@ant-design/x'
 import { BulbOutlined, CheckCircleOutlined, CheckOutlined, CloseCircleOutlined, CopyOutlined, FileMarkdownOutlined, FileOutlined, FilePdfOutlined, LoadingOutlined, ToolOutlined } from '@ant-design/icons'
 import { Image } from 'antd'
 import type { ChatAttachment, ChatMessage } from '@/models'
+import { formatMessageTime } from '@/utils/format'
 import { MarkdownMessage } from './MarkdownMessage'
 
 const MAX_WIDTH = '76%'
@@ -49,6 +50,11 @@ function MessageContent({ message, inverse = false, streaming = false }: { messa
   )
 }
 
+/** 时间戳（M月D日 HH:mm），展示在消息底部。 */
+export function MessageTimestamp({ iso }: { iso: string }): ReactElement {
+  return <span className="chat-message-time">{formatMessageTime(iso)}</span>
+}
+
 function UserBubble({ message }: { message: ChatMessage }): ReactElement {
   const [copied, setCopied] = useState(false)
   const [hovered, setHovered] = useState(false)
@@ -71,29 +77,32 @@ function UserBubble({ message }: { message: ChatMessage }): ReactElement {
         placement="end"
         content={<MessageContent message={message} inverse />}
         shape="corner"
-        styles={{ content: { background: 'var(--chat-user-bubble)', color: 'var(--on-primary)' } }}
+        styles={{ content: { background: 'var(--chat-user-bubble)', color: 'var(--chat-user-text)' } }}
       />
-      <button
-        type="button"
-        onClick={handleCopy}
-        style={{
-          opacity: hovered ? 1 : 0,
-          transition: 'opacity 0.15s',
-          pointerEvents: hovered ? 'auto' : 'none',
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          padding: '2px 6px',
-          color: 'var(--muted)',
-          fontSize: 12,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-        }}
-      >
-        {copied ? <CheckOutlined style={{ color: 'var(--success)' }} /> : <CopyOutlined />}
-        {copied ? '已复制' : '复制'}
-      </button>
+      <div className="chat-message-footer flex items-center gap-2">
+        <MessageTimestamp iso={message.createdAt} />
+        <button
+          type="button"
+          onClick={handleCopy}
+          style={{
+            opacity: hovered ? 1 : 0,
+            transition: 'opacity 0.15s',
+            pointerEvents: hovered ? 'auto' : 'none',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '2px 6px',
+            color: 'var(--muted)',
+            fontSize: 12,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          {copied ? <CheckOutlined style={{ color: 'var(--success)' }} /> : <CopyOutlined />}
+          {copied ? '已复制' : '复制'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -195,12 +204,17 @@ export function ChatMessageItem({ message, streaming = false }: { message: ChatM
   }
 
   return (
-    <Bubble
-      className="chat-assistant-message"
-      placement="start"
-      content={<MessageContent message={message} streaming={streaming} />}
-      variant="borderless"
-      style={{ maxWidth: MAX_WIDTH }}
-    />
+    <div className="chat-assistant-message" style={{ maxWidth: MAX_WIDTH }}>
+      <Bubble
+        placement="start"
+        content={<MessageContent message={message} streaming={streaming} />}
+        variant="borderless"
+      />
+      {message.finishedAt && (
+        <div className="chat-message-footer chat-assistant-footer flex items-center">
+          <MessageTimestamp iso={message.finishedAt} />
+        </div>
+      )}
+    </div>
   )
 }

@@ -88,6 +88,8 @@ export class AcpBridge extends EventEmitter {
   private turnGeneration = 0
   /** ACP 未提供 messageId 时，用于合并当前连续的助手消息分片。 */
   private fallbackAssistantMessageId?: string
+  /** 当前 turn 的助手正文消息 id，turn 结束时据此写入 finishedAt（用于计算该轮总耗时）。 */
+  private turnAssistantMessageId?: string
   /** session/load 中的无 ID 消息是完整历史消息，不能跨条合并。 */
   private replayingSession = false
   /** Pi ACP 的 session/new 响应会预告随后异步推送的启动信息。 */
@@ -440,6 +442,7 @@ export class AcpBridge extends EventEmitter {
       this.activePromptId = promptId
       const prompt = await this.toPromptContent(request)
       this.fallbackAssistantMessageId = crypto.randomUUID()
+      this.turnAssistantMessageId = undefined
       await connection.agent.request(acp.methods.agent.session.prompt, {
         sessionId,
         prompt
@@ -467,6 +470,18 @@ export class AcpBridge extends EventEmitter {
 
   /** 当前 turn 结束后：若还有排队消息则继续下一轮，否则恢复就绪。 */
   private async finishTurn(): Promise<void> {
+    // 给本轮助手正文打上结束时间，渲染层据此计算「用户发送 time → 回复结束」的总耗时。
+    const assistantId = this.turnAssistantMessageId
+    this.turnAssistantMessageId = undefined
+    if (assistantId) {
+      this.emit('message', {
+        id: assistantId,
+        role: 'assistant',
+        content: '',
+        createdAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString()
+      } satisfies ChatMessage)
+    }
     // 中断的 turn 可能没等到适配器的终态更新，先兜底收尾工具调用展示。
     this.finalizeToolCalls()
     const next = this.promptQueue.shift()
@@ -861,8 +876,10 @@ export class AcpBridge extends EventEmitter {
       return
     }
     if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text') {
+      const messageId = this.assistantMessageId(update.messageId)
+      if (!this.replayingSession) this.turnAssistantMessageId = messageId
       this.emit('message', {
-        id: this.assistantMessageId(update.messageId),
+        id: messageId,
         role: 'assistant',
         kind: 'text',
         content: update.content.text,

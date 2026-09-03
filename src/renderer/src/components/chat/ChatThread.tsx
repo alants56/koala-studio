@@ -48,7 +48,29 @@ export function ChatThread(): ReactElement {
   const latestUserMessageId = messages.findLast((message) => message.role === 'user')?.id
   const lastUserIndex = messages.findLastIndex((message) => message.role === 'user')
   const working = state.status === 'working'
-  const showSummary = working || state.lastTurnSeconds != null
+
+  // 为每个用户消息计算该轮总耗时，展示在其所属 agent 回复上方。
+  // - 已收尾的轮次：用助手消息的 finishedAt − 用户消息 createdAt 精确计算（存的是真实结束时间）。
+  // - 进行中 / 刚结束的最近一轮：finishedAt 尚为空，退回用 state 的 turn 计时兜底。
+  interface TurnSummaryProps {
+    working: boolean
+    startedAt?: number
+    seconds?: number
+  }
+  const turnSummaries = new Map<number, TurnSummaryProps>()
+  messages.forEach((message, index) => {
+    if (message.role !== 'user') return
+    // 该轮消息范围：到下一个用户消息为止（避免把后续轮次的回复算进来）。
+    const nextUserIndex = messages.findIndex((item, i) => i > index && item.role === 'user')
+    const turnMsgs = nextUserIndex === -1 ? messages.slice(index + 1) : messages.slice(index + 1, nextUserIndex)
+    const reply = turnMsgs.findLast((item) => item.role === 'assistant' && item.kind !== 'thinking' && item.content)
+    if (reply?.finishedAt) {
+      const total = Math.max(0, Math.round((new Date(reply.finishedAt).getTime() - new Date(message.createdAt).getTime()) / 1000))
+      turnSummaries.set(index, { working: false, seconds: total })
+    } else if (index === lastUserIndex && (working || state.lastTurnSeconds != null)) {
+      turnSummaries.set(index, { working, startedAt: state.workStartedAt, seconds: state.lastTurnSeconds })
+    }
+  })
 
   useLayoutEffect(() => {
     const box = scrollRef.current
@@ -92,17 +114,20 @@ export function ChatThread(): ReactElement {
       onScroll={handleScroll}
       onWheel={handleWheel}
     >
-      {messages.map((message, index) => (
-        <Fragment key={message.id}>
-          <ChatMessageItem
-            message={message}
-            streaming={working && message.role === 'assistant' && message.id === latestMessageId}
-          />
-          {showSummary && index === lastUserIndex && (
-            <TurnDurationSummary working={working} startedAt={state.workStartedAt} seconds={state.lastTurnSeconds} />
-          )}
-        </Fragment>
-      ))}
+      {messages.map((message, index) => {
+        const summary = turnSummaries.get(index)
+        return (
+          <Fragment key={message.id}>
+            <ChatMessageItem
+              message={message}
+              streaming={working && message.role === 'assistant' && message.id === latestMessageId}
+            />
+            {summary && (
+              <TurnDurationSummary working={summary.working} startedAt={summary.startedAt} seconds={summary.seconds} />
+            )}
+          </Fragment>
+        )
+      })}
     </section>
   )
 }
