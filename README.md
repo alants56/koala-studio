@@ -20,8 +20,8 @@
 - 使用 Pi：本机已安装 `pi` CLI 并完成认证
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 首次启动后，应用根据所选 Agent 自动启动对应的 ACP 适配器。顶栏可随时切换 Claude / Pi，偏好设置会持久化。
@@ -29,9 +29,9 @@ npm run dev
 ## 常用命令
 
 ```bash
-npm run dev       # 启动开发环境
-npm run build     # 类型检查 + 构建
-npm run package   # 打包 macOS 安装包
+pnpm dev       # 启动开发环境
+pnpm build     # 类型检查 + 构建
+pnpm package   # 打包 macOS 安装包
 ```
 
 ## 页面
