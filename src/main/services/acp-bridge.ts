@@ -602,22 +602,24 @@ export class AcpBridge extends EventEmitter {
   }
 
   /**
-   * 切换会话时只隔离当前 UI 路由，不终止旧 turn。
+   * 切换会话前中断旧 turn，并隔离它随后到达的异步收尾。
    *
-   * ACP 连接可以同时承载多个 session。切换历史会话不应影响原会话的
-   * 后台生成；旧 session 的通知会因 activeSessionId 检查被暂时忽略，
-   * 用户切回时仍可通过 session/load 看到完整结果。
+   * Claude ACP 在 session/load 时可能复用或重建底层会话；让旧 turn 继续
+   * 运行会和加载请求争用同一个连接，最终返回 Internal error。
    */
   private async prepareForSessionChange(): Promise<void> {
+    const previousSessionId = this.activeSessionId
     this.sessionChangeGeneration += 1
     await this.preserveAndDetachQueue('切换会话，排队消息已保留，返回后会继续处理。')
     // 工具调用状态属于上一个会话，切换后按新会话重新累积。
     this.toolCalls.clear()
-    // 让旧 turn 的 finally 不得改写新会话状态，但不要 cancel 旧 session。
-    // 这样切换会话不会中断原本正在执行的请求。
     this.turnGeneration += 1
     this.activePromptId = undefined
     this.fallbackAssistantMessageId = undefined
+    this.turnAssistantMessageId = undefined
+    if (this.state.status === 'working' && this.connection && previousSessionId) {
+      await this.connection.agent.notify(acp.methods.agent.session.cancel, { sessionId: previousSessionId })
+    }
     const agentName = this.currentAgent === 'pi' ? 'Pi' : 'Claude'
     this.setState({ ...this.state, status: 'ready', workStartedAt: undefined, lastTurnSeconds: undefined, queueDepth: 0, queuedPrompts: [], detail: `${agentName} 已就绪` })
   }
