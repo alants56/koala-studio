@@ -1,11 +1,10 @@
 import type { ReactElement } from 'react'
-import { Alert, App, Button, Space, Tooltip, Typography } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { Alert, App, Tooltip } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { Project } from '@/models'
 import { useAgent } from '@/state/AgentContext'
-import { STATUS_DETAILS, STATUS_DOT_COLORS } from '@/utils/constants'
 import { ChatComposer } from './ChatComposer'
+import { ChatHeader } from './ChatHeader'
 import { ConnectingScreen } from './ConnectingScreen'
 import { SessionLoadingScreen } from './SessionLoadingScreen'
 import { ChatThread } from './ChatThread'
@@ -18,15 +17,12 @@ function formatTokens(n: number): string {
 
 /** 单个项目的协作会话视图：小圆点状态 + 对话线程 + 输入区。 */
 export function ChatView({ project }: { project: Project }): ReactElement {
-  const { state, messages, sessionLoading, connect, createNewSession } = useAgent()
+  const { state, sessionLoading, connect, createNewSession } = useAgent()
   const { message } = App.useApp()
   const location = useLocation()
   const navigate = useNavigate()
 
-  const status = STATUS_DETAILS[state.status]
-  const canRetry = state.status === 'disconnected' || state.status === 'error'
   const connecting = state.status === 'disconnected' || state.status === 'connecting'
-  const hasConversationContent = messages.some((item) => item.role === 'user')
 
   const handleNewConversation = async (): Promise<void> => {
     const projectPath = `/projects/${encodeURIComponent(project.id)}`
@@ -57,36 +53,12 @@ export function ChatView({ project }: { project: Project }): ReactElement {
 
   return (
     <div className="chat-shell">
-      <div className="chat-header">
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Tooltip title={canRetry ? `点击重新连接（${status.label}）` : status.label}>
-              <span
-                className="chat-status"
-                onClick={canRetry ? () => void connect() : undefined}
-                role={canRetry ? 'button' : undefined}
-                tabIndex={canRetry ? 0 : undefined}
-                onKeyDown={(event) => {
-                  if (canRetry && (event.key === 'Enter' || event.key === ' ')) {
-                    event.preventDefault()
-                    void connect()
-                  }
-                }}
-              >
-                <span className="chat-status-dot" style={{ background: STATUS_DOT_COLORS[state.status] }} />
-              </span>
-            </Tooltip>
-            <Typography.Title level={4} className="chat-project-title" style={{ margin: 0 }}>{project.name}</Typography.Title>
-          </div>
-        </div>
-        <Space size={2}>
-          {hasConversationContent && (
-            <Button type="text" icon={<PlusOutlined />} onClick={() => void handleNewConversation()}>
-              新对话
-            </Button>
-          )}
-        </Space>
-      </div>
+      <ChatHeader
+        project={project}
+        state={state}
+        onConnect={() => void connect()}
+        onNewConversation={() => void handleNewConversation()}
+      />
 
       {state.status === 'error' && (
         <Alert

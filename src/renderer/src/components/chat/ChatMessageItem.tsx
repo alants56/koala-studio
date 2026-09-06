@@ -82,7 +82,7 @@ function UserBubble({ message, cwd }: { message: ChatMessage; cwd?: string }): R
         shape="corner"
         styles={{ content: { background: 'var(--chat-user-bubble)', color: 'var(--chat-user-text)' } }}
       />
-      <div className="chat-message-footer flex items-center gap-2">
+      <div className="chat-message-footer flex items-center justify-between self-stretch">
         <MessageTimestamp iso={message.createdAt} />
         <button
           type="button"

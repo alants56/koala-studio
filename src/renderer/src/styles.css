@@ -28,39 +28,133 @@
 :root {
   color: var(--ink);
   background: var(--canvas);
-  font-family: "Koala Numerals", "Koala Serif", serif;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
   font-synthesis: none;
 
-  /* Koala Studio palette (warm cream + terracotta) */
-  --primary: #cc785c;
-  --primary-active: #a9583e;
-  --primary-disabled: #e6dfd8;
-  --ink: #141413;
-  --body: #3d3d3a;
-  --body-strong: #252523;
-  --muted: #6c6a64;
-  --muted-soft: #8e8b82;
-  --hairline: #e6dfd8;
-  --hairline-soft: #ebe6df;
-  --canvas: #faf9f5;
-  --surface-soft: #f5f0e8;
-  --surface-card: #efe9de;
-  --surface-cream-strong: #e8e0d2;
-  --surface-dark: #181715;
-  --surface-dark-elevated: #252320;
-  --surface-dark-soft: #1f1e1b;
+  /* Koala Studio palette: graphite, cool paper, soft-blue accent */
+  --primary: #5273cf;
+  --primary-active: #4460ae;
+  --primary-disabled: #d3dbf2;
+  --ink: #17191d;
+  --body: #3d424b;
+  --body-strong: #252a32;
+  --muted: #737a86;
+  --muted-soft: #9aa1ad;
+  --hairline: #dfe3e8;
+  --hairline-soft: #e8ebef;
+  --canvas: #ffffff;
+  --surface-soft: #eef1f5;
+  --surface-card: #e7ebf0;
+  --surface-cream-strong: #dfe4eb;
+  --surface-dark: #17191d;
+  --surface-dark-elevated: #242830;
+  --surface-dark-soft: #1e2229;
   --on-primary: #ffffff;
-  --on-dark: #faf9f5;
-  --on-dark-soft: #a09d96;
-  --accent-teal: #5db8a6;
-  --accent-amber: #e8a55a;
-  --success: #5db872;
-  --warning: #d4a017;
-  --error: #c64545;
+  --on-dark: #f7f8fa;
+  --on-dark-soft: #aab1bd;
+  --accent-teal: #4f9dba;
+  --accent-amber: #c79545;
+  --success: #3f9b68;
+  --warning: #b47d22;
+  --error: #c0444b;
   /* RGB channels of primary, used to build alpha tints */
-  --primary-rgb: 204 120 92;
-  --chat-user-bubble: #f0ddd5;
-  --chat-user-text: #5d352b;
+  --primary-rgb: 82 115 207;
+  --chat-user-bubble: var(--primary);
+  --chat-user-text: #ffffff;
+}
+
+/* 全屏加载动画（连接 / 加载会话）统一采用舒适蓝，与用户消息气泡一致。 */
+.chat-loading-screen .ant-spin-dot-item {
+  background-color: var(--chat-user-bubble) !important;
+}
+
+.chat-loading-ping {
+  background: color-mix(in srgb, var(--chat-user-bubble) 25%, transparent);
+}
+
+/* 会话加载页：复用 chat-shell 布局，用骨架屏模拟正式对话的消息结构，
+   让加载态与真实会话无缝衔接，而不是一整屏居中的空白 spinner。 */
+.chat-loading-thread {
+  gap: 18px;
+}
+
+.chat-loading-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: min(780px, 84%);
+}
+
+.chat-loading-message--assistant {
+  margin-right: auto;
+}
+
+.chat-loading-message--user {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+.chat-loading-avatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--primary);
+}
+
+.chat-loading-skeleton {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-loading-skeleton .ant-skeleton-paragraph {
+  margin: 0 !important;
+}
+
+.chat-loading-user-bubble {
+  width: min(360px, 58%);
+  height: 52px;
+  border-radius: 15px 15px 4px 15px;
+  background: var(--chat-user-bubble);
+  opacity: 0.7;
+  box-shadow: 0 8px 18px rgb(27 42 88 / 16%);
+}
+
+.chat-loading-activity {
+  width: min(680px, 82%);
+  margin: 2px 0 12px;
+  padding: 9px 11px;
+  border-left: 2px solid rgb(var(--primary-rgb) / 30%);
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgb(var(--primary-rgb) / 8%), transparent 82%);
+}
+
+.chat-loading-activity::before {
+  display: block;
+  width: 46%;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--surface-soft);
+  content: '';
+}
+
+.chat-loading-composer {
+  height: 46px;
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--canvas) 92%, var(--surface-soft));
+  box-shadow: 0 16px 34px rgb(32 44 70 / 11%), inset 0 1px rgb(255 255 255 / 86%);
+}
+
+.chat-loading-note {
+  padding: 8px 0 0;
+  color: var(--muted-soft);
+  font-family: "Koala Mono", monospace;
+  font-size: 10px;
+  text-align: center;
 }
 
 html,
@@ -74,6 +168,7 @@ body,
 
 body {
   background: var(--canvas);
+  letter-spacing: -0.006em;
 }
 
 #root > .ant-app {
@@ -160,7 +255,7 @@ input {
   place-items: center;
   flex: 0 0 auto;
   color: var(--on-primary);
-  background: linear-gradient(145deg, #d88b70, var(--primary));
+  background: linear-gradient(145deg, #7089d9, var(--primary));
   border-radius: 10px;
   box-shadow: 0 7px 16px rgb(var(--primary-rgb) / 22%), inset 0 1px 0 rgb(255 255 255 / 32%);
   font-size: 15px;
@@ -543,7 +638,8 @@ input {
   min-height: 0;
   box-sizing: border-box;
   overflow: hidden;
-  padding: 18px;
+  background: #fff;
+  padding: 0;
 }
 
 .koala-content {
@@ -867,17 +963,19 @@ input {
 
 .chat-header {
   display: flex;
-  min-height: 54px;
+  min-height: 24px;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  border-bottom: 1px solid var(--hairline-soft);
-  padding: 10px clamp(24px, 4vw, 44px);
+  gap: 8px;
+  border-bottom: 1px solid var(--hairline);
+  padding: 4px clamp(24px, 4vw, 44px);
+  background: rgb(255 255 255 / 88%);
+  backdrop-filter: blur(18px);
 }
 
 .chat-project-title {
   color: var(--ink) !important;
-  font-size: 19px !important;
+  font-size: 15px !important;
   font-weight: 720 !important;
   letter-spacing: -0.015em;
 }
@@ -913,8 +1011,8 @@ input {
 
 .chat-status {
   display: inline-flex;
-  width: 18px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
   align-items: center;
   gap: 6px;
   padding: 0;
@@ -943,7 +1041,7 @@ input {
 .chat-thread {
   width: min(980px, 100%);
   margin: 0 auto;
-  padding: 36px clamp(24px, 5vw, 52px) 28px !important;
+  padding: 48px clamp(24px, 5vw, 52px) 36px !important;
   scrollbar-gutter: stable;
   scroll-behavior: smooth;
 }
@@ -954,7 +1052,7 @@ input {
 
 .chat-thread .ant-bubble-content {
   font-size: 14px;
-  line-height: 1.7;
+  line-height: 1.75;
 }
 
 .chat-assistant-message {
@@ -962,19 +1060,19 @@ input {
 }
 
 .chat-assistant-message .ant-bubble-content {
-  padding: 2px 0 !important;
+  padding: 6px 0 !important;
   color: var(--body) !important;
 }
 
 .chat-user-message {
   position: relative;
-  margin: 4px 0 18px;
+  margin: 8px 0 22px;
 }
 
 .chat-user-message .ant-bubble-content {
-  padding: 11px 14px !important;
-  border-radius: 14px 14px 4px 14px !important;
-  box-shadow: 0 6px 14px rgb(var(--primary-rgb) / 8%);
+  padding: 12px 16px !important;
+  border-radius: 15px 15px 4px 15px !important;
+  box-shadow: 0 8px 18px rgb(27 42 88 / 16%);
   line-height: 1.65;
 }
 
@@ -1057,6 +1155,7 @@ input {
   border-radius: 10px;
   background: var(--surface-soft);
   box-shadow: inset 0 1px rgb(255 255 255 / 55%);
+  padding: 10px 12px;
 }
 
 .chat-markdown :not(pre) > code {
@@ -1162,7 +1261,8 @@ input {
   position: relative;
   width: min(980px, 100%);
   margin: 0 auto;
-  padding: 0 clamp(24px, 5vw, 52px) 22px;
+  padding: 8px clamp(24px, 5vw, 52px) 24px;
+  background: linear-gradient(180deg, transparent, rgb(255 255 255 / 96%) 22%);
 }
 
 .chat-file-input {
@@ -1187,19 +1287,26 @@ input {
 
 .chat-composer-wrap .ant-sender {
   border: 1px solid var(--hairline);
-  border-radius: 14px;
+  border-top: 0;
+  border-radius: 16px;
   background: color-mix(in srgb, var(--canvas) 92%, var(--surface-soft));
-  box-shadow: 0 12px 28px rgb(var(--primary-rgb) / 8%), inset 0 1px rgb(255 255 255 / 72%);
+  box-shadow: 0 16px 34px rgb(32 44 70 / 11%), inset 0 1px rgb(255 255 255 / 86%);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
 .chat-composer-wrap .ant-sender:focus-within {
   border-color: rgb(var(--primary-rgb) / 48%);
-  box-shadow: 0 12px 28px rgb(var(--primary-rgb) / 9%), inset 0 1px rgb(255 255 255 / 72%);
+  border-top-width: 1px;
+  border-top-style: solid;
+  box-shadow: 0 18px 38px rgb(var(--primary-rgb) / 14%), 0 0 0 4px rgb(var(--primary-rgb) / 7%), inset 0 1px rgb(255 255 255 / 72%);
+  transform: translateY(-1px);
 }
 
 /* 权限触发器获得焦点时，不要把整个输入框伪装成输入态。 */
 .chat-composer-wrap .ant-sender:has(.ant-sender-input:focus) {
   border-color: var(--primary);
+  border-top-width: 1px;
+  border-top-style: solid;
   box-shadow: 0 0 0 3px rgb(var(--primary-rgb) / 10%), 0 12px 28px rgb(var(--primary-rgb) / 8%);
 }
 

@@ -11,9 +11,9 @@ export function ConnectingScreen({ project }: { project: Project }): ReactElemen
   const navigate = useNavigate()
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 py-16" role="status" aria-live="polite">
+    <div className="chat-loading-screen flex h-full flex-col items-center justify-center gap-6 py-16" role="status" aria-live="polite">
       <div className="relative grid h-24 w-24 place-items-center">
-        <span className="absolute inset-0 animate-ping rounded-full bg-blue-100/70" aria-hidden="true" />
+        <span className="chat-loading-ping absolute inset-0 animate-ping rounded-full" aria-hidden="true" />
         <Spin size="large" />
       </div>
       <div className="flex flex-col items-center gap-1.5">
