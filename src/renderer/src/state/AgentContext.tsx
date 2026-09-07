@@ -1,12 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
-import type { AcpSessionInfo, AgentState, ChatMessage } from '@shared/acp'
+import type { AcpSessionInfo, AgentState, ChatMessage, SessionTarget } from '@shared/acp'
 import type { ChatAttachment } from '@shared/attachments'
 import { acp, assertAcpApi } from '@/services/acp'
 import { useAgentSelection } from '@/state/AgentSelectionContext'
 import { INITIAL_MESSAGES } from '@/utils/constants'
+import { applySessionEvent, restoreSessionView, type SessionEvent, type SessionView } from '@shared/session-stream'
 import { dispatchSessionActivity } from '@/utils/session-events'
 
-const MIN_CONNECTING_MS = 0
 
 interface AgentContextValue {
   /** 当前 ACP 连接状态。 */
@@ -55,60 +55,53 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES)
   const [sessionLoading, setSessionLoading] = useState(false)
   const [sessionId, setSessionId] = useState<string>()
-  const connectingRef = useRef(false)
+  const generationRef = useRef(0)
+  const viewRef = useRef<SessionView | undefined>(undefined)
+  const bufferRef = useRef<SessionEvent[] | null>(null)
 
-  const ensureSession = useCallback(async () => {
-    assertAcpApi()
-    // 默认新建对话，不自动加载上一次的会话
-    const created = await acp.createSession(cwd)
-    setSessionId(created.sessionId)
-    setMessages(INITIAL_MESSAGES)
-  }, [cwd])
+  const publishView = useCallback((view: SessionView) => {
+    viewRef.current = view
+    setSessionId(view.target.sessionId)
+    setState(view.state)
+    setMessages(view.messages)
+  }, [])
 
-  const openInitialSession = useCallback(async () => {
-    if (!initialSessionId) {
-      await ensureSession()
-      return
-    }
-
-    assertAcpApi()
-    setMessages(INITIAL_MESSAGES)
+  const openSession = useCallback(async (id?: string) => {
+    const generation = ++generationRef.current
+    bufferRef.current = []
     setSessionLoading(true)
     try {
-      const loaded = await acp.loadSession(initialSessionId, cwd)
-      setSessionId(loaded.sessionId)
+      assertAcpApi()
+      const snapshot = id ? await acp.loadSession(id, cwd, currentAgent) : await acp.createSession(cwd, currentAgent)
+      if (generation !== generationRef.current) return
+      const target: SessionTarget = { sessionId: snapshot.sessionId, cwd, currentAgent }
+      publishView(restoreSessionView(target, snapshot, bufferRef.current ?? []))
+    } catch (error) {
+      if (generation !== generationRef.current) return
+      if (viewRef.current) {
+        // A capacity/load failure keeps the previous view and its intervening events intact.
+        publishView((bufferRef.current ?? []).reduce(applySessionEvent, viewRef.current))
+      } else {
+        setState({ status: 'error', currentAgent, detail: error instanceof Error ? error.message : '加载会话失败。' })
+      }
+      throw error
     } finally {
-      setSessionLoading(false)
+      if (generation === generationRef.current) {
+        bufferRef.current = null
+        setSessionLoading(false)
+      }
     }
-  }, [cwd, ensureSession, initialSessionId])
+  }, [cwd, currentAgent, publishView])
 
   const connect = useCallback(async () => {
-    if (connectingRef.current) return
-    connectingRef.current = true
-    const startedAt = Date.now()
-    try {
-      setState({ status: 'connecting', detail: `正在连接 ${agentName} ACP…`, currentAgent })
-      assertAcpApi()
-      const next = await acp.connect(cwd)
-      if (next.status === 'ready') {
-        setState({ status: 'connecting', detail: '正在加载历史对话…' })
-        await openInitialSession()
-        // 让加载动画至少展示 MIN_CONNECTING_MS，连接过程中 ACP 连接仍在进行
-        const elapsed = Date.now() - startedAt
-        if (elapsed < MIN_CONNECTING_MS) {
-          await new Promise((resolve) => setTimeout(resolve, MIN_CONNECTING_MS - elapsed))
-        }
-        // session/new 会在连接过程中同步权限模式；这里合并状态，避免把 modes 清掉。
-        setState((current) => ({ ...current, status: 'ready', detail: `${agentName} 已连接` }))
-      } else {
-        setState(next)
-      }
-    } catch (error) {
-      setState({ status: 'error', detail: error instanceof Error ? error.message : `连接 ${agentName} ACP 失败。`, currentAgent })
-    } finally {
-      connectingRef.current = false
-    }
-  }, [agentName, currentAgent, cwd, openInitialSession])
+    // load/new owns connection creation; re-entering a live session only reads its snapshot.
+    await openSession(initialSessionId).catch(() => undefined)
+  }, [initialSessionId, openSession])
+
+  const target = useCallback((): SessionTarget => {
+    if (!viewRef.current || bufferRef.current) throw new Error('当前会话尚未就绪。')
+    return viewRef.current.target
+  }, [])
 
   const send = useCallback(async (text: string, attachments: ChatAttachment[] = []) => {
     if (!sessionId) throw new Error('当前会话尚未就绪。')
@@ -118,95 +111,65 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
       title: text.replace(/\s+/g, ' ').trim().slice(0, 80) || attachments.map((item) => item.name).join('、').slice(0, 80)
     }
     if (state.status !== 'working') dispatchSessionActivity(activity)
-    await acp.prompt({ text, cwd, attachments })
-  }, [cwd, sessionId, state.status])
+    await acp.prompt({ text, cwd, attachments, target: target() })
+  }, [cwd, sessionId, state.status, target])
 
   const stop = useCallback(async () => {
-    await acp.stop()
-  }, [])
+    await acp.stop(target())
+  }, [target])
 
   const removeQueuedPrompt = useCallback(async (id: string) => {
-    await acp.removeQueuedPrompt(id)
-  }, [])
+    await acp.removeQueuedPrompt(id, target())
+  }, [target])
 
   const steerQueuedPrompt = useCallback(async (id: string) => {
-    await acp.steerQueuedPrompt(id)
-  }, [])
+    await acp.steerQueuedPrompt(id, target())
+  }, [target])
 
   const setMode = useCallback(async (modeId: string) => {
-    await acp.setMode(modeId)
-  }, [])
+    await acp.setMode(modeId, target())
+  }, [target])
 
   const setModel = useCallback(async (modelId: string) => {
-    await acp.setModel(modelId)
-  }, [])
+    await acp.setModel(modelId, target())
+  }, [target])
 
   const setEffort = useCallback(async (effortId: string) => {
-    await acp.setEffort(effortId)
-  }, [])
+    await acp.setEffort(effortId, target())
+  }, [target])
 
   const respondPermission = useCallback(async (optionId: string) => {
-    await acp.respondPermission(optionId)
-  }, [])
+    await acp.respondPermission(optionId, target())
+  }, [target])
 
   const listSessions = useCallback(async () => acp.listSessions(cwd), [cwd])
 
-  const loadSession = useCallback(
-    async (id: string) => {
-      setMessages(INITIAL_MESSAGES)
-      setSessionLoading(true)
-      try {
-        const loaded = await acp.loadSession(id, cwd)
-        setSessionId(loaded.sessionId)
-      } finally {
-        setSessionLoading(false)
-      }
-    },
-    [cwd]
-  )
-
-  const createNewSession = useCallback(async () => {
-    const created = await acp.createSession(cwd)
-    setSessionId(created.sessionId)
-    setMessages(INITIAL_MESSAGES)
-  }, [cwd])
+  const loadSession = useCallback((id: string) => openSession(id), [openSession])
+  const createNewSession = useCallback(() => openSession(), [openSession])
 
   useEffect(() => {
-    const removeState = acp.onState(setState)
-    const removeMessage = acp.onMessage((incoming) => {
-      setMessages((current) => {
-        // 工具消息由主进程发全量快照（状态/输出随时变化），按 id 整体替换而不是拼接
-        if (incoming.kind === 'tool') {
-          const existing = current.findIndex((item) => item.id === incoming.id)
-          if (existing === -1) return [...current, incoming]
-          return current.map((item, index) => (index === existing ? incoming : item))
-        }
-        // system 消息直接追加（无 id 合并需求）
-        if (incoming.role === 'system') return [...current, incoming]
-        // user / assistant 流式消息按 id 合并内容
-        const existing = current.findIndex((item) => item.id === incoming.id)
-        if (existing === -1) return [...current, incoming]
-        return current.map((item, index) =>
-          index === existing
-            ? {
-                ...item,
-                content: item.content + incoming.content,
-                attachments: [...(item.attachments ?? []), ...(incoming.attachments ?? [])],
-                finishedAt: incoming.finishedAt ?? item.finishedAt
-              }
-            : item
-        )
-      })
-    })
-
-    // 进入项目后自动连接，无需手动点击
-    void connect()
-
+    const receive = (event: SessionEvent): void => {
+      if (event.value.cwd !== cwd || event.value.currentAgent !== currentAgent) return
+      if (bufferRef.current) {
+        bufferRef.current.push(event)
+      } else if (viewRef.current) {
+        const next = applySessionEvent(viewRef.current, event)
+        if (next !== viewRef.current) publishView(next)
+      }
+    }
+    const removeState = acp.onState((value) => receive({ type: 'state', value }))
+    const removeMessage = acp.onMessage((value) => receive({ type: 'message', value }))
+    // Defer one microtask so StrictMode's discarded effect does not create a spare runtime.
+    let disposed = false
+    void Promise.resolve().then(() => { if (!disposed) return connect() })
     return () => {
+      disposed = true
+      generationRef.current++
+      bufferRef.current = null
       removeState()
       removeMessage()
     }
-  }, [connect])
+  }, [connect, cwd, currentAgent, publishView])
 
   const value = useMemo<AgentContextValue>(
     () => ({ state, cwd, messages, sessionLoading, sessionId, connect, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission, listSessions, loadSession, createNewSession }),

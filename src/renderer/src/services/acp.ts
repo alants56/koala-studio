@@ -2,6 +2,7 @@ import type { AcpApi } from '@shared/acp'
 
 const REQUIRED_METHODS: ReadonlyArray<keyof AcpApi> = [
   'getState',
+  'getSessionStates',
   'connect',
   'prompt',
   'removeQueuedPrompt',

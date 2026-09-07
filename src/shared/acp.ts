@@ -69,7 +69,20 @@ export interface AgentQueuedPrompt {
   attachmentNames: string[]
 }
 
+export interface SessionTarget {
+  sessionId: string
+  cwd: string
+  currentAgent: AgentAdapterId
+}
+
+export interface AcpMessageEvent extends SessionTarget {
+  revision: number
+  message: ChatMessage
+}
+
 export interface AgentState {
+  cwd?: string
+  revision?: number
   status: AgentStatus
   sessionId?: string
   detail?: string
@@ -123,6 +136,8 @@ export interface ChatMessage {
 }
 
 export interface PromptRequest {
+  /** Required at the IPC boundary; internal automation prompts may omit it. */
+  target?: SessionTarget
   text: string
   cwd: string
   attachments?: ChatAttachment[]
@@ -146,6 +161,8 @@ export interface AcpSessionResult {
 
 /** session/load 回放的历史消息。 */
 export interface LoadedSession {
+  state?: AgentState
+  revision?: number
   sessionId: string
   messages: ChatMessage[]
   modes?: AgentMode[]
@@ -153,25 +170,26 @@ export interface LoadedSession {
 }
 
 export interface AcpApi {
-  getState: () => Promise<AgentState>
+  getSessionStates: () => Promise<AgentState[]>
+  getState: (target?: SessionTarget) => Promise<AgentState>
   connect: (cwd: string) => Promise<AgentState>
-  prompt: (request: PromptRequest) => Promise<void>
-  removeQueuedPrompt: (id: string) => Promise<void>
-  steerQueuedPrompt: (id: string) => Promise<void>
-  stop: () => Promise<void>
-  setMode: (modeId: string) => Promise<void>
-  setModel: (modelId: string) => Promise<void>
-  setEffort: (effortId: string) => Promise<void>
+  prompt: (request: PromptRequest & { target: SessionTarget }) => Promise<void>
+  removeQueuedPrompt: (id: string, target: SessionTarget) => Promise<void>
+  steerQueuedPrompt: (id: string, target: SessionTarget) => Promise<void>
+  stop: (target: SessionTarget) => Promise<void>
+  setMode: (modeId: string, target: SessionTarget) => Promise<void>
+  setModel: (modelId: string, target: SessionTarget) => Promise<void>
+  setEffort: (effortId: string, target: SessionTarget) => Promise<void>
   /** 切换 ACP 适配器（claude / pi）。 */
   setAgent: (agentId: AgentAdapterId) => Promise<void>
   /** 通过 ACP session/list 查询 Claude Code 在该目录下的会话记录。 */
   listSessions: (cwd: string) => Promise<AcpSessionInfo[]>
   /** 通过 ACP session/load 加载历史会话，并返回回放的消息。 */
-  loadSession: (sessionId: string, cwd: string) => Promise<LoadedSession>
+  loadSession: (sessionId: string, cwd: string, agent: AgentAdapterId) => Promise<LoadedSession>
   /** 通过 ACP session/new 新建一个会话。 */
-  createSession: (cwd: string) => Promise<AcpSessionResult>
+  createSession: (cwd: string, agent: AgentAdapterId) => Promise<LoadedSession>
   /** 回复当前待确认的权限请求。*/
-  respondPermission: (optionId: string) => Promise<void>
+  respondPermission: (optionId: string, target: SessionTarget) => Promise<void>
   onState: (listener: (state: AgentState) => void) => () => void
-  onMessage: (listener: (message: ChatMessage) => void) => () => void
+  onMessage: (listener: (event: AcpMessageEvent) => void) => () => void
 }

@@ -29,7 +29,10 @@ export function AgentSelectionProvider({ children }: { children: ReactNode }): R
     }
 
     void acp.getState().then((state) => applyAgent(state.currentAgent))
-    const removeState = acp.onState((state) => applyAgent(state.currentAgent))
+    const removeState = acp.onState((state) => {
+      // Background sessions must not switch the globally selected adapter.
+      if (!state.sessionId) applyAgent(state.currentAgent)
+    })
     return () => {
       active = false
       removeState()

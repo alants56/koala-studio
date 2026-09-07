@@ -5,11 +5,12 @@ import { readdir } from 'node:fs/promises'
 import { promisify } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import type { AttachmentImportInput } from '../shared/attachments'
-import type { AgentAdapterId } from '../shared/acp'
+import type { AgentAdapterId, SessionTarget } from '../shared/acp'
 import type { CreateAutomationInput, UpdateAutomationInput } from '../shared/automations'
 import type { CreateTodoInput, ReorderTodoInput, UpdateTodoInput } from '../shared/todos'
 import type { CreateProjectInput, UpdateProjectInput } from '../shared/projects'
 import { AcpBridge } from './services/acp-bridge'
+import { AcpSessionManager } from './services/acp-session-manager'
 import {
   listClaudeResources,
   readClaudeSkill,
@@ -97,16 +98,21 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let mainWindow: BrowserWindow | undefined
-const acpBridge = new AcpBridge({
-  getPreferredModeId: getPreferredPermissionModeId,
-  setPreferredModeId: setPreferredPermissionModeId,
-  getPreferredModelId: getPreferredModelId,
-  setPreferredModelId: setPreferredModelId,
-  getPreferredEffortId: getPreferredEffortId,
-  setPreferredEffortId: setPreferredEffortId,
-  getPreferredAgentId: getPreferredAgentId,
-  setPreferredAgentId: setPreferredAgentId,
-  queuedPromptStore: getQueuedPromptStore()
+const acpBridge = new AcpSessionManager({
+  getPreferredAgentId,
+  setPreferredAgentId,
+  createBridge: (initialAgentId) => new AcpBridge({
+    initialAgentId,
+    getPreferredModeId: getPreferredPermissionModeId,
+    setPreferredModeId: setPreferredPermissionModeId,
+    getPreferredModelId: getPreferredModelId,
+    setPreferredModelId: setPreferredModelId,
+    getPreferredEffortId: getPreferredEffortId,
+    setPreferredEffortId: setPreferredEffortId,
+    getPreferredAgentId: getPreferredAgentId,
+    setPreferredAgentId: setPreferredAgentId,
+    queuedPromptStore: getQueuedPromptStore()
+  })
 })
 let automationScheduler: AutomationScheduler | undefined
 
@@ -183,18 +189,19 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('acp:get-state', async () => {
+  ipcMain.handle('acp:get-state', async (_, target?: SessionTarget) => {
     await acpBridge.getCurrentAgent()
-    return acpBridge.getState()
+    return acpBridge.getState(target)
   })
+  ipcMain.handle('acp:get-session-states', () => acpBridge.getSessionStates())
   ipcMain.handle('acp:connect', (_, cwd: string) => acpBridge.connect(cwd))
   ipcMain.handle('acp:prompt', (_, request) => acpBridge.prompt(request))
-  ipcMain.handle('acp:remove-queued-prompt', (_, id: string) => acpBridge.removeQueuedPrompt(id))
-  ipcMain.handle('acp:steer-queued-prompt', (_, id: string) => acpBridge.steerQueuedPrompt(id))
-  ipcMain.handle('acp:stop', () => acpBridge.stop())
-  ipcMain.handle('acp:set-mode', (_, modeId: string) => acpBridge.setMode(modeId))
-  ipcMain.handle('acp:set-model', (_, modelId: string) => acpBridge.setModel(modelId))
-  ipcMain.handle('acp:set-effort', (_, effortId: string) => acpBridge.setEffort(effortId))
+  ipcMain.handle('acp:remove-queued-prompt', (_, id: string, target: SessionTarget) => acpBridge.removeQueuedPrompt(id, target))
+  ipcMain.handle('acp:steer-queued-prompt', (_, id: string, target: SessionTarget) => acpBridge.steerQueuedPrompt(id, target))
+  ipcMain.handle('acp:stop', (_, target: SessionTarget) => acpBridge.stop(target))
+  ipcMain.handle('acp:set-mode', (_, modeId: string, target: SessionTarget) => acpBridge.setMode(modeId, target))
+  ipcMain.handle('acp:set-model', (_, modelId: string, target: SessionTarget) => acpBridge.setModel(modelId, target))
+  ipcMain.handle('acp:set-effort', (_, effortId: string, target: SessionTarget) => acpBridge.setEffort(effortId, target))
   ipcMain.handle('acp:set-agent', (_, agentId: string) => acpBridge.setAgent(agentId as 'claude' | 'pi'))
   ipcMain.handle('acp:list-sessions', async (_event, cwd: string) => {
     // 会话索引查询使用短连接，用主 bridge 当前的 agent 类型，避免侧栏读取其他项目时切断当前聊天。
@@ -210,9 +217,9 @@ app.whenReady().then(() => {
       listingBridge.dispose()
     }
   })
-  ipcMain.handle('acp:load-session', (_event, sessionId: string, cwd: string) => acpBridge.loadSession(sessionId, cwd))
-  ipcMain.handle('acp:create-session', (_event, cwd: string) => acpBridge.createSession(cwd))
-  ipcMain.handle('acp:respond-permission', (_event, optionId: string) => acpBridge.respondPermission(optionId))
+  ipcMain.handle('acp:load-session', (_event, sessionId: string, cwd: string, agent: AgentAdapterId) => acpBridge.loadSession(sessionId, cwd, agent))
+  ipcMain.handle('acp:create-session', (_event, cwd: string, agent: AgentAdapterId) => acpBridge.createSession(cwd, agent))
+  ipcMain.handle('acp:respond-permission', (_event, optionId: string, target: SessionTarget) => acpBridge.respondPermission(optionId, target))
 
   ipcMain.handle('projects:list', () => listProjects())
   ipcMain.handle('projects:create', (_event, input: CreateProjectInput) => createProject(input))

@@ -28,7 +28,7 @@ interface ProjectNavigationProps {
 /** 侧栏项目树：沿用项目页排序，并为每个可见项目展示最近的会话。 */
 export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactElement | null {
   const { projects, loading, defaultWorkspace } = useProjects()
-  const { revision: agentRevision } = useAgentSelection()
+  const { revision: agentRevision, currentAgent } = useAgentSelection()
   const location = useLocation()
   const navigate = useNavigate()
   const [showAllProjects, setShowAllProjects] = useState(false)
@@ -38,7 +38,6 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
   /** 正在流式生成的会话 id 集合，用于在侧栏会话行上展示加载圈。 */
   const [streamingSessionIds, setStreamingSessionIds] = useState<Set<string>>(() => new Set())
   const streamingSessionIdsRef = useRef<Set<string>>(streamingSessionIds)
-  const activeStreamingSessionIdRef = useRef<string | undefined>(undefined)
   const sessionListsRef = useRef(sessionLists)
   const requestVersionsRef = useRef(new Map<string, number>())
   const pendingSessionsRef = useRef(new Map<string, AcpSessionInfo>())
@@ -113,7 +112,6 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
       setSessionLists({})
       setLiveSelection(undefined)
       streamingSessionIdsRef.current = new Set()
-      activeStreamingSessionIdRef.current = undefined
       setStreamingSessionIds(new Set())
     }
 
@@ -141,8 +139,11 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
 
   useEffect(() => {
     let active = true
+    const revisions = new Map<string, number>()
     const applyState = (state: AgentState): void => {
-      if (!active) return
+      if (!active || !state.sessionId || state.currentAgent !== currentAgent) return
+      if ((state.revision ?? 0) < (revisions.get(state.sessionId) ?? -1)) return
+      revisions.set(state.sessionId, state.revision ?? 0)
       if (state.sessionId && typeof state.queueDepth === 'number') {
         updateSessionLists((current) => Object.fromEntries(Object.entries(current).map(([projectId, listState]) => [
           projectId,
@@ -154,27 +155,21 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
           }
         ])))
       }
-      const nextSessionId = state.status === 'working' ? state.sessionId : undefined
-      const previousSessionId = activeStreamingSessionIdRef.current
-      if (previousSessionId && previousSessionId !== nextSessionId) {
-        markStreaming(previousSessionId, false)
-        const completedProject = projects.find((project) =>
-          sessionListsRef.current[project.id]?.sessions.some((session) => session.sessionId === previousSessionId)
-          || pendingSessionsRef.current.get(project.id)?.sessionId === previousSessionId
-        )
+      const wasStreaming = streamingSessionIdsRef.current.has(state.sessionId)
+      markStreaming(state.sessionId, state.status === 'working')
+      if (wasStreaming && state.status !== 'working') {
+        const completedProject = projects.find((project) => (project.path ?? defaultWorkspace) === state.cwd)
         if (completedProject) void refreshProjectSessions(completedProject)
       }
-      if (nextSessionId) markStreaming(nextSessionId, true)
-      activeStreamingSessionIdRef.current = nextSessionId
     }
 
-    void window.acp.getState().then(applyState)
     const removeState = window.acp.onState(applyState)
+    void window.acp.getSessionStates().then((states) => states.forEach(applyState))
     return () => {
       active = false
       removeState()
     }
-  }, [markStreaming, projects, refreshProjectSessions, updateSessionLists])
+  }, [currentAgent, agentRevision, defaultWorkspace, markStreaming, projects, refreshProjectSessions, updateSessionLists])
 
   useEffect(() => {
     return subscribeSessionActivity((activity) => {

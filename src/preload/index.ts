@@ -9,20 +9,21 @@ import type { FileActionsApi } from '../shared/files'
 import type { WorkspaceApi } from '../shared/workspace'
 
 const acp: AcpApi = {
-  getState: () => ipcRenderer.invoke('acp:get-state'),
+  getSessionStates: () => ipcRenderer.invoke('acp:get-session-states'),
+  getState: (target) => ipcRenderer.invoke('acp:get-state', target),
   connect: (cwd) => ipcRenderer.invoke('acp:connect', cwd),
   prompt: (request) => ipcRenderer.invoke('acp:prompt', request),
-  removeQueuedPrompt: (id) => ipcRenderer.invoke('acp:remove-queued-prompt', id),
-  steerQueuedPrompt: (id) => ipcRenderer.invoke('acp:steer-queued-prompt', id),
-  stop: () => ipcRenderer.invoke('acp:stop'),
-  setMode: (modeId) => ipcRenderer.invoke('acp:set-mode', modeId),
-  setModel: (modelId) => ipcRenderer.invoke('acp:set-model', modelId),
-  setEffort: (effortId) => ipcRenderer.invoke('acp:set-effort', effortId),
+  removeQueuedPrompt: (id, target) => ipcRenderer.invoke('acp:remove-queued-prompt', id, target),
+  steerQueuedPrompt: (id, target) => ipcRenderer.invoke('acp:steer-queued-prompt', id, target),
+  stop: (target) => ipcRenderer.invoke('acp:stop', target),
+  setMode: (modeId, target) => ipcRenderer.invoke('acp:set-mode', modeId, target),
+  setModel: (modelId, target) => ipcRenderer.invoke('acp:set-model', modelId, target),
+  setEffort: (effortId, target) => ipcRenderer.invoke('acp:set-effort', effortId, target),
   setAgent: (agentId: AgentAdapterId) => ipcRenderer.invoke('acp:set-agent', agentId),
   listSessions: (cwd) => ipcRenderer.invoke('acp:list-sessions', cwd),
-  loadSession: (sessionId, cwd) => ipcRenderer.invoke('acp:load-session', sessionId, cwd),
-  createSession: (cwd) => ipcRenderer.invoke('acp:create-session', cwd),
-  respondPermission: (optionId) => ipcRenderer.invoke('acp:respond-permission', optionId),
+  loadSession: (sessionId, cwd, agent) => ipcRenderer.invoke('acp:load-session', sessionId, cwd, agent),
+  createSession: (cwd, agent) => ipcRenderer.invoke('acp:create-session', cwd, agent),
+  respondPermission: (optionId, target) => ipcRenderer.invoke('acp:respond-permission', optionId, target),
   onState: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, state: Parameters<typeof listener>[0]) => listener(state)
     ipcRenderer.on('acp:state', handler)

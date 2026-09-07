@@ -1,10 +1,9 @@
-import { useState, type ReactElement } from 'react'
+import { memo, useState, type ReactElement } from 'react'
 import { Bubble, ThoughtChain } from '@ant-design/x'
 import { BulbOutlined, CheckCircleOutlined, CheckOutlined, CloseCircleOutlined, CopyOutlined, FileMarkdownOutlined, FileOutlined, FilePdfOutlined, LoadingOutlined, ToolOutlined } from '@ant-design/icons'
 import { Image } from 'antd'
 import type { ChatAttachment, ChatMessage } from '@/models'
 import { formatMessageTime } from '@/utils/format'
-import { useAgent } from '@/state/AgentContext'
 import { MarkdownMessage } from './MarkdownMessage'
 import { FileContextMenu } from './FileContextMenu'
 
@@ -115,9 +114,10 @@ function UserBubble({ message, cwd }: { message: ChatMessage; cwd?: string }): R
  * - 助手正文：左侧，标签 Koala
  * - 思考过程 / 工具调用：左侧 ThoughtChain，灰色
  * - 系统消息：居中 System 气泡
+ * 用 memo 包裹：流式更新时只有内容变化的那条消息重渲染，避免整片列表反复渲染。
  */
-export function ChatMessageItem({ message, streaming = false }: { message: ChatMessage; streaming?: boolean }): ReactElement {
-  const { cwd } = useAgent()
+export const ChatMessageItem = memo(
+  function ChatMessageItem({ message, streaming = false, cwd }: { message: ChatMessage; streaming?: boolean; cwd?: string }): ReactElement {
   if (message.kind === 'thinking') {
     return (
       <ThoughtChain
@@ -221,4 +221,6 @@ export function ChatMessageItem({ message, streaming = false }: { message: ChatM
       )}
     </div>
   )
-}
+},
+(prev, next) => prev.message === next.message && prev.streaming === next.streaming && prev.cwd === next.cwd
+)
