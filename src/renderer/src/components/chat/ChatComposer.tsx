@@ -27,6 +27,7 @@ import type { AgentCommand, AgentPermissionOption } from '@shared/acp'
 const MAX_ATTACHMENT_COUNT = 10
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 const MAX_TOTAL_ATTACHMENT_BYTES = 50 * 1024 * 1024
+const PASTE_AS_FILE_THRESHOLD = 2000
 
 interface PendingAttachment extends UploadFile {
   sourceFile: File
@@ -410,9 +411,16 @@ export function ChatComposer(): ReactElement {
 
   const handlePaste = (event: ClipboardEvent<HTMLElement>): void => {
     const files = Array.from(event.clipboardData.files)
-    if (files.length === 0) return
-    event.preventDefault()
-    addFiles(files)
+    if (files.length > 0) {
+      event.preventDefault()
+      addFiles(files)
+      return
+    }
+    const text = event.clipboardData.getData('text/plain')
+    if (text.length > PASTE_AS_FILE_THRESHOLD) {
+      event.preventDefault()
+      addFiles([new File([text], '粘贴文本.txt', { type: 'text/plain' })])
+    }
   }
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>): void => {
