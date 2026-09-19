@@ -2132,6 +2132,7 @@ input {
 }
 
 /* 改动详情弹窗：左侧文件树 + 右侧并排对比。 */
+.git-changes-dialog .ant-modal-container,
 .git-changes-dialog .ant-modal-content {
   overflow: hidden;
   border-radius: 16px;
@@ -2145,6 +2146,7 @@ input {
 }
 
 .git-changes-dialog .ant-modal-body {
+  min-height: 0;
   padding: 0;
 }
 
@@ -2174,7 +2176,7 @@ input {
 .git-changes-body {
   display: grid;
   grid-template-columns: 268px minmax(0, 1fr);
-  height: min(560px, 68vh);
+  height: min(720px, 78vh);
 }
 
 .git-changes-tree {
@@ -2310,7 +2312,9 @@ input {
 .git-changes-diff {
   display: flex;
   min-width: 0;
+  min-height: 0;
   flex-direction: column;
+  overflow: hidden;
   background: var(--surface-card);
 }
 

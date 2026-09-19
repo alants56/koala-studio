@@ -106,7 +106,7 @@ export function GitChangesDialog({ cwd, open, onClose }: GitChangesDialogProps):
       open={open}
       onCancel={onClose}
       footer={null}
-      width={1080}
+      width={1280}
       centered
       destroyOnHidden
       className="git-changes-dialog"
