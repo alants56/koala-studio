@@ -6,24 +6,14 @@ import { promisify } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import type { AttachmentImportInput } from '../shared/attachments'
 import type { AgentAdapterId, SessionTarget } from '../shared/acp'
-import type { CreateAutomationInput, UpdateAutomationInput } from '../shared/automations'
 import type { CreateTodoInput, ReorderTodoInput, UpdateTodoInput } from '../shared/todos'
 import type { CreateProjectInput, UpdateProjectInput } from '../shared/projects'
+import type { UpdateConversationInput } from '../shared/conversations'
 import { AcpBridge } from './services/acp-bridge'
 import { AcpSessionManager } from './services/acp-session-manager'
-import {
-  listClaudeResources,
-  readClaudeSkill,
-  removeClaudeMcp,
-  removeClaudeSkill,
-  revealClaudePath,
-  runClaudePluginAction,
-  saveClaudeMcp,
-  saveClaudeSkill
-} from './services/claude-resources'
 import { createProject, deleteProject, listProjects, reorderProjects, updateProject } from './services/project-store'
-import { getAutomationStore } from './services/automation-store'
-import { AutomationScheduler, executeScheduledAutomation } from './services/automation-scheduler'
+import { getConversationStore } from './services/conversation-store'
+import { getSessionMetaStore } from './services/session-meta-store'
 import { getTodoStore } from './services/todo-store'
 import {
   getLastDirectoryPath,
@@ -116,8 +106,6 @@ const acpBridge = new AcpSessionManager({
     queuedPromptStore: getQueuedPromptStore()
   })
 })
-let automationScheduler: AutomationScheduler | undefined
-
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -151,11 +139,6 @@ function createWindow(): void {
   } else {
     void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
-}
-
-function parseResourceAgent(value: string): AgentAdapterId {
-  if (value !== 'claude' && value !== 'pi') throw new Error('不支持的 Agent 类型。')
-  return value
 }
 
 /** 项目未指定文件夹时的默认工作区：开发模式用应用所在目录，打包后用用户主目录。 */
@@ -214,10 +197,39 @@ app.whenReady().then(() => {
         listingBridge.listSessions(cwd),
         getQueuedPromptStore().countBySession(agentId, cwd)
       ])
-      return sessions.map((session) => ({ ...session, queueDepth: queueCounts.get(session.sessionId) ?? 0 }))
+      // 应用内的重命名 / 归档覆写在读取时合并，侧栏与看板拿到的都是生效后的标题与标记。
+      const merged = await getSessionMetaStore().apply(agentId, cwd, sessions)
+      // 早期归档没有标题快照：顺带补写，让设置弹窗的归档列表能纯本地渲染（不阻塞返回）。
+      void getSessionMetaStore().snapshotArchivedTitles(agentId, cwd, merged).catch(() => undefined)
+      return merged.map((session) => ({ ...session, queueDepth: queueCounts.get(session.sessionId) ?? 0 }))
     } finally {
       listingBridge.dispose()
     }
+  })
+  ipcMain.handle('acp:rename-session', async (_event, cwd: string, sessionId: string, title: string) => {
+    await getSessionMetaStore().rename(await acpBridge.getCurrentAgent(), cwd, sessionId, title)
+  })
+  ipcMain.handle('acp:set-session-archived', async (_event, cwd: string, sessionId: string, archived: boolean, title?: string) => {
+    await getSessionMetaStore().setArchived(await acpBridge.getCurrentAgent(), cwd, sessionId, archived, title)
+  })
+  ipcMain.handle('acp:list-archived-sessions', async () => getSessionMetaStore().listArchived(await acpBridge.getCurrentAgent()))
+  ipcMain.handle('acp:delete-session', async (_event, cwd: string, sessionId: string) => {
+    const agentId = await acpBridge.getCurrentAgent()
+    // 该会话可能还在后台运行：先卸掉运行实例，再删除 Agent 侧记录与本地覆写。
+    acpBridge.releaseSession(sessionId, cwd, agentId)
+    const deletionBridge = new AcpBridge({ initialAgentId: agentId })
+    let warning: string | undefined
+    try {
+      await deletionBridge.deleteSession(cwd, sessionId)
+    } catch (error) {
+      // 目录已删除、会话早已不存在等情况下 Agent 侧删不掉；本地索引仍然要清，否则会卡在归档列表里。
+      warning = error instanceof Error ? error.message : String(error)
+    } finally {
+      deletionBridge.dispose()
+    }
+    await getQueuedPromptStore().replace(agentId, cwd, sessionId, [])
+    await getSessionMetaStore().forget(agentId, cwd, sessionId)
+    return { agentDeleted: warning === undefined, warning }
   })
   ipcMain.handle('acp:load-session', (_event, sessionId: string, cwd: string, agent: AgentAdapterId) => acpBridge.loadSession(sessionId, cwd, agent))
   ipcMain.handle('acp:create-session', (_event, cwd: string, agent: AgentAdapterId) => acpBridge.createSession(cwd, agent))
@@ -230,6 +242,13 @@ app.whenReady().then(() => {
   ipcMain.handle('projects:reorder', (_event, orderedIds: string[]) => reorderProjects(orderedIds))
   ipcMain.handle('projects:pick-directory', () => pickDirectory())
   ipcMain.handle('workspace:get-default', () => getDefaultWorkspace())
+
+  ipcMain.handle('conversations:list', () => getConversationStore().list())
+  ipcMain.handle('conversations:create', () => getConversationStore().create())
+  ipcMain.handle('conversations:update', (_event, id: string, input: UpdateConversationInput) => getConversationStore().update(id, input))
+  ipcMain.handle('conversations:touch', (_event, id: string) => getConversationStore().touch(id))
+  ipcMain.handle('conversations:set-archived', (_event, id: string, archived: boolean) => getConversationStore().setArchived(id, archived))
+  ipcMain.handle('conversations:delete', (_event, id: string) => getConversationStore().delete(id))
 
   ipcMain.handle('attachments:import', (_event, files: AttachmentImportInput[]) => importAttachments(files))
   ipcMain.handle('attachments:list-open-with-apps', (_event, storageKey: string) => listOpenWithApps(attachmentFilePath(storageKey)))
@@ -268,14 +287,6 @@ app.whenReady().then(() => {
     // 用主进程里持久化的 Agent 偏好决定由谁来生成，不经过渲染层。
     generateCommitMessage(cwd, await acpBridge.getCurrentAgent()))
 
-  ipcMain.handle('automations:list', (_event, input) => getAutomationStore().list(input))
-  ipcMain.handle('automations:get', (_event, id: string) => getAutomationStore().get(id))
-  ipcMain.handle('automations:create', (_event, input: CreateAutomationInput) => getAutomationStore().create(input))
-  ipcMain.handle('automations:update', (_event, id: string, input: UpdateAutomationInput) => getAutomationStore().update(id, input))
-  ipcMain.handle('automations:set-enabled', (_event, id: string, enabled: boolean) => getAutomationStore().setEnabled(id, enabled))
-  ipcMain.handle('automations:run-test', (_event, id: string) => getAutomationStore().runTest(id))
-  ipcMain.handle('automations:delete', (_event, id: string) => getAutomationStore().delete(id))
-
   ipcMain.handle('todos:list', (_event, input) => getTodoStore().list(input))
   ipcMain.handle('todos:get', (_event, id: string) => getTodoStore().get(id))
   ipcMain.handle('todos:create', (_event, input: CreateTodoInput) => getTodoStore().create(input))
@@ -284,21 +295,9 @@ app.whenReady().then(() => {
   ipcMain.handle('todos:set-done', (_event, id: string, done: boolean) => getTodoStore().setDone(id, done))
   ipcMain.handle('todos:delete', (_event, id: string) => getTodoStore().delete(id))
 
-  ipcMain.handle('claude:list', (_event, agent: string) => listClaudeResources(parseResourceAgent(agent)))
-  ipcMain.handle('claude:read-skill', (_event, agent: string, id: string) => readClaudeSkill(parseResourceAgent(agent), id))
-  ipcMain.handle('claude:save-skill', (_event, agent: string, input) => saveClaudeSkill(parseResourceAgent(agent), input))
-  ipcMain.handle('claude:remove-skill', (_event, agent: string, id: string) => removeClaudeSkill(parseResourceAgent(agent), id))
-  ipcMain.handle('claude:save-mcp', (_event, agent: string, input) => saveClaudeMcp(parseResourceAgent(agent), input))
-  ipcMain.handle('claude:remove-mcp', (_event, agent: string, name: string, scope, projectPath?: string) => removeClaudeMcp(parseResourceAgent(agent), name, scope, projectPath))
-  ipcMain.handle('claude:plugin-action', (_event, agent: string, action, id: string) => runClaudePluginAction(parseResourceAgent(agent), action, id))
-  ipcMain.handle('claude:reveal', (_event, agent: string, path: string) => revealClaudePath(parseResourceAgent(agent), path))
-
-
   acpBridge.on('state', (state) => mainWindow?.webContents.send('acp:state', state))
   acpBridge.on('message', (message) => mainWindow?.webContents.send('acp:message', message))
 
-  automationScheduler = new AutomationScheduler(getAutomationStore(), executeScheduledAutomation)
-  automationScheduler.start()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -310,6 +309,5 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
-  automationScheduler?.stop()
   acpBridge.dispose()
 })

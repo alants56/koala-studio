@@ -8,7 +8,7 @@ import { piAcpEnvironment } from './pi-runtime'
 
 const execFileAsync = promisify(execFile)
 
-/** 生成提交说明是交互内的动作，超时按秒级给，不能沿用自动化的 30 分钟。 */
+/** 生成提交说明是交互内的动作，超时按秒级给，不能沿用长任务的 30 分钟。 */
 const GENERATE_TIMEOUT_MS = 60_000
 const GIT_TIMEOUT_MS = 15_000
 const GIT_MAX_BUFFER = 8 * 1024 * 1024

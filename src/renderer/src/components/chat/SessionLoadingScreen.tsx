@@ -1,7 +1,5 @@
 import type { ReactElement } from 'react'
 import { Skeleton, Spin } from 'antd'
-import { useNavigate } from 'react-router-dom'
-import type { Project } from '@/models'
 import { useAgent } from '@/state/AgentContext'
 import { ChatHeader } from './ChatHeader'
 
@@ -11,23 +9,21 @@ import { ChatHeader } from './ChatHeader'
  * 用骨架屏模拟真实的消息结构，让加载态与正式会话无缝衔接。
  */
 interface SessionLoadingScreenProps {
-  project: Project
-  /** 新建会话：由项目页换一代 AgentProvider，加载动画随之被替换。 */
+  /** 顶栏标题：项目名或对话标题。 */
+  title: string
+  /** 新建会话：由外层页面换一代 AgentProvider / 新建一条仅对话。 */
   onStartNewConversation: () => void
+  /** 查看项目看板；仅项目对话提供。 */
+  onOpenBoard?: () => void
 }
 
-export function SessionLoadingScreen({ project, onStartNewConversation }: SessionLoadingScreenProps): ReactElement {
+export function SessionLoadingScreen({ title, onStartNewConversation, onOpenBoard }: SessionLoadingScreenProps): ReactElement {
   const { state, cwd } = useAgent()
-  const navigate = useNavigate()
   const agentName = state.currentAgent === 'pi' ? 'Pi' : 'Claude'
-
-  const handleOpenBoard = (): void => {
-    void navigate(`/projects/${encodeURIComponent(project.id)}?view=board`)
-  }
 
   return (
     <div className="chat-shell chat-loading-screen" role="status" aria-live="polite">
-      <ChatHeader project={project} state={state} cwd={cwd} onNewConversation={onStartNewConversation} onOpenBoard={handleOpenBoard} />
+      <ChatHeader title={title} state={state} cwd={cwd} onNewConversation={onStartNewConversation} onOpenBoard={onOpenBoard} />
 
       <div className="chat-thread chat-loading-thread flex flex-1 flex-col overflow-y-auto">
         {/* 助手正文骨架 */}

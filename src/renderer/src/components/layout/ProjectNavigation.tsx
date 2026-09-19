@@ -5,19 +5,25 @@ import {
   EditOutlined,
   FolderOpenOutlined,
   FolderOutlined,
+  InboxOutlined,
   LoadingOutlined,
   MessageOutlined,
   MoreOutlined,
+  PlusOutlined,
   ProjectOutlined,
+  UndoOutlined,
   UpOutlined
 } from '@ant-design/icons'
 import { App, Button, Dropdown, Skeleton } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
+import type { Conversation } from '@shared/conversations'
 import type { AcpSessionInfo, AgentState, Project } from '@/models'
 import { RenameProjectModal } from '@/components/projects/RenameProjectModal'
+import { RenameSessionModal } from '@/components/layout/RenameSessionModal'
 import { useAgentSelection } from '@/state/AgentSelectionContext'
+import { useConversations } from '@/state/ConversationsContext'
 import { useProjects } from '@/state/ProjectsContext'
-import { subscribeSessionActivity } from '@/utils/session-events'
+import { subscribeSessionActivity, subscribeSessionMetaChange } from '@/utils/session-events'
 import { readableIpcError } from '@/utils/ipc-error'
 
 const DEFAULT_VISIBLE_COUNT = 5
@@ -34,15 +40,22 @@ interface ProjectNavigationProps {
   collapsed: boolean
 }
 
-/** 侧栏项目树：沿用项目页排序，并为每个可见项目展示最近的会话。 */
+/** 侧栏项目树与仅对话：沿用项目页排序，并为每个可见项目展示最近的会话。 */
 export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactElement | null {
   const { projects, loading, defaultWorkspace, deleteProject } = useProjects()
+  const { conversations, loading: conversationsLoading, createConversation, updateConversation, setConversationArchived, deleteConversation } = useConversations()
   const { revision: agentRevision, currentAgent } = useAgentSelection()
   const { modal, message } = App.useApp()
   const location = useLocation()
   const navigate = useNavigate()
   const [renamingProject, setRenamingProject] = useState<Project>()
+  /** 正在重命名的项目会话 / 对话；为空表示弹窗关闭。 */
+  const [renamingSession, setRenamingSession] = useState<{ project: Project; session: AcpSessionInfo }>()
+  const [renamingConversation, setRenamingConversation] = useState<Conversation>()
+  /** 哪些项目展开了「已归档」分组。 */
+  const [expandedArchivedProjects, setExpandedArchivedProjects] = useState<Set<string>>(() => new Set())
   const [showAllProjects, setShowAllProjects] = useState(false)
+  const [creatingConversation, setCreatingConversation] = useState(false)
   const [expandedSessionLists, setExpandedSessionLists] = useState<Set<string>>(() => new Set())
   const [sessionLists, setSessionLists] = useState<Record<string, SessionListState>>({})
   const [liveSelection, setLiveSelection] = useState<{ projectId: string; sessionId: string }>()
@@ -56,6 +69,7 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
 
   const routeParts = location.pathname.split('/')
   const activeProjectId = location.pathname.startsWith('/projects/') ? decodeURIComponent(routeParts[2] ?? '') : undefined
+  const activeConversationId = location.pathname.startsWith('/chats/') ? decodeURIComponent(routeParts[2] ?? '') : undefined
   const activeSessionId = new URLSearchParams(location.search).get('session') ?? undefined
   const effectiveActiveSessionId = activeSessionId
     ?? (liveSelection && liveSelection.projectId === activeProjectId ? liveSelection.sessionId : undefined)
@@ -192,11 +206,15 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
 
       // 发送开始即显示并选中新会话；同时让更早的列表请求失效，避免旧结果覆盖。
       requestVersionsRef.current.set(project.id, (requestVersionsRef.current.get(project.id) ?? 0) + 1)
+      // 用户改过名的会话保持自定义标题：发消息不再让首条消息文本盖掉它。
+      const existing = sessionListsRef.current[project.id]?.sessions.find((session) => session.sessionId === activity.sessionId)
       const optimisticSession: AcpSessionInfo = {
         sessionId: activity.sessionId,
-        title: activity.title || '未命名会话',
+        title: existing?.titleFromUser ? existing.title : activity.title || '未命名会话',
         updatedAt: new Date().toISOString(),
-        cwd: activity.cwd
+        cwd: activity.cwd,
+        titleFromUser: existing?.titleFromUser,
+        archived: existing?.archived
       }
       pendingSessionsRef.current.set(project.id, optimisticSession)
       updateSessionLists((current) => {
@@ -213,6 +231,12 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
     })
   }, [activeProjectId, defaultWorkspace, projects, updateSessionLists])
 
+  useEffect(() => subscribeSessionMetaChange(({ cwd }) => {
+    // 设置弹窗里取消了归档或删除了会话：重新读取该目录，让侧栏与之一致。
+    const project = projects.find((item) => (item.path ?? defaultWorkspace) === cwd)
+    if (project) void refreshProjectSessions(project)
+  }), [defaultWorkspace, projects, refreshProjectSessions])
+
   useEffect(() => {
     setLiveSelection(undefined)
   }, [location.key])
@@ -221,10 +245,16 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
     () => visibleProjects.map((project) => {
       const state = sessionLists[project.id]
       const showAllSessions = expandedSessionLists.has(project.id)
+      const sessions = state?.sessions ?? []
+      // 已归档的会话从主列表拿掉，仍然保留数据，展开「已归档」时可见。
+      const activeSessions = sessions.filter((session) => !session.archived)
+      const archivedSessions = sessions.filter((session) => session.archived)
       return {
         project,
         state,
-        sessions: showAllSessions ? state?.sessions ?? [] : state?.sessions.slice(0, DEFAULT_VISIBLE_COUNT) ?? [],
+        activeSessions,
+        archivedSessions,
+        visibleSessions: showAllSessions ? activeSessions : activeSessions.slice(0, DEFAULT_VISIBLE_COUNT),
         showAllSessions
       }
     }),
@@ -254,8 +284,211 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
     void navigate('/projects')
   }
 
+  /** 新建仅对话：目录与索引由主进程创建，随后直接进入该对话。 */
+  const createNewConversation = async (): Promise<void> => {
+    if (creatingConversation) return
+    setCreatingConversation(true)
+    try {
+      const created = await createConversation()
+      void navigate(`/chats/${encodeURIComponent(created.id)}`)
+    } catch (error) {
+      void message.error(readableIpcError(error, '新建对话失败'))
+    } finally {
+      setCreatingConversation(false)
+    }
+  }
+
+  /** 删除一条对话：只移除索引，目录与产物保留在本地。 */
+  const removeConversation = (conversation: Conversation): void => {
+    modal.confirm({
+      title: '删除对话',
+      content: `确定删除「${conversation.title}」吗？删除后无法在列表中恢复。`,
+      okText: '删除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await deleteConversation(conversation.id)
+        } catch (error) {
+          void message.error(readableIpcError(error, '删除对话失败'))
+          throw error
+        }
+        // 删掉的正是当前打开的对话时，留在原地只会看到 404。
+        if (activeConversationId === conversation.id) void navigate('/projects')
+      }
+    })
+  }
+
   const openBoard = (project: Project): void => {
     void navigate(`/projects/${encodeURIComponent(project.id)}?view=board`)
+  }
+
+  const toggleArchivedSessions = (projectId: string): void => {
+    setExpandedArchivedProjects((current) => {
+      const next = new Set(current)
+      if (next.has(projectId)) next.delete(projectId)
+      else next.add(projectId)
+      return next
+    })
+  }
+
+  /** 重命名项目会话：ACP 协议不提供改名，标题覆写记录在主进程的本地索引里。 */
+  const renameProjectSession = async (title: string): Promise<void> => {
+    const target = renamingSession
+    if (!target) return
+    await window.acp.renameSession(target.project.path ?? defaultWorkspace, target.session.sessionId, title)
+    updateSessionLists((current) => {
+      const listState = current[target.project.id]
+      if (!listState) return current
+      return {
+        ...current,
+        [target.project.id]: {
+          ...listState,
+          sessions: listState.sessions.map((session) => session.sessionId === target.session.sessionId
+            ? { ...session, title, titleFromUser: true }
+            : session)
+        }
+      }
+    })
+    void message.success('会话已重命名')
+  }
+
+  /** 归档 / 取消归档项目会话：只改本地索引，不删除 Agent 侧会话记录。 */
+  const archiveProjectSession = async (project: Project, session: AcpSessionInfo): Promise<void> => {
+    const archived = !session.archived
+    try {
+      await window.acp.setSessionArchived(project.path ?? defaultWorkspace, session.sessionId, archived, session.title)
+      updateSessionLists((current) => {
+        const listState = current[project.id]
+        if (!listState) return current
+        return {
+          ...current,
+          [project.id]: {
+            ...listState,
+            sessions: listState.sessions.map((item) => item.sessionId === session.sessionId ? { ...item, archived } : item)
+          }
+        }
+      })
+      void message.success(archived ? '会话已归档' : '已取消归档')
+    } catch (error) {
+      void message.error(readableIpcError(error, archived ? '归档失败' : '取消归档失败'))
+    }
+  }
+
+  /** 重命名对话。 */
+  const renameConversation = async (title: string): Promise<void> => {
+    const target = renamingConversation
+    if (!target) return
+    await updateConversation(target.id, { title })
+    void message.success('对话已重命名')
+  }
+
+  /** 归档 / 取消归档对话：只改索引标记，目录与产物保留。 */
+  const archiveConversation = async (conversation: Conversation): Promise<void> => {
+    const archived = !conversation.archivedAt
+    try {
+      await setConversationArchived(conversation.id, archived)
+      void message.success(archived ? '对话已归档' : '已取消归档')
+    } catch (error) {
+      void message.error(readableIpcError(error, archived ? '归档失败' : '取消归档失败'))
+    }
+  }
+
+  /** 项目会话行 =「打开会话」按钮 +「⋯」菜单（重命名 / 归档）。 */
+  const renderSessionRow = (project: Project, session: AcpSessionInfo): ReactElement => {
+    const streaming = streamingSessionIds.has(session.sessionId)
+    const sessionTitle = session.title || '未命名会话'
+    const active = activeProjectId === project.id && effectiveActiveSessionId === session.sessionId
+    return (
+      <div className={`koala-session-item${active ? ' is-active' : ''}`} key={session.sessionId}>
+        <button
+          type="button"
+          className={`koala-session-row${streaming ? ' is-streaming' : ''}`}
+          onClick={() => void navigate(`/projects/${encodeURIComponent(project.id)}?session=${encodeURIComponent(session.sessionId)}`)}
+          title={streaming ? `${sessionTitle}（正在生成）` : sessionTitle}
+        >
+          {streaming && <LoadingOutlined spin />}
+          <span>{sessionTitle}</span>
+        </button>
+        <Dropdown
+          menu={{
+            items: [
+              { key: 'rename', icon: <EditOutlined />, label: '重命名' },
+              {
+                key: 'archive',
+                icon: session.archived ? <UndoOutlined /> : <InboxOutlined />,
+                label: session.archived ? '取消归档' : '归档'
+              }
+            ],
+            onClick: ({ key, domEvent }) => {
+              domEvent.stopPropagation()
+              if (key === 'rename') setRenamingSession({ project, session })
+              if (key === 'archive') void archiveProjectSession(project, session)
+            }
+          }}
+          trigger={['click']}
+        >
+          <Button
+            className="koala-session-more"
+            type="text"
+            size="small"
+            icon={<MoreOutlined />}
+            aria-label={`会话「${sessionTitle}」的更多操作`}
+            onClick={(event) => event.stopPropagation()}
+          />
+        </Dropdown>
+      </div>
+    )
+  }
+
+  /** 对话行 =「打开对话」按钮 +「⋯」菜单（重命名 / 归档 / 删除）。 */
+  const renderConversationRow = (conversation: Conversation): ReactElement => {
+    const streaming = Boolean(conversation.sessionId && streamingSessionIds.has(conversation.sessionId))
+    const title = conversation.title || '新对话'
+    const active = activeConversationId === conversation.id
+    return (
+      <div className={`koala-conversation-item${active ? ' is-active' : ''}`} key={conversation.id}>
+        <button
+          type="button"
+          className={`koala-session-row koala-conversation-row${streaming ? ' is-streaming' : ''}`}
+          onClick={() => void navigate(`/chats/${encodeURIComponent(conversation.id)}`)}
+          title={streaming ? `${title}（正在生成）` : title}
+        >
+          {streaming && <LoadingOutlined spin />}
+          <span>{title}</span>
+        </button>
+        <Dropdown
+          menu={{
+            items: [
+              { key: 'rename', icon: <EditOutlined />, label: '重命名' },
+              {
+                key: 'archive',
+                icon: conversation.archivedAt ? <UndoOutlined /> : <InboxOutlined />,
+                label: conversation.archivedAt ? '取消归档' : '归档'
+              },
+              { type: 'divider' },
+              { key: 'delete', icon: <DeleteOutlined />, label: '删除对话', danger: true }
+            ],
+            onClick: ({ key, domEvent }) => {
+              domEvent.stopPropagation()
+              if (key === 'rename') setRenamingConversation(conversation)
+              if (key === 'archive') void archiveConversation(conversation)
+              if (key === 'delete') removeConversation(conversation)
+            }
+          }}
+          trigger={['click']}
+        >
+          <Button
+            className="koala-conversation-more"
+            type="text"
+            size="small"
+            icon={<MoreOutlined />}
+            aria-label={`对话「${title}」的更多操作`}
+            onClick={(event) => event.stopPropagation()}
+          />
+        </Dropdown>
+      </div>
+    )
   }
 
   const removeProject = (project: Project): void => {
@@ -278,18 +511,22 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
     })
   }
 
+  // 已归档的对话不再出现在侧栏，统一在设置弹窗的「已归档的会话管理」里查看与恢复。
+  const activeConversations = conversations.filter((conversation) => !conversation.archivedAt)
+
   return (
     <>
-      <nav className="koala-project-navigation" aria-label="项目和会话">
+      <nav className="koala-project-navigation" aria-label="项目和对话">
         <div className="koala-project-tree">
           {loading ? (
             <Skeleton className="koala-project-tree-loading" active paragraph={{ rows: 4 }} title={false} />
           ) : projectRows.length === 0 ? (
             <button type="button" className="koala-project-empty" onClick={openProjects}>新建第一个项目</button>
-          ) : projectRows.map(({ project, state, sessions, showAllSessions }) => {
+          ) : projectRows.map(({ project, state, activeSessions, archivedSessions, visibleSessions, showAllSessions }) => {
             const projectRouteActive = activeProjectId === project.id
             const projectSelected = projectRouteActive && !effectiveActiveSessionId
-            const hasMoreSessions = (state?.sessions.length ?? 0) > DEFAULT_VISIBLE_COUNT
+            const hasMoreSessions = activeSessions.length > DEFAULT_VISIBLE_COUNT
+            const showArchivedSessions = expandedArchivedProjects.has(project.id)
   
             return (
               <div className="koala-project-branch" key={project.id}>
@@ -340,27 +577,26 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
                     <span className="koala-session-status">暂无会话</span>
                   ) : (
                     <>
-                      {sessions.map((session) => {
-                        const streaming = streamingSessionIds.has(session.sessionId)
-                        const sessionTitle = session.title || '未命名会话'
-                        return (
-                          <button
-                            type="button"
-                            className={`koala-session-row${projectRouteActive && effectiveActiveSessionId === session.sessionId ? ' is-active' : ''}${streaming ? ' is-streaming' : ''}`}
-                            key={session.sessionId}
-                            onClick={() => void navigate(`/projects/${encodeURIComponent(project.id)}?session=${encodeURIComponent(session.sessionId)}`)}
-                            title={streaming ? `${sessionTitle}（正在生成）` : sessionTitle}
-                          >
-                            {streaming ? <LoadingOutlined spin /> : <MessageOutlined />}
-                            <span>{sessionTitle}</span>
-                          </button>
-                        )
-                      })}
+                      {activeSessions.length === 0 && <span className="koala-session-status">暂无会话</span>}
+                      {visibleSessions.map((session) => renderSessionRow(project, session))}
                       {hasMoreSessions && (
-                        <button type="button" className="koala-tree-more koala-session-more" onClick={() => toggleSessions(project.id)}>
+                        <button type="button" className="koala-tree-more" onClick={() => toggleSessions(project.id)}>
                           {showAllSessions ? <UpOutlined /> : <DownOutlined />}
                           <span>{showAllSessions ? '收起' : '更多'}</span>
                         </button>
+                      )}
+                      {archivedSessions.length > 0 && (
+                        <>
+                          <button
+                            type="button"
+                            className="koala-tree-more koala-archived-more"
+                            onClick={() => toggleArchivedSessions(project.id)}
+                          >
+                            {showArchivedSessions ? <UpOutlined /> : <DownOutlined />}
+                            <span>{`已归档 ${archivedSessions.length}`}</span>
+                          </button>
+                          {showArchivedSessions && archivedSessions.map((session) => renderSessionRow(project, session))}
+                        </>
                       )}
                     </>
                   )}
@@ -376,8 +612,52 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
             <span>{showAllProjects ? '收起' : '更多'}</span>
           </button>
         )}
+
+        {/* 仅对话：轻量级项目，每条对话一个自动创建的时间戳目录（不展示给用户）。 */}
+        <div className="koala-conversation-tree">
+          <div className="koala-conversation-head">
+            <div className="koala-conversation-title">
+              <MessageOutlined />
+              <span>对话</span>
+            </div>
+            <Button
+              className="koala-conversation-add"
+              type="text"
+              size="small"
+              icon={<PlusOutlined />}
+              loading={creatingConversation}
+              onClick={() => void createNewConversation()}
+              aria-label="新建对话"
+              title="新建对话"
+            />
+          </div>
+          {conversations.length === 0 ? (
+            <span className="koala-session-status">{conversationsLoading ? '正在读取对话...' : '暂无对话'}</span>
+          ) : (
+            <>
+              {activeConversations.length === 0 && <span className="koala-session-status">暂无对话</span>}
+              {activeConversations.map((conversation) => renderConversationRow(conversation))}
+            </>
+          )}
+        </div>
       </nav>
     <RenameProjectModal open={Boolean(renamingProject)} project={renamingProject} onClose={() => setRenamingProject(undefined)} />
+    <RenameSessionModal
+      open={Boolean(renamingSession)}
+      heading="重命名会话"
+      formName="rename-project-session"
+      initialTitle={renamingSession?.session.title ?? ''}
+      onSubmit={renameProjectSession}
+      onClose={() => setRenamingSession(undefined)}
+    />
+    <RenameSessionModal
+      open={Boolean(renamingConversation)}
+      heading="重命名对话"
+      formName="rename-conversation"
+      initialTitle={renamingConversation?.title ?? ''}
+      onSubmit={renameConversation}
+      onClose={() => setRenamingConversation(undefined)}
+    />
     </>
   )
 }

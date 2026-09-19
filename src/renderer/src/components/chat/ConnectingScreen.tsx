@@ -2,11 +2,18 @@ import type { ReactElement } from 'react'
 import { Button, Spin, Typography } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import type { Project } from '@/models'
 import { useAgent } from '@/state/AgentContext'
 
-/** 进入项目对话页时的连接加载动画：在建立 ACP 连接期间整页展示。 */
-export function ConnectingScreen({ project }: { project: Project }): ReactElement {
+interface ConnectingScreenProps {
+  /** 正在连接的标题：项目名或对话标题。 */
+  title: string
+  /** 返回列表的路由；仅对话没有列表页，可不传。 */
+  backTo?: string
+  backLabel?: string
+}
+
+/** 进入对话页时的连接加载动画：在建立 ACP 连接期间整页展示。 */
+export function ConnectingScreen({ title, backTo, backLabel }: ConnectingScreenProps): ReactElement {
   const { state } = useAgent()
   const navigate = useNavigate()
 
@@ -18,13 +25,15 @@ export function ConnectingScreen({ project }: { project: Project }): ReactElemen
       </div>
       <div className="flex flex-col items-center gap-1.5">
         <Typography.Title level={5} style={{ margin: 0 }}>
-          正在连接「{project.name}」…
+          正在连接「{title}」…
         </Typography.Title>
         <Typography.Text type="secondary">{state.detail ?? '正在建立 Claude ACP 连接…'}</Typography.Text>
       </div>
-      <Button type="text" size="small" icon={<ArrowLeftOutlined />} onClick={() => navigate('/projects')}>
-        返回项目列表
-      </Button>
+      {backTo && backLabel && (
+        <Button type="text" size="small" icon={<ArrowLeftOutlined />} onClick={() => void navigate(backTo)}>
+          {backLabel}
+        </Button>
+      )}
     </div>
   )
 }

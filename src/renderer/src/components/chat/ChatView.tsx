@@ -1,12 +1,11 @@
 import type { ReactElement } from 'react'
 import { Alert, Tooltip } from 'antd'
-import { useLocation, useNavigate } from 'react-router-dom'
-import type { Project } from '@/models'
 import { useAgent } from '@/state/AgentContext'
 import { ChatComposer } from './ChatComposer'
 import { ChatHeader } from './ChatHeader'
 import { ConnectingScreen } from './ConnectingScreen'
 import { SessionLoadingScreen } from './SessionLoadingScreen'
+import { ChatEmptyState } from './ChatEmptyState'
 import { ChatThread } from './ChatThread'
 
 function formatTokens(n: number): string {
@@ -16,45 +15,47 @@ function formatTokens(n: number): string {
 }
 
 interface ChatViewProps {
-  project: Project
-  /** 新建会话：由项目页换一代 AgentProvider，重挂载时的连接会建出恰好一个会话。 */
+  /** 顶栏标题：项目名或对话标题。 */
+  title: string
+  /** 空会话引导语里的工作区名；仅对话没有可展示的目录名时不传。 */
+  workspaceName?: string
+  /** 新建会话：项目页换一代 AgentProvider，对话页新建一条仅对话。 */
   onStartNewConversation: () => void
+  /** 查看项目看板；仅项目对话提供，仅对话不传。 */
+  onOpenBoard?: () => void
+  /** 连接/加载态下返回列表的入口；仅对话没有列表页，可不传。 */
+  backTo?: string
+  backLabel?: string
 }
 
-/** 单个项目的协作会话视图：小圆点状态 + 对话线程 + 输入区。 */
-export function ChatView({ project, onStartNewConversation }: ChatViewProps): ReactElement {
-  const { state, cwd, sessionLoading, connect } = useAgent()
-  const location = useLocation()
-  const navigate = useNavigate()
+/** 单个协作会话视图：小圆点状态 + 对话线程 + 输入区。 */
+export function ChatView({ title, workspaceName, onStartNewConversation, onOpenBoard, backTo, backLabel }: ChatViewProps): ReactElement {
+  const { state, cwd, sessionLoading, connect, messages } = useAgent()
 
   const connecting = state.status === 'disconnected' || state.status === 'connecting'
-
-  /** 只替换 view，保留 session：从看板回来还停在同一个会话上，且不会触发 AgentProvider 重挂载。 */
-  const handleOpenBoard = (): void => {
-    const params = new URLSearchParams(location.search)
-    params.set('view', 'board')
-    void navigate({ pathname: location.pathname, search: params.toString() })
-  }
+  // 新会话 / 空历史：不渲染消息列表，改为展示引导语；
+  // 生成中或连接异常时保持消息区原样，避免错误提示被引导语顶掉。
+  const empty = messages.length === 0 && state.status !== 'working' && state.status !== 'error'
 
   // 加载历史会话期间整页只展示加载动画，回放完成后再显示聊天界面
   if (sessionLoading) {
-    return <SessionLoadingScreen project={project} onStartNewConversation={onStartNewConversation} />
+    return <SessionLoadingScreen title={title} onStartNewConversation={onStartNewConversation} onOpenBoard={onOpenBoard} />
   }
 
   // 连接期间整页只展示加载动画，连接完成后再显示聊天界面
   if (connecting) {
-    return <ConnectingScreen project={project} />
+    return <ConnectingScreen title={title} backTo={backTo} backLabel={backLabel} />
   }
 
   return (
     <div className="chat-shell">
       <ChatHeader
-        project={project}
+        title={title}
         state={state}
         cwd={cwd}
         onConnect={() => void connect()}
         onNewConversation={onStartNewConversation}
-        onOpenBoard={handleOpenBoard}
+        onOpenBoard={onOpenBoard}
       />
 
       {state.status === 'error' && (
@@ -67,7 +68,7 @@ export function ChatView({ project, onStartNewConversation }: ChatViewProps): Re
         />
       )}
 
-      <ChatThread />
+      {empty ? <ChatEmptyState workspaceName={workspaceName} /> : <ChatThread />}
       <ChatComposer />
       {state.usage && (
         <Tooltip title={`上下文：${state.usage.used.toLocaleString()} / ${state.usage.size.toLocaleString()} tokens`}>

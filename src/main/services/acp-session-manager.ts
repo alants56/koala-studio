@@ -148,6 +148,12 @@ export class AcpSessionManager extends EventEmitter {
     return entry
   }
 
+  /** 删除历史会话前先卸掉对应的运行实例，避免在途请求把已删除的会话重新写回磁盘。 */
+  releaseSession(sessionId: string, cwd: string, agent: AgentAdapterId): void {
+    const entry = [...this.runtimes].find((item) => item.sessionId === sessionId && item.cwd === cwd && item.agent === agent)
+    if (entry) this.remove(entry)
+  }
+
   private async run(target: SessionTarget, action: (bridge: SessionBridge) => unknown): Promise<void> {
     const entry = this.runtime(target)
     entry.operations++

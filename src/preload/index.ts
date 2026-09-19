@@ -1,8 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AcpApi, AgentAdapterId } from '../shared/acp'
 import type { ProjectsApi } from '../shared/projects'
-import type { ClaudeApi } from '../shared/claude'
-import type { AutomationsApi } from '../shared/automations'
+import type { ConversationsApi } from '../shared/conversations'
 import type { TodosApi } from '../shared/todos'
 import type { AttachmentsApi } from '../shared/attachments'
 import type { FileActionsApi } from '../shared/files'
@@ -22,6 +21,10 @@ const acp: AcpApi = {
   setEffort: (effortId, target) => ipcRenderer.invoke('acp:set-effort', effortId, target),
   setAgent: (agentId: AgentAdapterId) => ipcRenderer.invoke('acp:set-agent', agentId),
   listSessions: (cwd) => ipcRenderer.invoke('acp:list-sessions', cwd),
+  renameSession: (cwd, sessionId, title) => ipcRenderer.invoke('acp:rename-session', cwd, sessionId, title),
+  setSessionArchived: (cwd, sessionId, archived, title) => ipcRenderer.invoke('acp:set-session-archived', cwd, sessionId, archived, title),
+  listArchivedSessions: () => ipcRenderer.invoke('acp:list-archived-sessions'),
+  deleteSession: (cwd, sessionId) => ipcRenderer.invoke('acp:delete-session', cwd, sessionId),
   loadSession: (sessionId, cwd, agent) => ipcRenderer.invoke('acp:load-session', sessionId, cwd, agent),
   createSession: (cwd, agent) => ipcRenderer.invoke('acp:create-session', cwd, agent),
   respondPermission: (optionId, target) => ipcRenderer.invoke('acp:respond-permission', optionId, target),
@@ -46,25 +49,13 @@ const projects: ProjectsApi = {
   pickDirectory: () => ipcRenderer.invoke('projects:pick-directory')
 }
 
-const claude: ClaudeApi = {
-  list: (agent) => ipcRenderer.invoke('claude:list', agent),
-  readSkill: (agent, id) => ipcRenderer.invoke('claude:read-skill', agent, id),
-  saveSkill: (agent, input) => ipcRenderer.invoke('claude:save-skill', agent, input),
-  removeSkill: (agent, id) => ipcRenderer.invoke('claude:remove-skill', agent, id),
-  saveMcp: (agent, input) => ipcRenderer.invoke('claude:save-mcp', agent, input),
-  removeMcp: (agent, name, scope, projectPath) => ipcRenderer.invoke('claude:remove-mcp', agent, name, scope, projectPath),
-  pluginAction: (agent, action, id) => ipcRenderer.invoke('claude:plugin-action', agent, action, id),
-  reveal: (agent, path) => ipcRenderer.invoke('claude:reveal', agent, path)
-}
-
-const automations: AutomationsApi = {
-  list: (input) => ipcRenderer.invoke('automations:list', input),
-  get: (id) => ipcRenderer.invoke('automations:get', id),
-  create: (input) => ipcRenderer.invoke('automations:create', input),
-  update: (id, input) => ipcRenderer.invoke('automations:update', id, input),
-  setEnabled: (id, enabled) => ipcRenderer.invoke('automations:set-enabled', id, enabled),
-  runTest: (id) => ipcRenderer.invoke('automations:run-test', id),
-  delete: (id) => ipcRenderer.invoke('automations:delete', id)
+const conversations: ConversationsApi = {
+  list: () => ipcRenderer.invoke('conversations:list'),
+  create: () => ipcRenderer.invoke('conversations:create'),
+  update: (id, input) => ipcRenderer.invoke('conversations:update', id, input),
+  touch: (id) => ipcRenderer.invoke('conversations:touch', id),
+  setArchived: (id, archived) => ipcRenderer.invoke('conversations:set-archived', id, archived),
+  delete: (id) => ipcRenderer.invoke('conversations:delete', id)
 }
 
 const todos: TodosApi = {
@@ -105,8 +96,7 @@ const git: GitApi = {
 
 contextBridge.exposeInMainWorld('acp', acp)
 contextBridge.exposeInMainWorld('projects', projects)
-contextBridge.exposeInMainWorld('claude', claude)
-contextBridge.exposeInMainWorld('automations', automations)
+contextBridge.exposeInMainWorld('conversations', conversations)
 contextBridge.exposeInMainWorld('todos', todos)
 contextBridge.exposeInMainWorld('attachments', attachments)
 contextBridge.exposeInMainWorld('files', files)

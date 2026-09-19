@@ -47,10 +47,15 @@ interface AgentProviderProps {
    * 用于把「从待办跳进来」这类外部意图绑定到实际产生的会话上——只有真的开始对话才会绑定。
    */
   onFirstPrompt?: (sessionId: string, title: string) => void
+  /**
+   * 会话建立（新建或加载成功）后触发一次。
+   * 仅对话用它把 sessionId 写回索引，重开时才能加载到同一个会话而不是新建一个。
+   */
+  onSessionReady?: (sessionId: string) => void
   children: ReactNode
 }
 
-export function AgentProvider({ cwd, initialSessionId, onFirstPrompt, children }: AgentProviderProps): ReactElement {
+export function AgentProvider({ cwd, initialSessionId, onFirstPrompt, onSessionReady, children }: AgentProviderProps): ReactElement {
   const { currentAgent } = useAgentSelection()
   const agentName = currentAgent === 'pi' ? 'Pi' : 'Claude'
   // 进入页面即视为「连接中」，避免首帧先闪现「未连接」
@@ -65,10 +70,18 @@ export function AgentProvider({ cwd, initialSessionId, onFirstPrompt, children }
   const firstPromptSentRef = useRef(false)
   // 放进 ref，避免调用方传内联函数时把 send 的引用也一起换掉。
   const onFirstPromptRef = useRef(onFirstPrompt)
+  const onSessionReadyRef = useRef(onSessionReady)
+  // 初始会话 id 只在挂载时锁定：会话建立后回写索引会让 props 变化，
+  // 若跟着重连会多闪一次加载态（运行时里已有同一个会话）。跨会话切换靠 key 重挂载。
+  const initialSessionIdRef = useRef(initialSessionId)
 
   useEffect(() => {
     onFirstPromptRef.current = onFirstPrompt
   }, [onFirstPrompt])
+
+  useEffect(() => {
+    onSessionReadyRef.current = onSessionReady
+  }, [onSessionReady])
 
   const publishView = useCallback((view: SessionView) => {
     if (viewRef.current?.target.sessionId !== view.target.sessionId) {
@@ -90,6 +103,7 @@ export function AgentProvider({ cwd, initialSessionId, onFirstPrompt, children }
       if (generation !== generationRef.current) return
       const target: SessionTarget = { sessionId: snapshot.sessionId, cwd, currentAgent }
       publishView(restoreSessionView(target, snapshot, bufferRef.current ?? []))
+      onSessionReadyRef.current?.(snapshot.sessionId)
     } catch (error) {
       if (generation !== generationRef.current) return
       if (viewRef.current) {
@@ -109,8 +123,8 @@ export function AgentProvider({ cwd, initialSessionId, onFirstPrompt, children }
 
   const connect = useCallback(async () => {
     // load/new owns connection creation; re-entering a live session only reads its snapshot.
-    await openSession(initialSessionId).catch(() => undefined)
-  }, [initialSessionId, openSession])
+    await openSession(initialSessionIdRef.current).catch(() => undefined)
+  }, [openSession])
 
   const target = useCallback((): SessionTarget => {
     if (!viewRef.current || bufferRef.current) throw new Error('当前会话尚未就绪。')

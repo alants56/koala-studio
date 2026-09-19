@@ -151,7 +151,7 @@ export function GitStatusPanel({ cwd }: GitStatusPanelProps): ReactElement | nul
             aria-expanded={open}
           >
             {loading && !diff ? <LoadingOutlined spin /> : <DiffOutlined />}
-            {dirty && diffCount}
+            {/* 改动行数不再展示在图标后，只在弹层与 Tooltip 里给，顶栏保持纯图标。 */}
           </Button>
         </Tooltip>
       </Popover>

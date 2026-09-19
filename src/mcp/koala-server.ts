@@ -5,18 +5,11 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
-import { AutomationStore } from '../shared/automation-store'
 import { TodoStore } from '../shared/todo-store'
 
-const file = process.env.KOALA_AUTOMATIONS_FILE || join(homedir(), 'Library', 'Application Support', 'koala-studio', 'automations.json')
-const store = new AutomationStore(file)
 const todosFile = process.env.KOALA_TODOS_FILE || join(homedir(), 'Library', 'Application Support', 'koala-studio', 'todos.json')
 const todoStore = new TodoStore(todosFile)
-const server = new McpServer({ name: 'koala-automations-mcp-server', version: '0.1.0' })
-const scheduleSchema = z.object({
-  type: z.enum(['once', 'daily']),
-  nextRunAt: z.string().datetime({ offset: true }).describe('下一次执行时间，ISO 8601 UTC，例如 2026-08-08T06:30:00.000Z。')
-})
+const server = new McpServer({ name: 'koala-mcp-server', version: '0.1.0' })
 const todoColumnIdSchema = z.string().trim().min(1).max(80).describe('待办类型 ID，例如 backlog、in-progress 或 completed。')
 const todoPositionSchema = z.number().int().min(0).describe('待办在类型内的位置，从 0 开始。')
 
@@ -35,44 +28,6 @@ function failure(error: unknown): { content: [{ type: 'text'; text: string }]; s
 async function execute<T>(operation: () => Promise<T>): Promise<ReturnType<typeof result> | ReturnType<typeof failure>> {
   try { return result(await operation()) } catch (error) { return failure(error) }
 }
-
-server.registerTool('koala_list_automations', {
-  title: '列出 Koala 自动化', description: '列出 Koala Studio 的自动化规则。可按状态、关键词筛选并分页。',
-  inputSchema: { state: z.enum(['active', 'paused', 'attention']).optional(), query: z.string().max(200).optional(), limit: z.number().int().min(1).max(100).optional(), offset: z.number().int().min(0).optional() },
-  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
-}, async (input) => execute(() => store.list(input)))
-
-server.registerTool('koala_get_automation', {
-  title: '读取 Koala 自动化', description: '按 ID 获取一条自动化规则及其运行记录。', inputSchema: { id: z.string().min(1) },
-  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
-}, async ({ id }) => execute(() => store.get(id)))
-
-server.registerTool('koala_create_automation', {
-  title: '创建 Koala 自动化', description: '创建一条自动化规则。重要：创建 trigger=指定时间 的启用任务时，必须同时传 schedule 和 actionType。actionType=claude_prompt 会启动独立 Claude Code 会话执行 instruction；actionType=pi_prompt 会启动独立 Pi 会话执行 instruction；两者都必须提供绝对 projectPath。actionType=create_high_priority_todo 会在工作台创建重点待办。仅在 triggerDetail 中写“计划于某时”不会触发执行。',
-  inputSchema: { name: z.string().min(1).max(120), description: z.string().max(500).optional(), trigger: z.string().min(1).max(120), triggerDetail: z.string().max(120).optional(), action: z.string().min(1).max(120), actionDetail: z.string().max(120).optional(), scope: z.string().min(1).max(120), enabled: z.boolean().optional(), schedule: scheduleSchema.optional(), actionType: z.enum(['feature_brief', 'claude_prompt', 'pi_prompt', 'create_high_priority_todo']).optional(), projectPath: z.string().min(1).max(4096).optional(), instruction: z.string().min(1).max(4000).optional().describe('actionType=claude_prompt 或 pi_prompt 时必填，由对应 Agent 在 projectPath 中自主完成。') },
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
-}, async (input) => execute(() => store.create(input)))
-
-server.registerTool('koala_update_automation', {
-  title: '更新 Koala 自动化', description: '更新一条自动化的名称、触发条件、动作、作用范围或计划。schedule 传 null 可取消计划。',
-  inputSchema: { id: z.string().min(1), name: z.string().min(1).max(120).optional(), description: z.string().max(500).optional(), trigger: z.string().min(1).max(120).optional(), triggerDetail: z.string().max(120).optional(), action: z.string().min(1).max(120).optional(), actionDetail: z.string().max(120).optional(), scope: z.string().min(1).max(120).optional(), schedule: scheduleSchema.nullable().optional(), actionType: z.enum(['feature_brief', 'claude_prompt', 'pi_prompt', 'create_high_priority_todo']).optional(), projectPath: z.string().min(1).max(4096).nullable().optional(), instruction: z.string().min(1).max(4000).nullable().optional() },
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
-}, async ({ id, ...input }) => execute(() => store.update(id, input)))
-
-server.registerTool('koala_set_automation_enabled', {
-  title: '启用或暂停 Koala 自动化', description: '切换指定自动化的启用状态。', inputSchema: { id: z.string().min(1), enabled: z.boolean() },
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
-}, async ({ id, enabled }) => execute(() => store.setEnabled(id, enabled)))
-
-server.registerTool('koala_test_automation', {
-  title: '测试运行 Koala 自动化', description: '手动测试一条自动化：校验执行计划、动作配置和项目文件夹是否存在，并记录测试运行结果（可能为失败）。不会对外发送通知或写入项目数据。', inputSchema: { id: z.string().min(1) },
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
-}, async ({ id }) => execute(() => store.runTest(id)))
-
-server.registerTool('koala_delete_automation', {
-  title: '删除 Koala 自动化', description: '删除一条自动化及其运行记录。请先确认 ID。', inputSchema: { id: z.string().min(1) },
-  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
-}, async ({ id }) => execute(async () => { await store.delete(id); return { id, deleted: true } }))
 
 server.registerTool('koala_list_todos', {
   title: '列出 Koala 待办', description: '列出 Koala Studio 待办。可按完成状态、重点、项目或关键词筛选并分页。',
@@ -129,7 +84,7 @@ async function startHttpServer(): Promise<void> {
     }
 
     void transport.handleRequest(request, response).catch((error: unknown) => {
-      process.stderr.write(`${error instanceof Error ? error.message : '无法处理 Koala 自动化 MCP 请求。'}\n`)
+      process.stderr.write(`${error instanceof Error ? error.message : '无法处理 Koala MCP 请求。'}\n`)
       if (!response.headersSent) {
         response.writeHead(500, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32603, message: 'Internal server error' }, id: null }))
@@ -145,7 +100,7 @@ async function startHttpServer(): Promise<void> {
     })
   })
 
-  process.stderr.write(`Koala automation MCP listening at http://127.0.0.1:${HTTP_MCP_PORT}${HTTP_MCP_PATH}\n`)
+  process.stderr.write(`Koala MCP listening at http://127.0.0.1:${HTTP_MCP_PORT}${HTTP_MCP_PATH}\n`)
   const close = (): void => {
     void transport.close().finally(() => httpServer.close())
   }
@@ -158,6 +113,6 @@ const transportPromise = process.env.KOALA_MCP_TRANSPORT === 'http'
   : server.connect(new StdioServerTransport())
 
 void transportPromise.catch((error: unknown) => {
-  process.stderr.write(`${error instanceof Error ? error.message : '无法启动 Koala 自动化 MCP 服务。'}\n`)
+  process.stderr.write(`${error instanceof Error ? error.message : '无法启动 Koala MCP 服务。'}\n`)
   process.exitCode = 1
 })

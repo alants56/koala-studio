@@ -82,10 +82,10 @@
       <small>React 19 · Ant Design 6 · Tailwind<br>renderer 进程</small>
     </div>
     <div class="lbody">
-      <div class="box" style="border-color:var(--pres)"><b>Pages</b><small>Projects / ProjectChat / Claude / Automations / Workbench</small></div>
+      <div class="box" style="border-color:var(--pres)"><b>Pages</b><small>Projects / ProjectChat / ConversationChat / Workbench</small></div>
       <div class="box" style="border-color:var(--pres)"><b>Components</b><small>ChatView · ChatThread · ChatComposer · MarkdownMessage · AppLayout · ProjectCard</small></div>
-      <div class="box" style="border-color:var(--pres)"><b>State</b><small>AgentContext · ProjectsContext · AgentSelectionContext</small></div>
-      <div class="box" style="border-color:var(--pres)"><b>Router</b><small>/projects /projects/:id /claude /automations /workbench</small></div>
+      <div class="box" style="border-color:var(--pres)"><b>State</b><small>AgentContext · ProjectsContext · ConversationsContext · AgentSelectionContext</small></div>
+      <div class="box" style="border-color:var(--pres)"><b>Router</b><small>/projects /projects/:id /chats/:id /workbench</small></div>
     </div>
   </div>
   <div class="arrow">▼</div>
@@ -98,8 +98,8 @@
       <small>contextBridge<br>preload 进程</small>
     </div>
     <div class="lbody">
-      <div class="box" style="border-color:var(--brg)"><b>window.acp / .projects / .claude</b><small>interfaceAcpApi · ProjectsApi · ClaudeApi</small></div>
-      <div class="box" style="border-color:var(--brg)"><b>window.automations / .todos / .attachments</b><small>AutomationsApi · TodosApi · AttachmentsApi</small></div>
+      <div class="box" style="border-color:var(--brg)"><b>window.acp / .projects / .conversations</b><small>interfaceAcpApi · ProjectsApi · ConversationsApi</small></div>
+      <div class="box" style="border-color:var(--brg)"><b>window.todos / .attachments</b><small>TodosApi · AttachmentsApi</small></div>
       <span class="pill">ipcRenderer.invoke · on</span>
     </div>
   </div>
@@ -113,12 +113,9 @@
       <small>Node + Electron<br>main 进程</small>
     </div>
     <div class="lbody">
-      <div class="box" style="border-color:var(--main)"><b>IPC Handlers</b><small>acp:* · projects:* · attachments:* · automations:* · todos:* · claude:*</small></div>
+      <div class="box" style="border-color:var(--main)"><b>IPC Handlers</b><small>acp:* · projects:* · conversations:* · attachments:* · todos:*</small></div>
       <div class="box" style="border-color:var(--main)"><b>AcpBridge</b><small>会话生命周期 · 流式消息 · 权限请求 · 排队/steering · 附件</small></div>
-      <div class="box" style="border-color:var(--main)"><b>Stores</b><small>project · automation · todo · attachment · preferences</small></div>
-      <div class="box" style="border-color:var(--main)"><b>Claude Resources</b><small>Skills / 插件 / MCP 配置</small></div>
-      <div class="box" style="border-color:var(--main)"><b>Automation Scheduler</b><small>定时检查 · 到期执行 · 运行记录</small></div>
-      <div class="box" style="border-color:var(--main)"><b>Executors</b><small>claude · pi · feature-brief(git)</small></div>
+      <div class="box" style="border-color:var(--main)"><b>Stores</b><small>project · conversation · todo · attachment · preferences</small></div>
       <div class="box" style="border-color:var(--main)"><b>Pi Runtime</b><small>Pi CLI 定位 · 内置 Node PATH</small></div>
     </div>
   </div>
@@ -131,8 +128,8 @@
       <small>src/shared<br>三端共享</small>
     </div>
     <div class="lbody">
-      <div class="box plug" style="border-color:var(--shared)"><b>shared/*.ts</b><small>acp · projects · automations · todos · attachments · claude</small></div>
-      <div class="box plug" style="border-color:var(--shared)"><b>AutomationStore / TodoStore</b><small>主进程与 MCP server 复用</small></div>
+      <div class="box plug" style="border-color:var(--shared)"><b>shared/*.ts</b><small>acp · projects · conversations · todos · attachments · claude</small></div>
+      <div class="box plug" style="border-color:var(--shared)"><b>TodoStore / ConversationStore</b><small>主进程与 MCP server 复用</small></div>
       <span class="pill">共享类型 & 业务逻辑</span>
     </div>
   </div>
@@ -142,10 +139,10 @@
     <div class="lname">
       <span class="tag" style="background:var(--mcp)">⑤</span>
       <h3>MCP 集成层<br>MCP Integration</h3>
-      <small>src/mcp<br>koala-automations</small>
+      <small>src/mcp<br>koala</small>
     </div>
     <div class="lbody">
-      <div class="box" style="border-color:var(--mcp)"><b>koala-automations MCP Server</b><small>koala_list/get/create/update/…automation</small></div>
+      <div class="box" style="border-color:var(--mcp)"><b>koala MCP Server</b><small>McpServer · Stdio / Streamable HTTP</small></div>
       <div class="box" style="border-color:var(--mcp)"><b>待办工具</b><small>koala_list/get/create/reorder/set_done/delete_todo</small></div>
       <span class="pill">stdio · http://127.0.0.1:29736/mcp</span>
       <span class="pill">注入到 Agent 会话</span>
@@ -176,7 +173,7 @@
       <small>系统 · CLI · 项目</small>
     </div>
     <div class="lbody">
-      <div class="box" style="border-color:var(--ext)"><b>用户数据</b><small>~/Library/Application Support/koala-studio/<br>projects.json · automations.json · todos.json</small></div>
+      <div class="box" style="border-color:var(--ext)"><b>用户数据</b><small>~/Library/Application Support/koala-studio/<br>projects.json · conversations.json · conversations/ · todos.json</small></div>
       <div class="box" style="border-color:var(--ext)"><b>Claude Code</b><small>会话存于 ~/.claude · Anthropic SDK</small></div>
       <div class="box" style="border-color:var(--ext)"><b>Pi CLI</b><small>本地安装与认证</small></div>
       <div class="box" style="border-color:var(--ext)"><b>用户项目</b><small>git 工作目录</small></div>
@@ -187,9 +184,9 @@
     <h2>关键数据流</h2>
     <ol>
       <li><b>聊天</b>：渲染端 <span class="code">window.acp.prompt()</span> → preload → <span class="code">acp:prompt</span> → <span class="code">AcpBridge.prompt()</span> → ACP <span class="code">session/prompt</span> → Agent 子进程；<span class="code">session/update</span> 通知反向流回 UI。</li>
-      <li><b>自动化</b>：<span class="code">AutomationScheduler</span> 轮询到期任务 → 执行器拉起独立 Agent 会话完成指令 → 结果写回 <span class="code">automations.json</span> 运行记录。</li>
-      <li><b>Agent 自管理</b>：<span class="code">AcpBridge</span> 在 <span class="code">session/new</span> / <span class="code">session/load</span> 时注入 <span class="code">koala-automations</span> MCP server，让 Agent 可直接读写自动化与待办。</li>
-      <li><b>项目/资源</b>：项目管理、Skills/插件/MCP 管理均经 IPC 落到本地 JSON 或 Claude Code 目录。</li>
+      <li><b>Agent 自管理</b>：<span class="code">AcpBridge</span> 在 <span class="code">session/new</span> / <span class="code">session/load</span> 时注入 <span class="code">koala</span> MCP server，让 Agent 可直接读写待办。</li>
+      <li><b>项目</b>：项目管理经 IPC 落到本地 JSON。</li>
+      <li><b>仅对话</b>：新建时主进程在应用数据目录分配 <span class="code">conversations/&lt;年月日时分秒&gt;</span> 并写入索引；对话页以该目录为 cwd 连接 ACP，<span class="code">onSessionReady</span> / <span class="code">onFirstPrompt</span> 回写 sessionId、标题与 Agent，重开时加载同一个会话。</li>
     </ol>
   </div>
 

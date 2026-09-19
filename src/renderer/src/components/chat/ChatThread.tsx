@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ReactElement, type UIEvent, type WheelEvent } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type UIEvent, type WheelEvent } from 'react'
 import { ThoughtChain } from '@ant-design/x'
 import type { ChatMessage } from '@/models'
 import { useAgent } from '@/state/AgentContext'
@@ -41,16 +41,55 @@ function summarizeActivity(messages: ChatMessage[]): string {
   return actions.length > 0 ? `已${actions.join('、')}` : '执行过程'
 }
 
-/** 一轮结束后收拢起来的思考 + 工具调用：默认折叠，展开后是逐条明细。
- *  分组头不带成功 / 失败图标，也不做红色强调——保持中性。有工具失败时默认展开，
+/** 边生成边收拢的思考 + 工具调用：默认折叠，展开后是逐条明细。
+ *  分组头不带成功 / 失败图标，也不做红色强调——保持中性。有工具失败时自动展开，
  *  让用户直接看到是哪一步出错，而不是靠颜色喊。 */
-function ActivityGroupMessage({ messages, cwd }: { messages: ChatMessage[]; cwd?: string }): ReactElement {
+function ActivityGroupMessage({ messages, cwd, live }: { messages: ChatMessage[]; cwd?: string; live?: boolean }): ReactElement {
   const failed = messages.some((message) => message.toolStatus === 'failed')
+  // 实时聚合让分组在生成途中就已挂载，defaultExpandedKeys 不再生效：
+  // 改为受控展开，一出现失败就展开（用户手动收起后不再抢回）。
+  const [expandedKeys, setExpandedKeys] = useState<string[]>(() => (failed ? ['group'] : []))
+  const listRef = useRef<HTMLDivElement>(null)
+  /** 展开的实时分组默认贴底；用户自己往上滚后暂停跟随。 */
+  const followListRef = useRef(true)
+
+  useEffect(() => {
+    if (failed) setExpandedKeys((current) => (current.includes('group') ? current : ['group']))
+  }, [failed])
+
+  // 展开（或收起后再展开）时贴底，避免实时分组停在最早几步。
+  const attachList = useCallback((node: HTMLDivElement | null): void => {
+    listRef.current = node
+    if (node && live) {
+      followListRef.current = true
+      node.scrollTop = node.scrollHeight
+    }
+  }, [live])
+
+  // 分组展开期间持续贴底：每次重渲后都跟到最新一步，
+  // 工具输出这类原地变高的内容也不会把位置留在中间。
+  useLayoutEffect(() => {
+    const list = listRef.current
+    if (!list || !live || !followListRef.current) return
+    list.scrollTop = list.scrollHeight
+  })
+
+  const handleListScroll = (): void => {
+    const list = listRef.current
+    if (!list) return
+    followListRef.current = list.scrollHeight - list.clientHeight - list.scrollTop <= BOTTOM_THRESHOLD_PX
+  }
+
+  // 滚轮向上先标记停止跟随：浏览器提交滚动位置前，流式重渲可能先把位置抢回底部。
+  const handleListWheel = (event: WheelEvent<HTMLDivElement>): void => {
+    if (event.deltaY < 0) followListRef.current = false
+  }
 
   return (
     <ThoughtChain
-      className="chat-activity-message chat-activity-group mr-auto"
-      defaultExpandedKeys={failed ? ['group'] : []}
+      className={`chat-activity-message chat-activity-group mr-auto${live ? ' is-live' : ''}`}
+      expandedKeys={expandedKeys}
+      onExpand={setExpandedKeys}
       line={false}
       items={[
         {
@@ -64,7 +103,7 @@ function ActivityGroupMessage({ messages, cwd }: { messages: ChatMessage[]; cwd?
           ),
           collapsible: true,
           content: (
-            <div className="chat-activity-group-list">
+            <div className="chat-activity-group-list" ref={attachList} onScroll={handleListScroll} onWheel={handleListWheel}>
               {messages.map((message) => <ChatMessageItem key={message.id} message={message} cwd={cwd} />)}
             </div>
           )
@@ -83,6 +122,32 @@ function TurnDurationSummary({ seconds }: { seconds: number }): ReactElement {
       <span className="chat-turn-summary-arrow" aria-hidden="true">›</span>
     </div>
   )
+}
+
+/** 聚合明细 / 工具输出是嵌套滚动区：在它们内部滚轮优先滚动自己，
+ *  只有滚到边界（上滑到顶 / 下滑到底）后，才把剩余位移接力给外层会话。
+ *  返回从事件目标向上找到的第一个真正可滚动的嵌套滚动区。 */
+function findNestedScroller(target: EventTarget | null): HTMLElement | null {
+  if (!(target instanceof Element)) return null
+  for (let node: Element | null = target; node; node = node.parentElement) {
+    if (!node.matches('.chat-activity-group-list, .chat-tool-output')) continue
+    const element = node as HTMLElement
+    if (element.scrollHeight - element.clientHeight > 1) return element
+  }
+  return null
+}
+
+/** 该滚动区在滚轮方向上是否还有内容可滚（留 1px 误差，macOS 触控板会有小数）。 */
+function canScrollOn(node: HTMLElement, deltaY: number): boolean {
+  if (deltaY < 0) return node.scrollTop > 1
+  return node.scrollTop < node.scrollHeight - node.clientHeight - 1
+}
+
+/** 把滚轮位移统一成像素，避免 line / page 模式下位移被放大或缩小。 */
+function wheelDeltaPx(event: WheelEvent<HTMLElement>): number {
+  if (event.deltaMode === 1) return event.deltaY * 16
+  if (event.deltaMode === 2) return event.deltaY * event.currentTarget.clientHeight
+  return event.deltaY
 }
 
 /** 对话消息列表：停留在底部时跟随新内容，用户向上浏览后暂停跟随。
@@ -207,6 +272,14 @@ function ChatThreadMessages(): ReactElement {
   }
 
   const handleWheel = (event: WheelEvent<HTMLElement>): void => {
+    const nested = findNestedScroller(event.target)
+    // 嵌套滚动区自己还能滚时，滚轮只作用于它：不影响会话跟随，也不触发反向补载。
+    if (nested && canScrollOn(nested, event.deltaY)) return
+
+    // 嵌套区已到边界：原生 chaining 被 overscroll-behavior: contain 关掉了，
+    // 这里手动接力，让「上滑到顶后继续上滑」等价于直接滚外层会话。
+    if (nested) event.currentTarget.scrollTop += wheelDeltaPx(event)
+
     // 在浏览器提交滚动位置前先记录向上浏览意图，避免同一时刻的流式更新抢回滚动位置。
     if (event.deltaY < 0) {
       followsLatestRef.current = false
@@ -215,17 +288,17 @@ function ChatThreadMessages(): ReactElement {
     }
   }
 
-  // 一轮结束后，把它中间连续的思考 / 工具调用收拢成一条摘要。
-  // 该轮还在进行时保持逐条展示，让用户看得到实时进度。
+  // 思考 / 工具调用边生成边收拢成一条摘要（实时聚合），不等该轮结束：
+  // 消息一到就并入分组，摘要与步数随生成更新，收尾时也不会整段突然塌缩。
   // 分组内每个下标都指向同一个数组：反向补载可能把分组切在中间，
   // 渲染时要在它第一条可见的消息处补上，否则整组会凭空消失。
   const groupByIndex = new Map<number, ChatMessage[]>()
+  /** 仍在接收新步骤的分组（即最后一个活动分组），展开时让它跟随最新一步。 */
+  let liveGroup: ChatMessage[] | undefined
   {
-    let turnStart = -1
     let open: ChatMessage[] | undefined
     messages.forEach((message, index) => {
       if (message.role === 'user') {
-        turnStart = index
         open = undefined
         return
       }
@@ -234,14 +307,11 @@ function ChatThreadMessages(): ReactElement {
         open = undefined
         return
       }
-      // 该轮是否已经结束：后面还有用户消息，或者它已经是最后一轮且当前不在生成中。
-      // 不能用 finishedAt / lastTurnSeconds 判断——历史会话回放的消息不带 finishedAt，
-      // 助手回复为空时两边都没有，会导致收拢永远不生效。
-      if (turnStart < 0 || (turnStart === lastUserIndex && working)) return
       open ??= []
       open.push(message)
       groupByIndex.set(index, open)
     })
+    liveGroup = open
   }
 
   const visibleMessages = startIndex > 0 ? messages.slice(startIndex) : messages
@@ -255,7 +325,7 @@ function ChatThreadMessages(): ReactElement {
       renderedGroups.add(group)
       entries.push(
         <Fragment key={group[0].id}>
-          <ActivityGroupMessage messages={group} cwd={cwd} />
+          <ActivityGroupMessage messages={group} cwd={cwd} live={working && group === liveGroup} />
         </Fragment>
       )
       return
@@ -281,7 +351,7 @@ function ChatThreadMessages(): ReactElement {
       onScroll={handleScroll}
       onWheel={handleWheel}
     >
-      <div ref={contentRef} className="chat-thread-content flex flex-col gap-1">
+      <div ref={contentRef} className="chat-thread-content flex flex-col gap-0.5">
         {startIndex > 0 && (
           <button
             type="button"

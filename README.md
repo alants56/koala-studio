@@ -8,11 +8,12 @@
 
 - **双 Agent 支持** — 在 Claude 和 Pi 之间自由切换，偏好设置持久化
 - **多项目管理** — 创建、搜索、删除项目，绑定本地目录，持久化到本地 JSON
+- **仅对话** — 不绑定项目目录的轻量对话：每条对话自动获得一个时间戳工作目录（应用数据目录下），会话记录与产物都在里面；界面只展示对话历史，不展示目录
 - **对话工作台** — 实时流式对话，支持图片、模型切换、推理强度调节、用量查询；Git 项目可在输入区查看本地分支、切换或新建分支
 - **后台会话** — Claude 和 Pi 共用最多 3 个独立会话运行实例，同目录、跨 Agent 也隔离消息、工具输出、权限和队列；切换会话/项目不会中断任务
 - **历史会话** — 直接读取 ACP 会话记录，可在不同会话间无缝切换
-- **资源管理** — 在应用内管理 Skills、插件和 MCP 配置（Claude 专属；Pi 仅支持 Skills）
-- **自动化** — 创建和管理自动化规则，Agent 可通过内置 MCP 工具直接读写
+- **已归档会话** — 侧栏可归档项目会话与仅对话；设置弹窗里集中管理，支持搜索、按项目筛选、取消归档或彻底删除
+- **待办工具** — 待办看板数据可通过内置 MCP 工具（`koala_*_todo`）由 Agent 直接读写
 
 ## 快速开始
 
@@ -45,9 +46,19 @@ pnpm package   # 打包 macOS 安装包
 | `/projects` | 项目列表，支持搜索、新建、删除 |
 | `/projects/:id` | 项目对话，自动连接 ACP；右上角可查看并切换历史会话 |
 | `/projects/:id?view=board` | 项目待办看板，按待办类型分列、可拖拽流转 |
-| `/claude` | Skills / 插件 / MCP 集中管理 |
-| `/automations` | 自动化规则管理与运行记录 |
+| `/chats/:id` | 单条仅对话，自动在专属目录连接 ACP，可加载历史 |
 | `/workbench` | 占位页（看板已按项目拆分，见上） |
+
+## 仅对话
+
+与项目对话并列的轻量形态：不绑定任何用户目录，新建时在主进程为每条对话创建一个
+以年月日时分秒命名的目录（`conversations/20250919143012`），作为该对话的 ACP 工作目录。
+
+- 目录、ACP 会话与 Agent 产物都按对话隔离，界面上只展示对话历史（侧栏「对话」区，新建与删除都在这里）
+- 标题默认取首条消息；每条对话写回自己的 `sessionId`，重开时加载同一个会话而不是新建
+- 切换 Agent 时会在同一目录内新开会话（旧 Agent 的会话 id 不能跨 Agent 加载）
+- 删除对话只移除列表索引，目录与产物保留在本地
+- 归档的对话从侧栏移出，在设置弹窗的「已归档的会话管理」里取消归档或删除
 
 ## 待办看板
 
@@ -64,7 +75,9 @@ pnpm package   # 打包 macOS 安装包
 | 数据 | 存储位置 |
 |------|---------|
 | 项目元数据 | `~/Library/Application Support/koala-studio/projects.json` |
-| 自动化规则 | `~/Library/Application Support/koala-studio/automations.json` |
+| 仅对话索引 | `~/Library/Application Support/koala-studio/conversations.json` |
+| 仅对话目录（会话与产物） | `~/Library/Application Support/koala-studio/conversations/<年月日时分秒>/` |
+| 会话元数据（重命名 / 归档标记） | `~/Library/Application Support/koala-studio/session-meta.json` |
 | 待办事项 | `~/Library/Application Support/koala-studio/todos.json` |
 | 对话记录 | 由 Claude Code 管理（`~/.claude` 会话存储），应用不另行持久化 |
 

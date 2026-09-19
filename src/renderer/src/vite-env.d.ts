@@ -2,9 +2,8 @@
 
 import type { AcpApi } from '@shared/acp'
 import type { ProjectsApi } from '@shared/projects'
-import type { AutomationsApi } from '@shared/automations'
+import type { ConversationsApi } from '@shared/conversations'
 import type { TodosApi } from '@shared/todos'
-import type { ClaudeApi } from '@shared/claude'
 import type { AttachmentsApi } from '@shared/attachments'
 import type { FileActionsApi } from '@shared/files'
 import type { GitApi } from '@shared/git'
@@ -14,9 +13,8 @@ declare global {
   interface Window {
     acp: AcpApi
     projects: ProjectsApi
-    automations: AutomationsApi
+    conversations: ConversationsApi
     todos: TodosApi
-    claude: ClaudeApi
     attachments: AttachmentsApi
     files: FileActionsApi
     workspace: WorkspaceApi

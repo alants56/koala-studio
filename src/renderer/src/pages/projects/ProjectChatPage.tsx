@@ -81,6 +81,13 @@ export function ProjectChatPage(): ReactElement {
 
   const startNewConversation = useCallback((): void => beginNewSession(), [beginNewSession])
 
+  /** 只替换 view，保留 session：从看板回来还停在同一个会话上，且不会触发 AgentProvider 重挂载。 */
+  const openBoard = useCallback((): void => {
+    const params = new URLSearchParams(location.search)
+    params.set('view', 'board')
+    void navigate({ pathname: location.pathname, search: params.toString() })
+  }, [location.pathname, location.search, navigate])
+
   // 侧栏点项目名的 ?new= 意图：换算成递增代数（唯一建会话路径）并立刻把它从 URL 摘掉，
   // 这样回退/前进到这条历史时不会重复建会话。location.key 保证 StrictMode 下只处理一次。
   const handledNewSessionRef = useRef<string | undefined>(undefined)
@@ -132,7 +139,14 @@ export function ProjectChatPage(): ReactElement {
           initialSessionId={initialSessionId}
           onFirstPrompt={handleFirstPrompt}
         >
-          <ChatView project={project} onStartNewConversation={startNewConversation} />
+          <ChatView
+          title={project.name}
+          workspaceName={project.name}
+          onStartNewConversation={startNewConversation}
+          onOpenBoard={openBoard}
+          backTo="/projects"
+          backLabel="返回项目列表"
+        />
         </AgentProvider>
       </div>
       {boardActivated && (

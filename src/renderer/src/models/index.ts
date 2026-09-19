@@ -8,10 +8,12 @@ export type {
   AgentStatus,
   ChatMessage,
   LoadedSession,
-  PromptRequest
+  PromptRequest,
+  SessionDeletionResult
 } from '@shared/acp'
 export type { AttachmentImportInput, AttachmentsApi, ChatAttachment, ChatAttachmentKind } from '@shared/attachments'
 export type { CreateProjectInput, Project, ProjectsApi, UpdateProjectInput } from '@shared/projects'
+export type { Conversation, ConversationsApi, UpdateConversationInput } from '@shared/conversations'
 
 /** 连接状态在 UI 上的展示元信息（antd Badge status + 文案）。 */
 export type BadgeStatus = 'success' | 'processing' | 'default' | 'error' | 'warning'

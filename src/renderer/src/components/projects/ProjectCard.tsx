@@ -1,6 +1,6 @@
 import { useRef, type DragEvent, type MouseEvent, type ReactElement } from 'react'
 import { Avatar, Button, Card, Dropdown, Space, Tag, Typography } from 'antd'
-import { DeleteOutlined, EditOutlined, FolderOutlined, MoreOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, FolderOutlined, MoreOutlined, ProjectOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import type { Project } from '@/models'
 import { avatarColor } from '@/utils/avatar-color'
@@ -23,7 +23,7 @@ interface ProjectCardProps {
   onDrop?: (event: DragEvent<HTMLElement>) => void
 }
 
-/** 项目卡片：点击进入对话，右上角菜单可编辑或删除。 */
+/** 项目卡片：点击进入对话，右上角菜单可查看看板、编辑或删除。 */
 export function ProjectCard({
   project,
   onEdit,
@@ -50,6 +50,10 @@ export function ProjectCard({
     const target = event.target as HTMLElement
     if (target.closest('button, a, .ant-popconfirm')) return
     void navigate(`/projects/${project.id}`)
+  }
+
+  const openBoard = (): void => {
+    void navigate(`/projects/${encodeURIComponent(project.id)}?view=board`)
   }
 
   const handleDragEnd = (): void => {
@@ -91,12 +95,14 @@ export function ProjectCard({
         <Dropdown
           menu={{
             items: [
+              { key: 'board', icon: <ProjectOutlined />, label: '查看项目看板' },
               { key: 'edit', icon: <EditOutlined />, label: '编辑项目' },
               { type: 'divider' },
               { key: 'delete', icon: <DeleteOutlined />, label: '删除项目', danger: true }
             ],
             onClick: ({ key, domEvent }) => {
               domEvent.stopPropagation()
+              if (key === 'board') openBoard()
               if (key === 'edit') onEdit()
               if (key === 'delete') onDelete()
             }

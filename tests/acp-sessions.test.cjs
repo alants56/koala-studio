@@ -26,7 +26,7 @@ function fixture(preferredAgent = 'claude', { history = [], startupInfo } = {}) 
       })
       bridge.calls = []
       bridge.turns = []
-      bridge.automationMcpServers = () => []
+      bridge.koalaMcpServers = () => []
       bridge.connect = async (path) => {
         bridge.sessionCwd = path
         bridge.connection = {

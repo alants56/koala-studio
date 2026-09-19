@@ -12,5 +12,5 @@
     "rootDir": "src",
     "outDir": "out/mcp"
   },
-  "include": ["src/mcp/**/*.ts", "src/shared/automation-store.ts", "src/shared/automations.ts", "src/shared/todo-store.ts", "src/shared/todos.ts"]
+  "include": ["src/mcp/**/*.ts", "src/shared/todo-store.ts", "src/shared/todos.ts"]
 }

@@ -6,31 +6,27 @@ import {
   DashboardOutlined,
   DownOutlined,
   FolderOpenOutlined,
-  AppstoreOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  ThunderboltOutlined
+  SettingOutlined
 } from '@ant-design/icons'
 import { useLocation, useNavigate, useOutlet } from 'react-router-dom'
 import type { MenuProps } from 'antd'
 import type { AgentAdapterId } from '@shared/acp'
 import { useAgentSelection } from '@/state/AgentSelectionContext'
+import { SettingsDialog } from '@/components/settings/SettingsDialog'
 import { ProjectNavigation } from './ProjectNavigation'
 
 const { Sider, Content } = Layout
 
 const MENU_ITEMS: MenuProps['items'] = [
   { key: '/workbench', icon: <DashboardOutlined />, label: '工作台' },
-  { key: '/claude', icon: <AppstoreOutlined />, label: '插件' },
-  { key: '/automations', icon: <ThunderboltOutlined />, label: '自动化执行' },
   { key: '/projects', icon: <FolderOpenOutlined />, label: '项目' }
 ]
 
 function getSelectedKey(pathname: string): string {
   if (pathname === '/projects') return '/projects'
   if (pathname.startsWith('/workbench')) return '/workbench'
-  if (pathname.startsWith('/claude')) return '/claude'
-  if (pathname.startsWith('/automations')) return '/automations'
   return ''
 }
 
@@ -42,6 +38,7 @@ export function AppLayout(): ReactElement {
   const outlet = useOutlet()
   const [projectDetailOutlet, setProjectDetailOutlet] = useState<ReactNode>(null)
   const [agentOpen, setAgentOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const { message } = App.useApp()
   const { currentAgent, switching, setAgent } = useAgentSelection()
 
@@ -57,6 +54,10 @@ export function AppLayout(): ReactElement {
 
   const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
     void navigate(key)
+  }
+
+  const handleOpenSettings = (): void => {
+    setSettingsOpen(true)
   }
 
   const handleAgentChange = async (agentId: AgentAdapterId): Promise<void> => {
@@ -170,8 +171,18 @@ export function AppLayout(): ReactElement {
               )}
             </Button>
           </Popover>
+          <Tooltip title="设置">
+            <Button
+              type="text"
+              className="koala-settings-trigger"
+              icon={<SettingOutlined />}
+              onClick={handleOpenSettings}
+              aria-label="设置"
+            />
+          </Tooltip>
         </div>
       </Sider>
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <Layout className="koala-content-wrap">
         <Content className="koala-content">
           {retainedProjectDetail && (

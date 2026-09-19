@@ -1,4 +1,5 @@
 import type { ChatAttachment } from './attachments'
+import type { ArchivedSessionMeta } from './session-meta-store'
 
 export type AgentAdapterId = 'claude' | 'pi'
 
@@ -136,7 +137,7 @@ export interface ChatMessage {
 }
 
 export interface PromptRequest {
-  /** Required at the IPC boundary; internal automation prompts may omit it. */
+  /** Required at the IPC boundary; internal helper prompts may omit it. */
   target?: SessionTarget
   text: string
   cwd: string
@@ -149,6 +150,10 @@ export interface AcpSessionInfo {
   title: string
   updatedAt: string
   cwd: string
+  /** 标题是用户在应用内自定义的；此时不再被首条消息 / Agent 标题覆盖。 */
+  titleFromUser?: boolean
+  /** 已归档：侧栏默认收起，可在「已归档」分组里取消归档。 */
+  archived?: boolean
   /** 该历史会话中持久化等待处理的消息数量。 */
   queueDepth?: number
 }
@@ -157,6 +162,13 @@ export interface AcpSessionResult {
   sessionId: string
   modes?: AgentMode[]
   currentModeId?: string
+}
+
+/** 删除历史会话的结果：Agent 侧清理可能失败（目录已删除、会话已不存在），本地索引仍会清掉。 */
+export interface SessionDeletionResult {
+  agentDeleted: boolean
+  /** Agent 侧删除失败的原因，仅在 agentDeleted 为 false 时存在。 */
+  warning?: string
 }
 
 /** session/load 回放的历史消息。 */
@@ -184,6 +196,14 @@ export interface AcpApi {
   setAgent: (agentId: AgentAdapterId) => Promise<void>
   /** 通过 ACP session/list 查询 Claude Code 在该目录下的会话记录。 */
   listSessions: (cwd: string) => Promise<AcpSessionInfo[]>
+  /** 应用内重命名历史会话（ACP 协议没有改名方法，覆写记录在本地索引）。 */
+  renameSession: (cwd: string, sessionId: string, title: string) => Promise<void>
+  /** 应用内归档 / 取消归档历史会话（只影响侧栏展示，不删除 Agent 侧记录）。 */
+  setSessionArchived: (cwd: string, sessionId: string, archived: boolean, title?: string) => Promise<void>
+  /** 本地归档索引：设置弹窗直接读，不启动 Agent 进程。 */
+  listArchivedSessions: () => Promise<ArchivedSessionMeta[]>
+  /** 彻底删除历史会话（ACP session/delete）：Agent 侧记录一并删除，不可恢复。 */
+  deleteSession: (cwd: string, sessionId: string) => Promise<SessionDeletionResult>
   /** 通过 ACP session/load 加载历史会话，并返回回放的消息。 */
   loadSession: (sessionId: string, cwd: string, agent: AgentAdapterId) => Promise<LoadedSession>
   /** 通过 ACP session/new 新建一个会话。 */

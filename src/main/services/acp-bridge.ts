@@ -17,7 +17,6 @@ import type {
   LoadedSession,
   PromptRequest
 } from '../../shared/acp'
-import { automationsFilePath } from './automation-store'
 import { todosFilePath } from './todo-store'
 import {
   attachmentResourceUri,
@@ -111,14 +110,13 @@ export class AcpBridge extends EventEmitter {
     this.state = { status: 'disconnected', currentAgent: this.currentAgent }
   }
 
-  private automationMcpServers(): acp.McpServer[] {
+  private koalaMcpServers(): acp.McpServer[] {
     return [{
-      name: 'koala-automations',
+      name: 'koala',
       command: process.execPath,
-      args: [join(__dirname, '../mcp/mcp/automations-server.js')],
+      args: [join(__dirname, '../mcp/mcp/koala-server.js')],
       env: [
         { name: 'ELECTRON_RUN_AS_NODE', value: '1' },
-        { name: 'KOALA_AUTOMATIONS_FILE', value: automationsFilePath() },
         { name: 'KOALA_TODOS_FILE', value: todosFilePath() }
       ]
     }]
@@ -244,7 +242,6 @@ export class AcpBridge extends EventEmitter {
       }
       this.sessionCwd = cwd
       this.setState({ status: 'ready', detail: `${agentName} 已连接`, steeringSupported: this.steeringSupported })
-      this.emit('message', this.systemMessage(`已连接 ${agentName} ACP。`))
     } catch (error) {
       if (generation === this.connectionGeneration) {
         this.dispose()
@@ -268,6 +265,15 @@ export class AcpBridge extends EventEmitter {
     }))
   }
 
+  /** 通过 ACP session/delete 删除历史会话：Agent 侧记录一并删除，不可恢复。 */
+  async deleteSession(cwd: string, sessionId: string): Promise<void> {
+    const state = await this.connect(cwd)
+    if ((state.status !== 'ready' && state.status !== 'working') || !this.connection) {
+      throw new Error(`${state.detail ?? '无法连接 Agent'}，删除会话失败。`)
+    }
+    await this.connection.agent.request(acp.methods.agent.session.delete, { sessionId })
+  }
+
   /** 通过 ACP session/load 加载历史会话，回放消息通过 onMessage 事件流式推送到 UI。 */
   async loadSession(sessionId: string, cwd: string): Promise<LoadedSession> {
     if (!this.connection) throw new Error('请先连接 Agent ACP。')
@@ -281,7 +287,7 @@ export class AcpBridge extends EventEmitter {
     const response = await this.connection.agent.request(acp.methods.agent.session.load, {
       sessionId,
       cwd,
-      mcpServers: this.automationMcpServers()
+      mcpServers: this.koalaMcpServers()
     }).finally(() => {
       // 并发加载时，较早请求的 finally 不能结束较新会话的回放状态。
       if (sessionChangeGeneration === this.sessionChangeGeneration) this.replayingSession = false
@@ -330,7 +336,7 @@ export class AcpBridge extends EventEmitter {
     await this.prepareForSessionChange()
     const sessionChangeGeneration = this.sessionChangeGeneration
     this.suppressPiStartupInfo = false
-    const response = await this.connection.agent.request(acp.methods.agent.session.new, { cwd, mcpServers: this.automationMcpServers() })
+    const response = await this.connection.agent.request(acp.methods.agent.session.new, { cwd, mcpServers: this.koalaMcpServers() })
     if (sessionChangeGeneration !== this.sessionChangeGeneration) {
       return { sessionId: response.sessionId }
     }
