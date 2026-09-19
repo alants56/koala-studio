@@ -70,7 +70,7 @@ function fixture(preferredAgent = 'claude', { history = [], startupInfo } = {}) 
 const send = (manager, sessionId, text = 'hello', path = cwd, agent = 'claude') => manager.prompt({ text, cwd: path, target: target(sessionId, path, agent) })
 const assistant = (snapshot) => snapshot.messages.filter((message) => message.role === 'assistant' && message.kind !== 'tool').map((message) => message.content).join('')
 
-for (const agent of ['claude', 'pi']) {
+for (const agent of ['claude', 'pi', 'codex']) {
   test(`${agent}: three same-directory sessions stream independently and switching never loads/cancels a live session`, async (t) => {
     const { manager, bridges } = fixture(agent)
     t.after(() => manager.dispose())
@@ -370,6 +370,96 @@ test('pi: delayed startup notice is suppressed only in its own session after swi
   await tick()
   assert.equal(assistant(await manager.loadSession(a.sessionId, cwd, 'pi')), 'A answer')
   assert.equal(assistant(await manager.loadSession(b.sessionId, cwd, 'pi')), 'B answer')
+})
+
+test('codex: terminal output snapshots replace the previous buffer instead of accumulating', async (t) => {
+  const { manager, bridges } = fixture('codex')
+  t.after(() => manager.dispose())
+  const session = await manager.createSession(cwd, 'codex')
+  const prompt = send(manager, session.sessionId, 'run', cwd, 'codex')
+  await tick()
+  const bridge = bridges[0]
+  const update = (value) => bridge.handleSessionUpdate({ sessionId: session.sessionId, update: value })
+  update({ sessionUpdate: 'tool_call', toolCallId: 't1', title: 'bash', kind: 'execute', status: 'in_progress', content: [] })
+  // codex 声明了 _meta.terminal_output：每次都是完整快照，后一次覆盖前一次。
+  update({ sessionUpdate: 'tool_call_update', toolCallId: 't1', _meta: { terminal_output: { data: 'first\n' } } })
+  update({ sessionUpdate: 'tool_call_update', toolCallId: 't1', _meta: { terminal_output: { data: 'first\nsecond\n' } } })
+  update({ sessionUpdate: 'tool_call_update', toolCallId: 't1', status: 'completed', _meta: { terminal_exit: { exit_code: 0 } } })
+  bridge.complete()
+  await prompt
+  await tick()
+  const snapshot = await manager.loadSession(session.sessionId, cwd, 'codex')
+  const tool = snapshot.messages.find((message) => message.kind === 'tool')
+  assert.equal(tool.content, '````\nfirst\nsecond\n\n````')
+  assert.equal(tool.exitCode, 0)
+  assert.equal(tool.toolStatus, 'completed')
+})
+
+test('codex: auth_required logs in once and retries the failed message without echoing it twice', async (t) => {
+  const { manager, bridges } = fixture('codex')
+  t.after(() => manager.dispose())
+  const session = await manager.createSession(cwd, 'codex')
+  const bridge = bridges[0]
+  bridge.agentAuthMethods = [{ id: 'chat-gpt', name: 'ChatGPT' }]
+  const request = bridge.connection.agent.request
+  let promptAttempts = 0
+  bridge.connection.agent.request = async (method, params) => {
+    if (method === 'authenticate') {
+      bridge.calls.push({ method, params })
+      return {}
+    }
+    if (method === 'session/prompt') {
+      promptAttempts += 1
+      if (promptAttempts === 1) {
+        const error = new Error('Authentication required')
+        error.code = -32000
+        throw error
+      }
+      return new Promise((resolve) => bridge.turns.push(resolve))
+    }
+    return request(method, params)
+  }
+
+  const prompt = send(manager, session.sessionId, 'hello codex', cwd, 'codex')
+  for (let i = 0; i < 5; i++) await tick()
+  assert.equal(promptAttempts, 2)
+  assert.equal(bridge.calls.filter((call) => call.method === 'authenticate').length, 1)
+  assert.equal(bridge.calls.find((call) => call.method === 'authenticate').params.methodId, 'chat-gpt')
+  const messages = (await manager.loadSession(session.sessionId, cwd, 'codex')).messages
+  assert.equal(messages.filter((message) => message.role === 'user' && message.content === 'hello codex').length, 1)
+  bridge.complete()
+  await prompt
+  await tick()
+  assert.equal(manager.getState(target(session.sessionId, cwd, 'codex')).status, 'ready')
+})
+
+test('codex: loading a session without a rollout falls back to a fresh session', async (t) => {
+  const { manager } = fixture('codex')
+  t.after(() => manager.dispose())
+  const original = manager.options.createBridge
+  manager.options.createBridge = (agent) => {
+    const bridge = original(agent)
+    const connect = bridge.connect
+    bridge.connect = async (path) => {
+      await connect(path)
+      const request = bridge.connection.agent.request
+      bridge.connection.agent.request = async (method, params) => {
+        if (method === 'session/load') {
+          const error = new Error('Internal error')
+          error.code = -32603
+          error.data = { details: `no rollout found for thread id ${params.sessionId}` }
+          throw error
+        }
+        return request(method, params)
+      }
+      return bridge.getState()
+    }
+    return bridge
+  }
+  // 该会话从未产生 rollout（例如新建后没发过消息）：不应报错，退回新建空会话。
+  const reopened = await manager.loadSession('never-prompted', cwd, 'codex')
+  assert.ok(reopened.sessionId.startsWith('new-'))
+  assert.notEqual(reopened.sessionId, 'never-prompted')
 })
 
 test('mixed Claude/Pi sessions with the same ID share the three-runtime limit but never share events or controls', async (t) => {

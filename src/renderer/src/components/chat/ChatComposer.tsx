@@ -24,7 +24,7 @@ import {
 import { useAgent } from '@/state/AgentContext'
 import { formatTurnDuration } from '@/utils/turn-duration'
 import { GitBranchPicker } from './GitBranchPicker'
-import type { AgentCommand, AgentPermissionOption } from '@shared/acp'
+import { agentDisplayName, type AgentCommand, type AgentPermissionOption } from '@shared/acp'
 
 const MAX_ATTACHMENT_COUNT = 10
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
@@ -45,7 +45,7 @@ interface PermissionModePresentation {
 const MODE_PRESENTATIONS: Record<string, PermissionModePresentation> = {
   auto: {
     label: '自动',
-    description: '由 Claude 判断哪些操作可安全执行。',
+    description: '由 Agent 判断哪些操作可安全执行。',
     icon: <RobotOutlined />
   },
   default: {
@@ -219,6 +219,7 @@ function useElapsedSeconds(startedAt?: number): number {
 export function ChatComposer(): ReactElement {
   const { state, cwd, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission } = useAgent()
   const { message } = App.useApp()
+  const agentName = agentDisplayName(state.currentAgent)
   const [prompt, setPrompt] = useState('')
   const [permissionOpen, setPermissionOpen] = useState(false)
   const [modelOpen, setModelOpen] = useState(false)
@@ -230,10 +231,14 @@ export function ChatComposer(): ReactElement {
   const [draggingFiles, setDraggingFiles] = useState(false)
   const [pendingQueueActionId, setPendingQueueActionId] = useState<string>()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const composerRef = useRef<HTMLDivElement>(null)
   const attachmentItemsRef = useRef(attachmentItems)
 
   const ready = state.status === 'ready'
   const loading = state.status === 'working'
+  /** 草稿会话（还没有真实目录与会话）也能输入：首条消息提交时才真正创建。 */
+  const draft = state.status === 'draft'
+  const canCompose = ready || draft
   /** 运行中显示在「停止」左侧的实时用时；空闲时不走计时器。 */
   const elapsedSeconds = useElapsedSeconds(loading ? state.workStartedAt : undefined)
   const commands = state.commands ?? EMPTY_COMMANDS
@@ -272,6 +277,12 @@ export function ChatComposer(): ReactElement {
     attachmentItemsRef.current = attachmentItems
   }, [attachmentItems])
 
+  // 草稿会话：进入页面即可直接输入，不用再点一下输入框。
+  useEffect(() => {
+    if (!draft) return
+    composerRef.current?.querySelector('textarea')?.focus()
+  }, [draft])
+
   useEffect(() => () => {
     attachmentItemsRef.current.forEach((item) => {
       if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
@@ -283,7 +294,7 @@ export function ChatComposer(): ReactElement {
       await setMode(modeId)
       setPermissionOpen(false)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '切换 Claude 权限模式失败')
+      message.error(error instanceof Error ? error.message : `切换 ${agentName} 权限模式失败`)
     }
   }
 
@@ -292,7 +303,7 @@ export function ChatComposer(): ReactElement {
       await setModel(modelId)
       setModelOpen(false)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '切换 Claude 模型失败')
+      message.error(error instanceof Error ? error.message : `切换 ${agentName} 模型失败`)
     }
   }
 
@@ -359,7 +370,7 @@ export function ChatComposer(): ReactElement {
   const handleSubmit = (text: string): void => {
     const trimmed = text.trim()
     // Agent 忙碌时也允许发送，新消息统一进入输入框上方的待处理队列。
-    if ((!trimmed && attachmentItems.length === 0) || (!ready && !loading) || importingAttachments) return
+    if ((!trimmed && attachmentItems.length === 0) || (!canCompose && !loading) || importingAttachments) return
 
     setImportingAttachments(true)
     void Promise.all(attachmentItems.map(async (item) => ({
@@ -372,6 +383,8 @@ export function ChatComposer(): ReactElement {
       setPrompt('')
       clearAttachments()
       void send(trimmed, attachments).catch((error: unknown) => {
+        // 发送失败（包括草稿对话创建失败）把文字放回输入框，避免用户重写。
+        if (trimmed) setPrompt((current) => current || trimmed)
         void message.error(error instanceof Error ? error.message : '发送消息失败。')
       })
     }).catch((error: unknown) => {
@@ -545,6 +558,7 @@ export function ChatComposer(): ReactElement {
 
   return (
     <div
+      ref={composerRef}
       className={`chat-composer-wrap${draggingFiles ? ' is-dragging-files' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={(event) => {
@@ -553,13 +567,13 @@ export function ChatComposer(): ReactElement {
       onDrop={handleDrop}
     >
       {state.pendingPermission && (
-        <div className="chat-permission-request" role="group" aria-label="Claude 权限请求">
+        <div className="chat-permission-request" role="group" aria-label={`${agentName} 权限请求`}>
           <div className="chat-permission-request-header">
             <QuestionCircleOutlined className="chat-permission-request-icon" aria-hidden="true" />
             <span className="chat-permission-request-title">
               {state.pendingPermission.toolTitle
-                ? `允许 Claude 执行：${state.pendingPermission.toolTitle}`
-                : `${state.currentAgent === 'pi' ? 'Pi' : 'Claude'} 请求权限`}
+                ? `允许 ${agentName} 执行：${state.pendingPermission.toolTitle}`
+                : `${agentName} 请求权限`}
             </span>
           </div>
           <div className="chat-permission-request-options">
@@ -661,7 +675,7 @@ export function ChatComposer(): ReactElement {
         // 自管按钮：忙碌时仍要能输入并排队，同时保留停止按钮；
         // 因此不把 loading 交给 Sender（它会独占发送键），改为在 suffix 里渲染两种动作。
         loading={false}
-        disabled={(!ready && !loading) || importingAttachments}
+        disabled={(!canCompose && !loading) || importingAttachments}
         readOnly={importingAttachments}
         placeholder="输入消息，或粘贴 / 拖入图片、PDF、Markdown 等文件。"
         autoSize={{ minRows: 1, maxRows: 6 }}
@@ -722,7 +736,7 @@ export function ChatComposer(): ReactElement {
               className="chat-attachment-send"
               aria-label="发送附件"
               icon={importingAttachments ? <LoadingOutlined spin /> : <SendOutlined />}
-              disabled={!ready || importingAttachments}
+              disabled={!canCompose || importingAttachments}
               onClick={() => handleSubmit('')}
             />
           )
@@ -733,7 +747,7 @@ export function ChatComposer(): ReactElement {
               type="text"
               className="chat-attachment-trigger"
               icon={<PaperClipOutlined />}
-              disabled={(!ready && !loading) || importingAttachments}
+              disabled={(!canCompose && !loading) || importingAttachments}
               onClick={() => fileInputRef.current?.click()}
             >
               添加文件
@@ -747,7 +761,7 @@ export function ChatComposer(): ReactElement {
                   open={permissionOpen}
                   onOpenChange={setPermissionOpen}
                   content={permissionPanel}
-                  title="如何批准 Claude 操作？"
+                  title={`如何批准 ${agentName} 操作？`}
                 >
                   <Button
                     type="text"

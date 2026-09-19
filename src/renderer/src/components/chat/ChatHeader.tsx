@@ -15,13 +15,15 @@ interface ChatHeaderProps {
   onConnect?: () => void
   /** 点击「新对话」按钮。 */
   onNewConversation: () => void
+  /** 是否展示「新对话」按钮；草稿会话本身就是新对话，不需要再开一个。 */
+  showNewConversation?: boolean
   /** 切换到该项目的待办看板；仅项目对话提供，仅对话不显示看板入口。 */
   onOpenBoard?: () => void
 }
 
 /** 会话区顶栏：左侧连接状态圆点 + 标题 + 「新对话」，右侧图标化的看板入口与 Git 环境信息。
  *  在正式对话页与历史会话加载页共用，确保切换会话时顶部样式保持不变。 */
-export function ChatHeader({ title, state, cwd, onConnect, onNewConversation, onOpenBoard }: ChatHeaderProps): ReactElement {
+export function ChatHeader({ title, state, cwd, onConnect, onNewConversation, onOpenBoard, showNewConversation = true }: ChatHeaderProps): ReactElement {
   const status = STATUS_DETAILS[state.status]
   const canRetry = state.status === 'disconnected' || state.status === 'error'
 
@@ -45,9 +47,11 @@ export function ChatHeader({ title, state, cwd, onConnect, onNewConversation, on
           </span>
         </Tooltip>
         <Typography.Title level={4} className="chat-project-title" style={{ margin: 0 }}>{title}</Typography.Title>
-        <Button type="text" className="chat-header-new" icon={<PlusOutlined />} onClick={onNewConversation}>
-          新对话
-        </Button>
+        {showNewConversation && (
+          <Button type="text" className="chat-header-new" icon={<PlusOutlined />} onClick={onNewConversation}>
+            新对话
+          </Button>
+        )}
       </div>
       <Space size={2}>
         {/* 右侧只留图标，文案放进 Tooltip，避免顶栏被文字撑宽。 */}

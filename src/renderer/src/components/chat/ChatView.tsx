@@ -56,6 +56,7 @@ export function ChatView({ title, workspaceName, onStartNewConversation, onOpenB
         onConnect={() => void connect()}
         onNewConversation={onStartNewConversation}
         onOpenBoard={onOpenBoard}
+        showNewConversation={state.status !== 'draft'}
       />
 
       {state.status === 'error' && (
@@ -64,7 +65,7 @@ export function ChatView({ title, workspaceName, onStartNewConversation, onOpenB
           showIcon
           style={{ margin: '16px 0' }}
           message="ACP 连接失败"
-          description={state.detail ?? '无法启动 Claude ACP 服务。'}
+          description={state.detail ?? '无法启动 Agent ACP 服务。'}
         />
       )}
 

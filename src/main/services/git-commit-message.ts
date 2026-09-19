@@ -4,7 +4,7 @@ import { promisify } from 'node:util'
 import * as acp from '@agentclientprotocol/sdk'
 import type { ClientConnection, SessionNotification } from '@agentclientprotocol/sdk'
 import type { AgentAdapterId } from '../../shared/acp'
-import { piAcpEnvironment } from './pi-runtime'
+import { agentAdapterEnvironment, agentAdapterPath } from './agent-runtime'
 
 const execFileAsync = promisify(execFile)
 
@@ -124,12 +124,9 @@ export async function generateCommitMessage(cwd: string, agent: AgentAdapterId):
   }
 
   try {
-    const adapterPath = agent === 'pi'
-      ? require.resolve('pi-acp/dist/index.js')
-      : require.resolve('@agentclientprotocol/claude-agent-acp/dist/index.js')
-    agentProcess = spawn(process.execPath, [adapterPath], {
+    agentProcess = spawn(process.execPath, [agentAdapterPath(agent)], {
       cwd,
-      env: agent === 'pi' ? piAcpEnvironment() : { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      env: agentAdapterEnvironment(agent),
       stdio: ['pipe', 'pipe', 'pipe']
     })
     // 子进程异常退出后仍可能收到一次写入，未监听会变成未捕获的 EPIPE 异常。

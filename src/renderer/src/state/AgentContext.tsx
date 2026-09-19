@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
-import type { AcpSessionInfo, AgentState, ChatMessage, SessionTarget } from '@shared/acp'
+import { agentDisplayName, type AcpSessionInfo, type AgentState, type ChatMessage, type SessionTarget } from '@shared/acp'
 import type { ChatAttachment } from '@shared/attachments'
 import { acp, assertAcpApi } from '@/services/acp'
 import { useAgentSelection } from '@/state/AgentSelectionContext'
@@ -29,7 +29,7 @@ interface AgentContextValue {
   setEffort: (effortId: string) => Promise<void>
   /** 回复当前待确认的权限请求。 */
   respondPermission: (optionId: string) => Promise<void>
-  /** 查询 Claude Code 在该目录下的会话记录（ACP session/list）。 */
+  /** 查询 Agent 在该目录下的会话记录（ACP session/list）。 */
   listSessions: () => Promise<AcpSessionInfo[]>
   /** 加载历史会话（ACP session/load），替换当前消息并设为当前会话。 */
   loadSession: (sessionId: string) => Promise<void>
@@ -57,7 +57,7 @@ interface AgentProviderProps {
 
 export function AgentProvider({ cwd, initialSessionId, onFirstPrompt, onSessionReady, children }: AgentProviderProps): ReactElement {
   const { currentAgent } = useAgentSelection()
-  const agentName = currentAgent === 'pi' ? 'Pi' : 'Claude'
+  const agentName = agentDisplayName(currentAgent)
   // 进入页面即视为「连接中」，避免首帧先闪现「未连接」
   const [state, setState] = useState<AgentState>({ status: 'connecting', detail: `正在连接 ${agentName} ACP…`, currentAgent })
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES)
@@ -217,4 +217,44 @@ export function useAgent(): AgentContextValue {
     throw new Error('useAgent 必须在 <AgentProvider> 内使用')
   }
   return context
+}
+
+interface DraftAgentProviderProps {
+  /** 首条消息提交：由页面创建真实对话（目录 + 索引）并跳到该对话。 */
+  onSubmit: (text: string, attachments?: ChatAttachment[]) => Promise<void>
+  children: ReactNode
+}
+
+/**
+ * 草稿会话：从点「对话」到提交首条消息之间还没有目录与真实会话，
+ * 这里给出一份可输入的 Agent 上下文，让 ChatComposer 等聊天组件原样复用；
+ * 真正的目录与 ACP 会话在 onSubmit 里创建。
+ */
+export function DraftAgentProvider({ onSubmit, children }: DraftAgentProviderProps): ReactElement {
+  const { currentAgent } = useAgentSelection()
+  const noop = useCallback(async (): Promise<void> => undefined, [])
+  const value = useMemo<AgentContextValue>(
+    () => ({
+      state: { status: 'draft', currentAgent },
+      cwd: '',
+      messages: [],
+      sessionLoading: false,
+      connect: noop,
+      send: onSubmit,
+      removeQueuedPrompt: noop,
+      steerQueuedPrompt: noop,
+      stop: noop,
+      setMode: noop,
+      setModel: noop,
+      setEffort: noop,
+      respondPermission: noop,
+      listSessions: async () => [],
+      loadSession: async () => {
+        throw new Error('草稿会话尚未创建。')
+      }
+    }),
+    [currentAgent, noop, onSubmit]
+  )
+
+  return <AgentContext.Provider value={value}>{children}</AgentContext.Provider>
 }

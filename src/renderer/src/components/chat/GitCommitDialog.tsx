@@ -8,6 +8,7 @@ import {
   RobotOutlined
 } from '@ant-design/icons'
 import type { GitDiffSummary, GitRepositoryStatus } from '@shared/git'
+import { agentDisplayName } from '@shared/acp'
 import { readableIpcError } from '@/utils/ipc-error'
 import { useAgentSelection } from '@/state/AgentSelectionContext'
 
@@ -42,7 +43,7 @@ function defaultCommitMessage(status?: GitRepositoryStatus): string {
 export function GitCommitDialog({ cwd, open, onClose, onCommitted }: GitCommitDialogProps): ReactElement {
   const { message } = App.useApp()
   const { currentAgent } = useAgentSelection()
-  const agentName = currentAgent === 'pi' ? 'Pi' : 'Claude'
+  const agentName = agentDisplayName(currentAgent)
 
   const [status, setStatus] = useState<GitRepositoryStatus>()
   const [diff, setDiff] = useState<GitDiffSummary>()

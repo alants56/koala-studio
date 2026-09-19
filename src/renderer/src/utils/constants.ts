@@ -15,7 +15,8 @@ export const STATUS_DOT_COLORS: Record<AgentStatus, string> = {
   connecting: 'var(--warning)',
   ready: 'var(--success)',
   working: 'var(--primary)',
-  error: 'var(--error)'
+  error: 'var(--error)',
+  draft: 'var(--muted-soft)'
 }
 
 export const STATUS_DETAILS: Record<AgentStatus, StatusMeta> = {
@@ -23,5 +24,6 @@ export const STATUS_DETAILS: Record<AgentStatus, StatusMeta> = {
   connecting: { badge: 'processing', label: '连接中' },
   ready: { badge: 'success', label: '已就绪' },
   working: { badge: 'processing', label: '正在生成' },
-  error: { badge: 'error', label: '连接异常' }
+  error: { badge: 'error', label: '连接异常' },
+  draft: { badge: 'default', label: '待创建' }
 }

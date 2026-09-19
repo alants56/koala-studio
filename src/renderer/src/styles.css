@@ -660,7 +660,7 @@ input {
 
 .koala-conversation-head {
   display: flex;
-  height: 28px;
+  height: 30px;
   align-items: center;
   justify-content: space-between;
   gap: 4px;
@@ -677,13 +677,20 @@ input {
   border: 0;
   background: transparent;
   color: var(--muted-soft);
-  font-size: 11px;
+  cursor: pointer;
+  /* 与项目标题同号，让「对话」成为同级分区标题而不是描述文字。 */
+  font-size: 13px;
   font-weight: 620;
-  letter-spacing: 0.04em;
+  transition: color 150ms ease;
+}
+
+.koala-conversation-title:hover,
+.koala-conversation-title:focus-visible {
+  color: var(--body-strong);
 }
 
 .koala-conversation-title .anticon {
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .koala-conversation-add.ant-btn {
@@ -2092,6 +2099,372 @@ input {
 .git-status-entry-arrow {
   color: var(--muted-soft);
   font-size: 10px;
+}
+
+/* 环境信息里的「变更」行：整体可点，打开改动详情弹窗。
+   负 margin 让 hover 底色比内容宽一点，同时保持内容与其他行对齐。 */
+.git-status-change {
+  display: block;
+  width: calc(100% + 16px);
+  margin-inline: -8px;
+  border: 0;
+  border-radius: 6px;
+  padding: 3px 8px 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: start;
+}
+
+.git-status-change:hover:not(:disabled),
+.git-status-change:focus-visible:not(:disabled) {
+  outline: 0;
+  background: var(--surface-soft);
+}
+
+.git-status-change:disabled {
+  cursor: default;
+}
+
+.git-status-change .git-status-sub {
+  display: block;
+}
+
+/* 改动详情弹窗：左侧文件树 + 右侧并排对比。 */
+.git-changes-dialog .ant-modal-content {
+  overflow: hidden;
+  border-radius: 16px;
+  padding: 0;
+}
+
+.git-changes-dialog .ant-modal-header {
+  margin: 0;
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.git-changes-dialog .ant-modal-body {
+  padding: 0;
+}
+
+.git-changes-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.git-changes-title {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.git-changes-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.git-changes-heading .git-diff-count {
+  margin-inline-start: auto;
+  /* 弹窗右上角被关闭按钮占用，留出空间。 */
+  margin-inline-end: 22px;
+}
+
+.git-changes-body {
+  display: grid;
+  grid-template-columns: 268px minmax(0, 1fr);
+  height: min(560px, 68vh);
+}
+
+.git-changes-tree {
+  overflow: auto;
+  border-inline-end: 1px solid var(--hairline);
+  padding: 8px 8px 12px;
+  background: var(--canvas);
+}
+
+.git-changes-tree-loading,
+.git-changes-tree-empty {
+  padding: 24px 12px;
+  color: var(--muted-soft);
+  font-size: 12px;
+  text-align: center;
+}
+
+.git-changes-tree-note {
+  padding: 10px 6px 2px;
+  color: var(--muted-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* 文件树：目录可折叠，文件行右侧标变更类型。 */
+.git-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.git-tree-row {
+  display: flex;
+  width: 100%;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 5px;
+  padding: 3px 6px;
+  background: transparent;
+  color: var(--body-strong);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-align: start;
+}
+
+.git-tree-row:hover,
+.git-tree-row:focus-visible {
+  outline: 0;
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+  color: var(--ink);
+}
+
+.git-tree-row.is-selected {
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+  color: var(--ink);
+}
+
+.git-tree-caret {
+  color: var(--muted-soft);
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+
+.git-tree-caret.is-collapsed {
+  transform: rotate(-90deg);
+}
+
+.git-tree-icon {
+  color: var(--muted-soft);
+  font-size: 12px;
+}
+
+.git-tree-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-tree-count {
+  flex: 0 0 auto;
+  color: var(--muted-soft);
+  font-size: 11px;
+}
+
+/* 变更类型徽标：A/M/D/R/C/U，配色与语义对应。 */
+.git-change-tag {
+  display: inline-flex;
+  min-width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  padding-inline: 4px;
+  font-family: "Koala Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.git-change-tag.is-added,
+.git-change-tag.is-untracked {
+  background: color-mix(in srgb, var(--success) 16%, transparent);
+  color: var(--success-text);
+}
+
+.git-change-tag.is-deleted {
+  background: color-mix(in srgb, var(--error) 14%, transparent);
+  color: var(--error-text);
+}
+
+.git-change-tag.is-renamed,
+.git-change-tag.is-copied {
+  background: color-mix(in srgb, var(--accent-violet) 16%, transparent);
+  color: var(--accent-violet-text);
+}
+
+.git-change-tag.is-conflict {
+  background: color-mix(in srgb, var(--warning) 22%, transparent);
+  color: var(--warning-text);
+}
+
+.git-change-tag.is-modified {
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+/* 并排对比：工具栏 + 行号栏 + 代码，改动行整行着色。 */
+.git-changes-diff {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  background: var(--surface-card);
+}
+
+.git-diff-view {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.git-diff-placeholder {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  padding: 24px;
+  color: var(--muted-soft);
+  font-size: 12px;
+  text-align: center;
+}
+
+.git-diff-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 4px;
+}
+
+.git-diff-file {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: "Koala Mono", monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-diff-toolbar .git-diff-count {
+  margin-inline-start: auto;
+}
+
+.git-diff-changed-lines {
+  overflow: hidden;
+  padding: 0 14px 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-diff-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.git-diff-table {
+  width: 100%;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: "Koala Mono", monospace;
+  font-size: 11px;
+  tab-size: 4;
+}
+
+.git-diff-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 1px solid var(--hairline);
+  padding: 5px 12px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-align: start;
+}
+
+.git-diff-table td {
+  padding: 1px 0;
+  line-height: 20px;
+  vertical-align: top;
+}
+
+.git-diff-num {
+  width: 44px;
+  min-width: 44px;
+  padding-inline: 8px 10px !important;
+  color: var(--muted-soft);
+  font-size: 10px;
+  text-align: end;
+  user-select: none;
+}
+
+.git-diff-code {
+  overflow: hidden;
+  padding-inline: 10px 16px !important;
+  color: var(--body-strong);
+  font-size: 11px;
+  white-space: pre;
+}
+
+/* 右栏与左栏之间画一条分隔线，两栏始终并排对齐。 */
+.git-diff-pane-head.is-new {
+  border-inline-start: 1px solid var(--hairline);
+}
+
+.git-diff-table td:nth-child(3) {
+  border-inline-start: 1px solid var(--hairline);
+}
+
+.git-diff-num.is-add {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  color: var(--success-text);
+}
+
+.git-diff-code.is-add {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.git-diff-num.is-del {
+  background: color-mix(in srgb, var(--error) 16%, transparent);
+  color: var(--error-text);
+}
+
+.git-diff-code.is-del {
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+}
+
+.git-diff-hunk td {
+  padding: 2px 12px;
+  background: color-mix(in srgb, var(--primary) 4%, transparent);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 18px;
+}
+
+.git-diff-refreshing {
+  position: absolute;
+  inset-block-start: 10px;
+  inset-inline-end: 12px;
+}
+
+.git-diff-note {
+  padding: 6px 14px;
+  border-top: 1px solid var(--hairline);
+  background: var(--surface-soft);
+  color: var(--muted-soft);
+  font-size: 11px;
 }
 
 /* 提交弹窗：说明输入 + 选项 + 提交/推送操作行。 */
@@ -3581,34 +3954,9 @@ input {
   flex: 0 0 auto;
   flex-direction: column;
   gap: 10px;
-  padding: 12px;
+  padding: 14px 12px 12px;
   border-right: 1px solid var(--hairline);
   background: var(--canvas);
-}
-
-.koala-settings-back {
-  display: flex;
-  height: 30px;
-  align-items: center;
-  gap: 8px;
-  border: 0;
-  border-radius: 6px;
-  padding: 0 6px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 12px;
-  text-align: left;
-  transition: color 150ms ease, background-color 150ms ease;
-}
-
-.koala-settings-back:hover {
-  background: var(--surface-soft);
-  color: var(--primary-active);
-}
-
-.koala-settings-back .anticon {
-  font-size: 11px;
 }
 
 .koala-settings-nav-search.ant-input-affix-wrapper {
@@ -3685,6 +4033,8 @@ input {
 
 .koala-settings-panel-head {
   flex: 0 0 auto;
+  /* 给右上角的关闭（X）按钮留位置，说明文字不压到按钮下面。 */
+  padding-right: 30px;
 }
 
 .koala-settings-panel-title {

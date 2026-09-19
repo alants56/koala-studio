@@ -40,6 +40,10 @@ Desktop.ini
 ehthumbs.db
 $RECYCLE.BIN/
 
+# ---- UI Check (temporary visual inspection artifacts) ----
+.ui-check/
+.ui-check-dist/
+
 # ---- Misc ----
 coverage/
 *.local

@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import type { AcpBridge } from './acp-bridge'
+import { isAgentAdapterId } from '../../shared/acp'
 import type { AgentAdapterId, AgentState, ChatMessage, LoadedSession, PromptRequest, SessionTarget } from '../../shared/acp'
 import { mergeChatMessage } from '../../shared/chat-messages'
 
@@ -40,7 +41,7 @@ export class AcpSessionManager extends EventEmitter {
 
   async getCurrentAgent(): Promise<AgentAdapterId> {
     this.agentReady ??= this.options.getPreferredAgentId().then((agent) => {
-      if (agent === 'claude' || agent === 'pi') this.currentAgent = agent
+      if (isAgentAdapterId(agent)) this.currentAgent = agent
     })
     await this.agentReady
     return this.currentAgent
@@ -58,7 +59,7 @@ export class AcpSessionManager extends EventEmitter {
   }
 
   async setAgent(agent: AgentAdapterId): Promise<void> {
-    if (agent !== 'claude' && agent !== 'pi') throw new Error('不支持所选 Agent。')
+    if (!isAgentAdapterId(agent)) throw new Error('不支持所选 Agent。')
     await this.getCurrentAgent()
     await this.options.setPreferredAgentId(agent)
     this.currentAgent = agent
@@ -83,7 +84,7 @@ export class AcpSessionManager extends EventEmitter {
 
   private async openSession(cwd: string, sessionId?: string, requestedAgent?: AgentAdapterId): Promise<LoadedSession> {
     const agent = requestedAgent ?? await this.getCurrentAgent()
-    if (agent !== 'claude' && agent !== 'pi') throw new Error('不支持所选 Agent。')
+    if (!isAgentAdapterId(agent)) throw new Error('不支持所选 Agent。')
     // Reserve capacity before any await and serialize load/new to prevent duplicate runtimes.
     const operation = this.opening.then(async () => {
       if (this.disposed) throw new Error('ACP 会话管理器已关闭。')

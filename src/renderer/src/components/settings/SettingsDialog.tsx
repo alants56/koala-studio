@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import { App, Button, Empty, Input, Modal, Select, Skeleton, Tooltip } from 'antd'
 import {
-  ArrowLeftOutlined,
   DeleteOutlined,
   FolderOutlined,
   InboxOutlined,
@@ -358,17 +357,13 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps): ReactEle
       footer={null}
       centered
       width={980}
-      closable={false}
+      closable
       destroyOnHidden
       className="koala-settings-dialog"
       styles={{ body: { padding: 0 } }}
     >
       <div className="koala-settings-shell">
         <aside className="koala-settings-nav" aria-label="设置导航">
-          <button type="button" className="koala-settings-back" onClick={onClose}>
-            <ArrowLeftOutlined />
-            <span>返回应用</span>
-          </button>
           <Input
             className="koala-settings-nav-search"
             size="small"

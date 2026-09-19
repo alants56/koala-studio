@@ -28,7 +28,15 @@ import {
   setPreferredAgentId
 } from './services/preferences-store'
 import { attachmentFilePath, importAttachments } from './services/attachment-store'
-import { checkoutGitBranch, commitGitChanges, createGitBranch, getGitDiffSummary, getGitStatus } from './services/git-service'
+import {
+  checkoutGitBranch,
+  commitGitChanges,
+  createGitBranch,
+  getGitChangeList,
+  getGitDiffSummary,
+  getGitFileDiff,
+  getGitStatus
+} from './services/git-service'
 import { generateCommitMessage } from './services/git-commit-message'
 import { getQueuedPromptStore } from './services/queued-prompt-store'
 
@@ -187,7 +195,7 @@ app.whenReady().then(() => {
   ipcMain.handle('acp:set-mode', (_, modeId: string, target: SessionTarget) => acpBridge.setMode(modeId, target))
   ipcMain.handle('acp:set-model', (_, modelId: string, target: SessionTarget) => acpBridge.setModel(modelId, target))
   ipcMain.handle('acp:set-effort', (_, effortId: string, target: SessionTarget) => acpBridge.setEffort(effortId, target))
-  ipcMain.handle('acp:set-agent', (_, agentId: string) => acpBridge.setAgent(agentId as 'claude' | 'pi'))
+  ipcMain.handle('acp:set-agent', (_, agentId: string) => acpBridge.setAgent(agentId as AgentAdapterId))
   ipcMain.handle('acp:list-sessions', async (_event, cwd: string) => {
     // 会话索引查询使用短连接，用主 bridge 当前的 agent 类型，避免侧栏读取其他项目时切断当前聊天。
     const agentId = await acpBridge.getCurrentAgent()
@@ -280,6 +288,8 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:status', (_event, cwd: string) => getGitStatus(cwd))
   ipcMain.handle('git:diff', (_event, cwd: string) => getGitDiffSummary(cwd))
+  ipcMain.handle('git:changes', (_event, cwd: string) => getGitChangeList(cwd))
+  ipcMain.handle('git:file-diff', (_event, cwd: string, path: string) => getGitFileDiff(cwd, path))
   ipcMain.handle('git:checkout', (_event, cwd: string, branch: string) => checkoutGitBranch(cwd, branch))
   ipcMain.handle('git:create-branch', (_event, cwd: string, branch: string) => createGitBranch(cwd, branch))
   ipcMain.handle('git:commit', (_event, cwd: string, message: string, options) => commitGitChanges(cwd, message, options))

@@ -1,6 +1,6 @@
 # Koala Studio 分层架构图
 
-> 基于 Electron + React + Ant Design 的 AI Agent 桌面工作台，通过 **Agent Client Protocol (ACP)** 同时接入 Claude Code 与 Pi 两个 Agent。
+> 基于 Electron + React + Ant Design 的 AI Agent 桌面工作台，通过 **Agent Client Protocol (ACP)** 同时接入 Claude Code、Pi 与 Codex 三个 Agent。
 
 ## 分层架构总览
 
@@ -34,8 +34,8 @@ acp:* · projects:* · conversations:* · attachments:* · todos:* · claude:*"]
 会话生命周期 · 流式消息 · 权限请求 · 排队/steering · 附件事务"]
         Store["stores
 project-store · conversation-store · todo-store · attachment-store · preferences-store"]
-        Pi["pi-runtime
-Pi CLI 定位 · 内置 Node PATH 引导"]
+        Pi["agent-runtime / pi-runtime
+适配器入口定位 · Pi CLI 定位 · 内置 Node PATH 引导"]
         Win["BrowserWindow · koala-asset 自定义协议"]
     end
 
@@ -56,12 +56,14 @@ ndjson stdio 客户端 · session/prompt · _session/steering · usage"]
 @agentclientprotocol/claude-agent-acp"]
         AdPi["Pi ACP 适配器
 pi-acp"]
+        AdCodex["Codex ACP 适配器
+@agentclientprotocol/codex-acp"]
     end
 
     subgraph Ext["⑦ 外部系统与数据层"]
         DS["用户数据 ~/Library/Application Support/koala-studio
 projects.json · conversations.json · conversations/ · todos.json · 偏好 · 附件"]
-        CLI["Claude Code(会话存于 ~/.claude) · Pi CLI · Anthropic SDK"]
+        CLI["Claude Code(会话存于 ~/.claude) · Pi CLI · Codex CLI · Anthropic SDK"]
         Git["用户项目工作目录(git)"]
     end
 
@@ -77,14 +79,17 @@ projects.json · conversations.json · conversations/ · todos.json · 偏好 ·
     Acp --> ACP
     ACP --> AdClaude
     ACP --> AdPi
+    ACP --> AdCodex
     AdClaude -.集成到会话.-> MCP
     AdPi -.集成到会话.-> MCP
+    AdCodex -.集成到会话.-> MCP
     Acp -.注入 MCP 工具.-> MCP
     Store --> DS
     Store --> Shared
     MCP --> Shared
     AdClaude --> CLI
     AdPi --> CLI
+    AdCodex --> CLI
     Exec --> Git
 ```
 
@@ -97,8 +102,8 @@ projects.json · conversations.json · conversations/ · todos.json · 偏好 ·
 | **③ 主进程层** | `src/main` | 注册 IPC 处理器，聚合 `AcpBridge`、各 store 与资源管理 |
 | **④ 契约层** | `src/shared` | 主进程、preload、渲染端共享的 TS 类型与可复用 store |
 | **⑤ MCP 集成层** | `src/mcp` | 把待办作为 `koala_*` MCP 工具开放给 Agent 会话 |
-| **⑥ Agent 适配层** | `@agentclientprotocol/*` | ACP 客户端，拉起 Claude Code / Pi 子进程并以 ndjson stdio 通信 |
-| **⑦ 外部系统层** | 系统 / CLI | 本地 JSON 存储、Claude Code 会话、Pi CLI、用户 Git 项目 |
+| **⑥ Agent 适配层** | `@agentclientprotocol/*` | ACP 客户端，拉起 Claude Code / Pi / Codex 子进程并以 ndjson stdio 通信 |
+| **⑦ 外部系统层** | 系统 / CLI | 本地 JSON 存储、Claude Code / Codex 会话、Pi CLI、用户 Git 项目 |
 
 ## 关键数据流
 

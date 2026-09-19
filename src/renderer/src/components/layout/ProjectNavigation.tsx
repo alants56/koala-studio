@@ -43,7 +43,7 @@ interface ProjectNavigationProps {
 /** 侧栏项目树与仅对话：沿用项目页排序，并为每个可见项目展示最近的会话。 */
 export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactElement | null {
   const { projects, loading, defaultWorkspace, deleteProject } = useProjects()
-  const { conversations, loading: conversationsLoading, createConversation, updateConversation, setConversationArchived, deleteConversation } = useConversations()
+  const { conversations, loading: conversationsLoading, updateConversation, setConversationArchived, deleteConversation } = useConversations()
   const { revision: agentRevision, currentAgent } = useAgentSelection()
   const { modal, message } = App.useApp()
   const location = useLocation()
@@ -55,7 +55,6 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
   /** 哪些项目展开了「已归档」分组。 */
   const [expandedArchivedProjects, setExpandedArchivedProjects] = useState<Set<string>>(() => new Set())
   const [showAllProjects, setShowAllProjects] = useState(false)
-  const [creatingConversation, setCreatingConversation] = useState(false)
   const [expandedSessionLists, setExpandedSessionLists] = useState<Set<string>>(() => new Set())
   const [sessionLists, setSessionLists] = useState<Record<string, SessionListState>>({})
   const [liveSelection, setLiveSelection] = useState<{ projectId: string; sessionId: string }>()
@@ -284,18 +283,9 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
     void navigate('/projects')
   }
 
-  /** 新建仅对话：目录与索引由主进程创建，随后直接进入该对话。 */
-  const createNewConversation = async (): Promise<void> => {
-    if (creatingConversation) return
-    setCreatingConversation(true)
-    try {
-      const created = await createConversation()
-      void navigate(`/chats/${encodeURIComponent(created.id)}`)
-    } catch (error) {
-      void message.error(readableIpcError(error, '新建对话失败'))
-    } finally {
-      setCreatingConversation(false)
-    }
+  /** 新建仅对话：先进草稿页，提交首条消息时才真正创建目录与索引。 */
+  const createNewConversation = (): void => {
+    void navigate('/chats/new', { replace: location.pathname === '/chats/new' })
   }
 
   /** 删除一条对话：只移除索引，目录与产物保留在本地。 */
@@ -616,17 +606,21 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
         {/* 仅对话：轻量级项目，每条对话一个自动创建的时间戳目录（不展示给用户）。 */}
         <div className="koala-conversation-tree">
           <div className="koala-conversation-head">
-            <div className="koala-conversation-title">
+            <button
+              type="button"
+              className="koala-conversation-title"
+              onClick={createNewConversation}
+              title="新建对话"
+            >
               <MessageOutlined />
               <span>对话</span>
-            </div>
+            </button>
             <Button
               className="koala-conversation-add"
               type="text"
               size="small"
               icon={<PlusOutlined />}
-              loading={creatingConversation}
-              onClick={() => void createNewConversation()}
+              onClick={createNewConversation}
               aria-label="新建对话"
               title="新建对话"
             />

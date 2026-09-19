@@ -1,21 +1,28 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
-const { mkdtemp, writeFile } = require('node:fs/promises')
+const { mkdir, mkdtemp, realpath, writeFile } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
 const { basename, join } = require('node:path')
 const { execFile, execFileSync } = require('node:child_process')
 const { promisify } = require('node:util')
 const {
   checkoutGitBranch,
+  classifyGitChange,
   commitGitChanges,
   countBufferLines,
   countChangedFiles,
   createGitBranch,
+  getGitChangeList,
   getGitDiffSummary,
+  getGitFileDiff,
   getGitStatus,
+  pairDiffLines,
   parseBranchList,
   parseNumstat,
-  parsePorcelain
+  parsePorcelain,
+  parseStatusFiles,
+  parseUnifiedDiff,
+  splitFileLines
 } = require('../src/main/services/git-service.ts')
 const { buildCommitContext, sanitizeCommitMessage } = require('../src/main/services/git-commit-message.ts')
 
@@ -165,6 +172,94 @@ test('switches branches and creates a new branch', { skip: !hasGit() }, async ()
   await assert.rejects(() => checkoutGitBranch(dir, '  '), /分支名不能为空/)
 })
 
+test('classifyGitChange maps porcelain codes to UI kinds', () => {
+  assert.equal(classifyGitChange('M', ' '), 'modified')
+  assert.equal(classifyGitChange(' ', 'M'), 'modified')
+  assert.equal(classifyGitChange('?', '?'), 'untracked')
+  assert.equal(classifyGitChange('A', ' '), 'added')
+  assert.equal(classifyGitChange('D', ' '), 'deleted')
+  assert.equal(classifyGitChange('R', ' '), 'renamed')
+  assert.equal(classifyGitChange('C', ' '), 'copied')
+  // 冲突优先于其它状态。
+  assert.equal(classifyGitChange('U', 'U'), 'conflict')
+  assert.equal(classifyGitChange('A', 'A'), 'conflict')
+  assert.equal(classifyGitChange('U', 'D'), 'conflict')
+})
+
+test('parseStatusFiles keeps paths, kinds and rename sources', () => {
+  assert.deepEqual(parseStatusFiles(''), [])
+  const files = parseStatusFiles(' M src/app.ts\0?? docs/new.md\0R  moved.ts\0old.ts\0')
+  assert.deepEqual(files, [
+    { path: 'src/app.ts', status: ' M', kind: 'modified', originalPath: undefined },
+    { path: 'docs/new.md', status: '??', kind: 'untracked', originalPath: undefined },
+    // -z 格式下重命名条目多出一个「原始路径」字段，属于同一个文件。
+    { path: 'moved.ts', status: 'R ', kind: 'renamed', originalPath: 'old.ts' }
+  ])
+})
+
+test('splitFileLines handles CRLF and a missing trailing newline', () => {
+  assert.deepEqual(splitFileLines(''), [])
+  assert.deepEqual(splitFileLines('a\nb\n'), ['a', 'b'])
+  assert.deepEqual(splitFileLines('a\nb'), ['a', 'b'])
+  assert.deepEqual(splitFileLines('a\r\nb\r\n'), ['a', 'b'])
+  assert.deepEqual(splitFileLines('\n'), [''])
+})
+
+test('pairDiffLines matches deleted lines with added ones', () => {
+  const context = { oldNumber: 1, newNumber: 1, text: 'keep', type: 'context' }
+  const deleted = { oldNumber: 2, text: 'before', type: 'del' }
+  const deleted2 = { oldNumber: 3, text: 'before2', type: 'del' }
+  const added = { newNumber: 2, text: 'after', type: 'add' }
+  const rows = pairDiffLines([context, deleted, deleted2, added])
+  // 上下文行左右同源。
+  assert.equal(rows[0].left, context)
+  assert.equal(rows[0].right, context)
+  // 两行删除只有一行新增时，右侧留空。
+  assert.equal(rows[1].left, deleted)
+  assert.equal(rows[1].right, added)
+  assert.equal(rows[2].left, deleted2)
+  assert.equal(rows[2].right, undefined)
+})
+
+test('parseUnifiedDiff turns a patch into paired rows', () => {
+  const raw = [
+    'diff --git a/a.txt b/a.txt',
+    'index 1111111..2222222 100644',
+    '--- a/a.txt',
+    '+++ b/a.txt',
+    '@@ -1,3 +1,4 @@',
+    ' hello',
+    '-old line',
+    '+new line',
+    '+extra line',
+    ' tail'
+  ].join('\n')
+
+  const { hunks, binary } = parseUnifiedDiff(raw)
+  assert.equal(binary, false)
+  assert.equal(hunks.length, 1)
+  assert.equal(hunks[0].header, '@@ -1,3 +1,4 @@')
+  const rows = hunks[0].rows
+  assert.equal(rows.length, 4)
+  assert.equal(rows[0].left.oldNumber, 1)
+  assert.equal(rows[0].left.text, 'hello')
+  assert.equal(rows[1].left.text, 'old line')
+  assert.equal(rows[1].right.text, 'new line')
+  assert.equal(rows[1].right.newNumber, 2)
+  // 多出来的新增行只有右侧。
+  assert.equal(rows[2].left, undefined)
+  assert.equal(rows[2].right.newNumber, 3)
+  assert.equal(rows[3].right.newNumber, 4)
+  // 末尾换行符不会被当成一行上下文。
+  assert.equal(rows[3].right.text, 'tail')
+})
+
+test('parseUnifiedDiff flags binary patches', () => {
+  const { hunks, binary } = parseUnifiedDiff('diff --git a/logo.bin b/logo.bin\nBinary files a/logo.bin and b/logo.bin differ\n')
+  assert.equal(binary, true)
+  assert.deepEqual(hunks, [])
+})
+
 test('summarizes tracked and untracked changes', { skip: !hasGit() }, async () => {
   const dir = await makeRepository('diff')
   await writeFile(join(dir, 'a.txt'), 'hello\nworld\n')
@@ -176,6 +271,115 @@ test('summarizes tracked and untracked changes', { skip: !hasGit() }, async () =
 
   await writeFile(join(dir, 'a.txt'), '')
   assert.equal((await getGitDiffSummary(dir)).deletions, 1)
+})
+
+test('lists changed files for the change tree', { skip: !hasGit() }, async () => {
+  const dir = await makeRepository('changelist')
+  await mkdir(join(dir, 'docs'), { recursive: true })
+  await writeFile(join(dir, 'keep.txt'), 'keep\n')
+  await writeFile(join(dir, 'docs/guide.md'), '# 指南\n')
+  await git(dir, ['add', '.'])
+  await git(dir, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'more'])
+
+  await writeFile(join(dir, 'keep.txt'), 'keep\nchanged\n')
+  await git(dir, ['rm', '-q', 'docs/guide.md'])
+  await writeFile(join(dir, 'new.txt'), 'brand new\n')
+  await git(dir, ['mv', 'a.txt', 'moved.txt'])
+
+  const list = await getGitChangeList(dir)
+  assert.equal(list.isRepository, true)
+  assert.equal(list.truncated, false)
+  // macOS 的 /var 是软链，git 返回的是解析后的真实路径。
+  assert.equal(list.root, await realpath(dir))
+  const byPath = Object.fromEntries(list.files.map((file) => [file.path, file]))
+  assert.equal(byPath['keep.txt'].kind, 'modified')
+  assert.equal(byPath['docs/guide.md'].kind, 'deleted')
+  assert.equal(byPath['new.txt'].kind, 'untracked')
+  assert.equal(byPath['moved.txt'].kind, 'renamed')
+  assert.equal(byPath['moved.txt'].originalPath, 'a.txt')
+
+  // 非仓库目录返回空清单，弹窗显示空态。
+  const outside = await mkdtemp(join(tmpdir(), 'koala-nochanges-'))
+  assert.deepEqual(await getGitChangeList(outside), { isRepository: false, files: [], truncated: false })
+})
+
+test('builds a side-by-side diff for a modified file', { skip: !hasGit() }, async () => {
+  const dir = await makeRepository('filediff')
+  await writeFile(join(dir, 'a.txt'), 'hello\nold line\n')
+  await git(dir, ['add', 'a.txt'])
+  await git(dir, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'two lines'])
+  await writeFile(join(dir, 'a.txt'), 'hello\nnew line\n')
+
+  const diff = await getGitFileDiff(dir, 'a.txt')
+  assert.equal(diff.path, 'a.txt')
+  assert.equal(diff.kind, 'modified')
+  assert.equal(diff.binary, false)
+  assert.equal(diff.hunks.length, 1)
+  const rows = diff.hunks[0].rows
+  assert.equal(rows[0].left.text, 'hello')
+  assert.equal(rows[0].right.newNumber, 1)
+  // 改动的行左右配对，行号分别是旧 2 / 新 2。
+  assert.equal(rows[1].left.text, 'old line')
+  assert.equal(rows[1].left.oldNumber, 2)
+  assert.equal(rows[1].right.text, 'new line')
+  assert.equal(rows[1].right.newNumber, 2)
+})
+
+test('renders an untracked file as all-added lines', { skip: !hasGit() }, async () => {
+  const dir = await makeRepository('untracked-diff')
+  await writeFile(join(dir, 'note.md'), 'one\ntwo\n')
+
+  const diff = await getGitFileDiff(dir, 'note.md')
+  assert.equal(diff.kind, 'untracked')
+  assert.equal(diff.binary, false)
+  assert.equal(diff.hunks.length, 1)
+  assert.equal(diff.hunks[0].header, '@@ -0,0 +1,2 @@')
+  // 未跟踪文件没有旧内容，左侧全空。
+  assert.equal(diff.hunks[0].rows[0].left, undefined)
+  assert.equal(diff.hunks[0].rows[0].right.text, 'one')
+  assert.equal(diff.hunks[0].rows[0].right.newNumber, 1)
+  assert.equal(diff.hunks[0].rows[1].right.text, 'two')
+})
+
+test('reports deleted and binary files without crashing', { skip: !hasGit() }, async () => {
+  const dir = await makeRepository('deleted-diff')
+  await git(dir, ['rm', '-q', 'a.txt'])
+  await writeFile(join(dir, 'logo.bin'), Buffer.from([0x00, 0x01, 0x02, 0x0a]))
+
+  const deleted = await getGitFileDiff(dir, 'a.txt')
+  assert.equal(deleted.kind, 'deleted')
+  assert.equal(deleted.hunks[0].rows[0].left.text, 'hello')
+  assert.equal(deleted.hunks[0].rows[0].right, undefined)
+
+  const binary = await getGitFileDiff(dir, 'logo.bin')
+  assert.equal(binary.binary, true)
+  assert.deepEqual(binary.hunks, [])
+})
+
+test('shows rename diffs including content changes', { skip: !hasGit() }, async () => {
+  const dir = await makeRepository('rename-diff')
+  const lines = Array.from({ length: 10 }, (_, index) => `line ${index + 1}`)
+  await writeFile(join(dir, 'a.txt'), `${lines.join('\n')}\n`)
+  await git(dir, ['add', 'a.txt'])
+  await git(dir, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'ten lines'])
+  await git(dir, ['mv', 'a.txt', 'moved.txt'])
+  await writeFile(join(dir, 'moved.txt'), `${lines.map((line) => (line === 'line 4' ? 'line four' : line)).join('\n')}\n`)
+
+  const diff = await getGitFileDiff(dir, 'moved.txt')
+  assert.equal(diff.kind, 'renamed')
+  // 高相似度的重命名能被 git 识别，改动行左右配对。
+  assert.equal(diff.hunks.length, 1)
+  const changed = diff.hunks[0].rows.find((row) => row.right?.text === 'line four')
+  assert.equal(changed.left.text, 'line 4')
+})
+
+test('rejects paths outside the repository', { skip: !hasGit() }, async () => {
+  const dir = await makeRepository('path-guard')
+  for (const path of ['../outside.txt', '/etc/hosts', 'a/../../b.txt', '']) {
+    const diff = await getGitFileDiff(dir, path)
+    assert.deepEqual(diff.hunks, [], `路径 ${path} 不应被读取`)
+    assert.equal(diff.binary, false)
+  }
 })
 
 test('counts binary files without line numbers', { skip: !hasGit() }, async () => {

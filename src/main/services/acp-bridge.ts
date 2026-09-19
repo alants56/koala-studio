@@ -25,13 +25,33 @@ import {
 } from './attachment-store'
 import type { ChatAttachment } from '../../shared/attachments'
 import { isHarnessEnvelope } from '../../shared/chat-messages'
-import { piAcpEnvironment } from './pi-runtime'
+import { agentDisplayName, isAgentAdapterId } from '../../shared/acp'
+import { agentAdapterEnvironment, agentAdapterPath } from './agent-runtime'
 import type { QueuedPromptStore, StoredQueuedPrompt } from './queued-prompt-store'
 
 const DIRECT_IMAGE_MIME_TYPES = new Set(['image/gif', 'image/jpeg', 'image/png', 'image/webp'])
 const MAX_EMBEDDED_TEXT_BYTES = 2 * 1024 * 1024
 /** 工具输出缓冲上限（超出保留尾部，避免超长输出拖垮渲染）。 */
 const MAX_TOOL_OUTPUT_CHARS = 50_000
+/** Codex 浏览器登录等待上限：超过后提示用户改用 codex login / API key。 */
+const CODEX_AUTH_TIMEOUT_MS = 5 * 60 * 1000
+
+/** ACP 的 auth_required（-32000）：适配器要求客户端先完成登录。 */
+function isAuthRequiredError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const candidate = error as { code?: unknown; message?: unknown }
+  if (candidate.code === -32000) return true
+  return typeof candidate.message === 'string' && candidate.message.startsWith('Authentication required')
+}
+
+/** Codex 的 rollout 文件在首个 turn 之后才落盘，加载空会话时会报 no rollout found。 */
+function isMissingRolloutError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const data = (error as { data?: unknown }).data
+  if (!data || typeof data !== 'object') return false
+  const details = (data as { details?: unknown }).details
+  return typeof details === 'string' && details.includes('no rollout found')
+}
 
 /** 工具调用的累积状态：tool_call / tool_call_update / terminal _meta 汇聚到一个条目。 */
 interface ToolCallEntry {
@@ -96,6 +116,8 @@ export class AcpBridge extends EventEmitter {
   private suppressPiStartupInfo = false
   /** 当前 ACP 适配器是否支持 _session/steering（把消息注入正在进行的 turn）。 */
   private steeringSupported = false
+  /** initialize 返回的登录方式；Codex 未登录时用它发起浏览器授权。 */
+  private agentAuthMethods: acp.AuthMethod[] = []
   /** 本地 FIFO 队列：Agent 忙碌时的新消息先入队，当前 turn 结束后逐条处理。 */
   private promptQueue: StoredQueuedPrompt[] = []
   /** 当前会话的工具调用累积状态（toolCallId → 条目），切换会话时清空。 */
@@ -129,7 +151,7 @@ export class AcpBridge extends EventEmitter {
   async getCurrentAgent(): Promise<AgentAdapterId> {
     if (!this.agentPreferenceLoaded) {
       const preferredAgentId = await this.options.getPreferredAgentId?.()
-      if (preferredAgentId === 'claude' || preferredAgentId === 'pi') {
+      if (isAgentAdapterId(preferredAgentId)) {
         this.currentAgent = preferredAgentId
       }
       this.agentPreferenceLoaded = true
@@ -139,7 +161,7 @@ export class AcpBridge extends EventEmitter {
   }
 
   async setAgent(agentId: AgentAdapterId): Promise<void> {
-    if (agentId !== 'claude' && agentId !== 'pi') {
+    if (!isAgentAdapterId(agentId)) {
       throw new Error('不支持所选 Agent。')
     }
     if (agentId === await this.getCurrentAgent()) return
@@ -181,18 +203,14 @@ export class AcpBridge extends EventEmitter {
   }
 
   private async establishConnection(cwd: string, agentId: AgentAdapterId, generation: number): Promise<AgentState> {
-    const agentName = agentId === 'pi' ? 'Pi' : 'Claude'
+    const agentName = agentDisplayName(agentId)
     this.setState({ status: 'connecting', detail: `正在启动 ${agentName} ACP 适配器…` })
 
     try {
-      const adapterPath = agentId === 'pi'
-        ? require.resolve('pi-acp/dist/index.js')
-        : require.resolve('@agentclientprotocol/claude-agent-acp/dist/index.js')
+      const adapterPath = agentAdapterPath(agentId)
       const agentProcess = spawn(process.execPath, [adapterPath], {
         cwd,
-        env: agentId === 'pi'
-          ? piAcpEnvironment()
-          : { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+        env: agentAdapterEnvironment(agentId),
         stdio: ['pipe', 'pipe', 'pipe']
       })
       this.agentProcess = agentProcess
@@ -235,6 +253,7 @@ export class AcpBridge extends EventEmitter {
       // 读取 ACP 引导扩展能力：claude-agent-acp 会在 _meta.steering.supported 广告。
       const steeringMeta = (initializeResponse as unknown as { _meta?: { steering?: { supported?: boolean } } })?._meta?.steering
       this.steeringSupported = Boolean(steeringMeta?.supported)
+      this.agentAuthMethods = initializeResponse.authMethods ?? []
       if (generation !== this.connectionGeneration || this.agentProcess !== agentProcess) {
         connection.close()
         agentProcess.kill()
@@ -284,14 +303,24 @@ export class AcpBridge extends EventEmitter {
     this.sessionCwd = cwd
 
     this.replayingSession = true
-    const response = await this.connection.agent.request(acp.methods.agent.session.load, {
-      sessionId,
-      cwd,
-      mcpServers: this.koalaMcpServers()
-    }).finally(() => {
+    let response: acp.LoadSessionResponse
+    try {
+      response = await this.connection.agent.request(acp.methods.agent.session.load, {
+        sessionId,
+        cwd,
+        mcpServers: this.koalaMcpServers()
+      })
+    } catch (error) {
+      if (this.currentAgent === 'codex' && isMissingRolloutError(error) && sessionChangeGeneration === this.sessionChangeGeneration) {
+        // 该 Codex 会话从未产生过 turn（rollout 不存在）：退化为新建，让空对话重开时仍可用。
+        this.replayingSession = false
+        return { ...await this.createSession(cwd), messages: [] }
+      }
+      throw error
+    } finally {
       // 并发加载时，较早请求的 finally 不能结束较新会话的回放状态。
       if (sessionChangeGeneration === this.sessionChangeGeneration) this.replayingSession = false
-    })
+    }
 
     // 用户在加载期间又切换了会话；丢弃这次加载的状态更新。
     if (sessionChangeGeneration !== this.sessionChangeGeneration || this.activeSessionId !== sessionId) {
@@ -410,7 +439,7 @@ export class AcpBridge extends EventEmitter {
 
     if (this.steeringSupported) {
       const outcome = await this.trySteer(queued.request)
-      if (outcome === 'injected') return
+      if (outcome === 'injected' || outcome === 'startedNewTurn') return
       if (outcome === 'promptRequired') {
         this.promptQueue.unshift(queued)
         try {
@@ -447,7 +476,7 @@ export class AcpBridge extends EventEmitter {
     const connection = this.connection
     const sessionId = this.activeSessionId
     if (!connection || !sessionId) return
-    const agentName = this.currentAgent === 'pi' ? 'Pi' : 'Claude'
+    const agentName = agentDisplayName(this.currentAgent)
     this.setState({
       ...this.state,
       status: 'working',
@@ -469,7 +498,14 @@ export class AcpBridge extends EventEmitter {
       })
     } catch (error) {
       if (turnGeneration === this.turnGeneration) {
-        this.emit('message', this.systemMessage(error instanceof Error ? error.message : `${agentName} 未能完成请求。`))
+        if (this.currentAgent === 'codex' && isAuthRequiredError(error)) {
+          // 登录流程本身负责提示；登录成功后把这条消息放回队列最前面，当前 turn 收尾后自动重发。
+          if (await this.authenticateCodex()) {
+            this.promptQueue.unshift({ id: crypto.randomUUID(), request, displayed: true })
+          }
+        } else {
+          this.emit('message', this.systemMessage(error instanceof Error ? error.message : `${agentName} 未能完成请求。`))
+        }
       }
     } finally {
       if (this.activePromptId === promptId) {
@@ -479,6 +515,32 @@ export class AcpBridge extends EventEmitter {
       if (turnGeneration === this.turnGeneration && this.activeSessionId === sessionId) {
         void this.finishTurn()
       }
+    }
+  }
+
+  /**
+   * Codex 通过 ACP 声明登录方式：未登录时的首次请求会返回 auth_required。
+   * 优先复用浏览器 ChatGPT 授权（适配器会先读取已保存的账号，已登录时立即返回）。
+   */
+  private async authenticateCodex(): Promise<boolean> {
+    const connection = this.connection
+    const methodId = this.agentAuthMethods.find((method) => method.id === 'chat-gpt')?.id
+    if (!connection || !methodId) {
+      this.emit('message', this.systemMessage('Codex 尚未登录。可以在终端运行 codex login 完成授权，或设置 OPENAI_API_KEY 后重试。'))
+      return false
+    }
+    this.setState({ ...this.state, detail: 'Codex 需要登录，请在浏览器中完成授权…' })
+    try {
+      await Promise.race([
+        connection.agent.request(acp.methods.agent.authenticate, { methodId }),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Codex 登录等待超时。')), CODEX_AUTH_TIMEOUT_MS).unref()
+        })
+      ])
+      return true
+    } catch {
+      this.emit('message', this.systemMessage('Codex 登录未完成。可以在终端运行 codex login 完成授权，或设置 OPENAI_API_KEY 后重试。'))
+      return false
     }
   }
 
@@ -520,7 +582,7 @@ export class AcpBridge extends EventEmitter {
       void this.runTurn(next.request)
       return
     }
-    const agentName = this.currentAgent === 'pi' ? 'Pi' : 'Claude'
+    const agentName = agentDisplayName(this.currentAgent)
     this.setState({
       ...this.state,
       status: 'ready',
@@ -627,7 +689,7 @@ export class AcpBridge extends EventEmitter {
     if (this.state.status === 'working' && this.connection && previousSessionId) {
       await this.connection.agent.notify(acp.methods.agent.session.cancel, { sessionId: previousSessionId })
     }
-    const agentName = this.currentAgent === 'pi' ? 'Pi' : 'Claude'
+    const agentName = agentDisplayName(this.currentAgent)
     this.setState({ ...this.state, status: 'ready', workStartedAt: undefined, lastTurnSeconds: undefined, queueDepth: 0, queuedPrompts: [], detail: `${agentName} 已就绪` })
   }
 
@@ -661,9 +723,10 @@ export class AcpBridge extends EventEmitter {
 
   /**
    * 通过 ACP 的 _session/steering 扩展协议，把消息注入到正在进行的 turn 中。
-   * 返回 injected（已注入） / promptRequired（无活跃 turn，需降级） / failed（失败）。
+   * 返回 injected（已注入） / startedNewTurn（无活跃 turn，适配器已用该消息启动新一轮）
+   * / promptRequired（无活跃 turn，需降级） / failed（失败）。
    */
-  private async trySteer(request: PromptRequest): Promise<'injected' | 'promptRequired' | 'failed'> {
+  private async trySteer(request: PromptRequest): Promise<'injected' | 'startedNewTurn' | 'promptRequired' | 'failed'> {
     const connection = this.connection
     const sessionId = this.activeSessionId
     if (!connection || !sessionId) return 'failed'
@@ -674,6 +737,7 @@ export class AcpBridge extends EventEmitter {
         { sessionId, prompt, _meta: { steering: { idleBehavior: 'promptRequired' as const } } }
       ) as { outcome?: string }
       if (response?.outcome === 'injected') return 'injected'
+      if (response?.outcome === 'startedNewTurn') return 'startedNewTurn'
       if (response?.outcome === 'promptRequired') {
         return 'promptRequired'
       }
@@ -842,6 +906,7 @@ export class AcpBridge extends EventEmitter {
     this.promptQueue = []
     this.toolCalls.clear()
     this.steeringSupported = false
+    this.agentAuthMethods = []
     this.connection?.close()
     this.agentProcess?.kill()
     this.connection = undefined
@@ -928,7 +993,7 @@ export class AcpBridge extends EventEmitter {
           createdAt: new Date().toISOString()
         } satisfies ChatMessage)
       }).catch((error: unknown) => {
-        this.emit('message', this.systemMessage(error instanceof Error ? error.message : '无法保存 Claude 返回的图片。'))
+        this.emit('message', this.systemMessage(error instanceof Error ? error.message : `无法保存 ${agentDisplayName(this.currentAgent)} 返回的图片。`))
       })
     } else if (update.sessionUpdate === 'agent_thought_chunk' && update.content.type === 'text') {
       this.emit('message', {
@@ -984,8 +1049,9 @@ export class AcpBridge extends EventEmitter {
     if (!meta) return
     const output = meta.terminal_output?.data
     if (typeof output === 'string' && output.length > 0) {
-      // claude 完成时一次性全量推送（替换）；pi 执行中按增量推送（追加）。
-      entry.terminal = this.currentAgent === 'claude' ? output : entry.terminal + output
+      // pi 执行中按增量推送（追加）；claude / codex 均声明了 _meta.terminal_output，
+      // 收到的是完整快照（替换）。
+      entry.terminal = this.currentAgent === 'pi' ? entry.terminal + output : output
       if (entry.terminal.length > MAX_TOOL_OUTPUT_CHARS) {
         entry.terminal = entry.terminal.slice(-MAX_TOOL_OUTPUT_CHARS)
         entry.truncated = true

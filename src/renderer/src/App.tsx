@@ -21,6 +21,7 @@ export function App(): ReactElement {
                 <Route path="/workbench" element={<WorkbenchPage />} />
                 <Route path="/projects" element={<ProjectsPage />} />
                 <Route path="/projects/:projectId" element={<ProjectChatPage />} />
+                <Route path="/chats/new" element={<ConversationChatPage />} />
                 <Route path="/chats/:conversationId" element={<ConversationChatPage />} />
               </Route>
             </Routes>

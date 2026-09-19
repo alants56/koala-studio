@@ -27,7 +27,7 @@ export function ConnectingScreen({ title, backTo, backLabel }: ConnectingScreenP
         <Typography.Title level={5} style={{ margin: 0 }}>
           正在连接「{title}」…
         </Typography.Title>
-        <Typography.Text type="secondary">{state.detail ?? '正在建立 Claude ACP 连接…'}</Typography.Text>
+        <Typography.Text type="secondary">{state.detail ?? '正在建立 Agent ACP 连接…'}</Typography.Text>
       </div>
       {backTo && backLabel && (
         <Button type="text" size="small" icon={<ArrowLeftOutlined />} onClick={() => void navigate(backTo)}>

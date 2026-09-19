@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import { Button, Divider, Popover, Tooltip } from 'antd'
 import { BranchesOutlined, DiffOutlined, LoadingOutlined, RightOutlined } from '@ant-design/icons'
 import type { GitDiffSummary, GitRepositoryStatus } from '@shared/git'
+import { GitChangesDialog } from './GitChangesDialog'
 import { GitCommitDialog } from './GitCommitDialog'
 
 interface GitStatusPanelProps {
@@ -27,6 +28,7 @@ export function GitStatusPanel({ cwd }: GitStatusPanelProps): ReactElement | nul
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
   const [commitOpen, setCommitOpen] = useState(false)
+  const [changesOpen, setChangesOpen] = useState(false)
 
   const refresh = useCallback(async (): Promise<void> => {
     // preload 尚未注入 git API（旧版本覆盖安装）时直接隐藏，避免整页报错。
@@ -101,13 +103,26 @@ export function GitStatusPanel({ cwd }: GitStatusPanelProps): ReactElement | nul
     <div className="git-status-panel">
       <div className="git-status-heading">环境信息</div>
 
-      <div className="git-status-row">
-        <DiffOutlined className="git-status-icon" aria-hidden="true" />
-        <span className="git-status-label">变更</span>
-        {/* 干净时用破折号，避免展示没有意义的 +0 −0。 */}
-        {dirty ? diffCount : <span className="git-status-empty">—</span>}
-      </div>
-      <div className="git-status-sub">{changeDetail}</div>
+      {/* 改动行整体可点：打开改动详情弹窗，逐文件看行级对比。 */}
+      <button
+        type="button"
+        className="git-status-change"
+        disabled={!dirty}
+        title={dirty ? '查看改动详情' : changeDetail}
+        onClick={() => {
+          setOpen(false)
+          setChangesOpen(true)
+        }}
+      >
+        <span className="git-status-row">
+          <DiffOutlined className="git-status-icon" aria-hidden="true" />
+          <span className="git-status-label">变更</span>
+          {/* 干净时用破折号，避免展示没有意义的 +0 −0。 */}
+          {dirty ? diffCount : <span className="git-status-empty">—</span>}
+          {dirty && <RightOutlined className="git-status-entry-arrow" aria-hidden="true" />}
+        </span>
+        <span className="git-status-sub">{changeDetail}</span>
+      </button>
 
       <Divider className="git-status-divider" />
 
@@ -155,6 +170,7 @@ export function GitStatusPanel({ cwd }: GitStatusPanelProps): ReactElement | nul
           </Button>
         </Tooltip>
       </Popover>
+      <GitChangesDialog cwd={cwd} open={changesOpen} onClose={() => setChangesOpen(false)} />
       <GitCommitDialog
         cwd={cwd}
         open={commitOpen}

@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import { Skeleton, Spin } from 'antd'
+import { agentDisplayName } from '@shared/acp'
 import { useAgent } from '@/state/AgentContext'
 import { ChatHeader } from './ChatHeader'
 
@@ -19,7 +20,7 @@ interface SessionLoadingScreenProps {
 
 export function SessionLoadingScreen({ title, onStartNewConversation, onOpenBoard }: SessionLoadingScreenProps): ReactElement {
   const { state, cwd } = useAgent()
-  const agentName = state.currentAgent === 'pi' ? 'Pi' : 'Claude'
+  const agentName = agentDisplayName(state.currentAgent)
 
   return (
     <div className="chat-shell chat-loading-screen" role="status" aria-live="polite">

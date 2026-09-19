@@ -1,9 +1,32 @@
 import type { ChatAttachment } from './attachments'
 import type { ArchivedSessionMeta } from './session-meta-store'
 
-export type AgentAdapterId = 'claude' | 'pi'
+export type AgentAdapterId = 'claude' | 'pi' | 'codex'
 
-export type AgentStatus = 'disconnected' | 'connecting' | 'ready' | 'working' | 'error'
+/** 全部可用的 ACP 适配器：UI 列表与主进程校验共用同一份定义。 */
+export const AGENT_ADAPTER_IDS: readonly AgentAdapterId[] = ['claude', 'pi', 'codex']
+
+/** 适配器在界面上的展示名。 */
+export const AGENT_DISPLAY_NAMES: Record<AgentAdapterId, string> = {
+  claude: 'Claude',
+  pi: 'Pi',
+  codex: 'Codex'
+}
+
+export function isAgentAdapterId(value: unknown): value is AgentAdapterId {
+  return typeof value === 'string' && (AGENT_ADAPTER_IDS as readonly string[]).includes(value)
+}
+
+/** 展示名 fallback 为 Claude：偏好读取失败时保持与默认 Agent 一致。 */
+export function agentDisplayName(agentId: AgentAdapterId | undefined): string {
+  return agentId ? AGENT_DISPLAY_NAMES[agentId] : AGENT_DISPLAY_NAMES.claude
+}
+
+/**
+ * Agent 连接状态。
+ * 'draft' 是渲染层专用的「草稿会话」状态：还没有目录与真实会话，只等待用户提交首条消息。
+ */
+export type AgentStatus = 'disconnected' | 'connecting' | 'ready' | 'working' | 'error' | 'draft'
 
 export interface AgentMode {
   id: string
@@ -192,7 +215,7 @@ export interface AcpApi {
   setMode: (modeId: string, target: SessionTarget) => Promise<void>
   setModel: (modelId: string, target: SessionTarget) => Promise<void>
   setEffort: (effortId: string, target: SessionTarget) => Promise<void>
-  /** 切换 ACP 适配器（claude / pi）。 */
+  /** 切换 ACP 适配器（claude / pi / codex）。 */
   setAgent: (agentId: AgentAdapterId) => Promise<void>
   /** 通过 ACP session/list 查询 Claude Code 在该目录下的会话记录。 */
   listSessions: (cwd: string) => Promise<AcpSessionInfo[]>

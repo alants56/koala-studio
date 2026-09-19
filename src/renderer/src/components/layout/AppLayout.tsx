@@ -12,7 +12,7 @@ import {
 } from '@ant-design/icons'
 import { useLocation, useNavigate, useOutlet } from 'react-router-dom'
 import type { MenuProps } from 'antd'
-import type { AgentAdapterId } from '@shared/acp'
+import { AGENT_ADAPTER_IDS, AGENT_DISPLAY_NAMES, type AgentAdapterId } from '@shared/acp'
 import { useAgentSelection } from '@/state/AgentSelectionContext'
 import { SettingsDialog } from '@/components/settings/SettingsDialog'
 import { ProjectNavigation } from './ProjectNavigation'
@@ -84,9 +84,9 @@ export function AppLayout(): ReactElement {
 
   const agentPanel = (
     <div className="koala-agent-panel chat-model-panel" role="listbox" aria-label="Agent 列表">
-      {(['claude', 'pi'] as const).map((agentId) => {
+      {AGENT_ADAPTER_IDS.map((agentId) => {
         const selected = agentId === currentAgent
-        const label = agentId === 'claude' ? 'Claude' : 'Pi'
+        const label = AGENT_DISPLAY_NAMES[agentId]
         return (
           <button
             key={agentId}
@@ -160,12 +160,12 @@ export function AppLayout(): ReactElement {
               className={`koala-agent-trigger${collapsed ? ' is-collapsed' : ''}`}
               icon={<CodeOutlined />}
               loading={switching}
-              aria-label={`当前 Agent：${currentAgent === 'pi' ? 'Pi' : 'Claude'}`}
+              aria-label={`当前 Agent：${AGENT_DISPLAY_NAMES[currentAgent]}`}
               aria-expanded={agentOpen}
             >
               {!collapsed && (
                 <>
-                  <span>{currentAgent === 'pi' ? 'Pi' : 'Claude'}</span>
+                  <span>{AGENT_DISPLAY_NAMES[currentAgent]}</span>
                   <DownOutlined className="koala-agent-trigger-chevron" aria-hidden="true" />
                 </>
               )}
