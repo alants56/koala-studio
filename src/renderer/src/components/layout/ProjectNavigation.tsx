@@ -22,6 +22,9 @@ import { readableIpcError } from '@/utils/ipc-error'
 
 const DEFAULT_VISIBLE_COUNT = 5
 
+/** 侧栏点项目名的建会话请求号：自增，让项目页能区分每一次点击。 */
+let newSessionRequestId = 0
+
 type SessionListState =
   | { status: 'loading'; sessions: AcpSessionInfo[] }
   | { status: 'ready'; sessions: AcpSessionInfo[] }
@@ -241,8 +244,10 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
     })
   }
 
+  /** 点项目名 = 进项目并开一代新会话：带上 ?new= 意图，由项目页换算成 sessionGeneration。 */
   const openProject = (project: Project): void => {
-    void navigate(`/projects/${encodeURIComponent(project.id)}`)
+    newSessionRequestId += 1
+    void navigate(`/projects/${encodeURIComponent(project.id)}?new=${newSessionRequestId}`)
   }
 
   const openProjects = (): void => {

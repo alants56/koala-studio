@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Button, Result, Spin } from 'antd'
 import type { TodoItem } from '@shared/todos'
@@ -26,6 +26,7 @@ interface ProjectTarget {
  * 「新建会话」只有一条路径——递增 sessionGeneration 让 AgentProvider 换 key 重挂载，
  * 由它重挂载时的 connect() 建出恰好一个会话。不要再叠加显式的 createNewSession，
  * 两条路径同时生效时会各建一个会话，孤儿化其中一个并白占一个并发名额。
+ * 侧栏点项目名带 ?new= 意图进来，同样在这里换算成递增代数，不另开建会话入口。
  */
 export function ProjectChatPage(): ReactElement {
   const { projectId } = useParams<{ projectId: string }>()
@@ -37,6 +38,7 @@ export function ProjectChatPage(): ReactElement {
   const project = projectId ? getProject(projectId) : undefined
   const projectRouteActive = location.pathname.startsWith('/projects/')
   const routeSessionId = searchParams.get('session') || undefined
+  const routeNewSession = searchParams.get('new') || undefined
   const routeView: ProjectView = searchParams.get('view') === 'board' ? 'board' : 'chat'
 
   const [retainedTarget, setRetainedTarget] = useState<ProjectTarget>({ projectId, sessionId: routeSessionId, view: routeView })
@@ -72,11 +74,22 @@ export function ProjectChatPage(): ReactElement {
     const params = new URLSearchParams(location.search)
     params.delete('session')
     params.delete('view')
+    params.delete('new')
     // 从看板点进来时压一条历史，返回键能回到看板；「新对话」则就地重置，不堆历史。
     void navigate({ pathname: location.pathname, search: params.toString() }, { replace: todoId === undefined })
   }, [location.pathname, location.search, navigate])
 
   const startNewConversation = useCallback((): void => beginNewSession(), [beginNewSession])
+
+  // 侧栏点项目名的 ?new= 意图：换算成递增代数（唯一建会话路径）并立刻把它从 URL 摘掉，
+  // 这样回退/前进到这条历史时不会重复建会话。location.key 保证 StrictMode 下只处理一次。
+  const handledNewSessionRef = useRef<string | undefined>(undefined)
+  useLayoutEffect(() => {
+    if (!projectRouteActive || !routeNewSession) return
+    if (handledNewSessionRef.current === location.key) return
+    handledNewSessionRef.current = location.key
+    beginNewSession()
+  }, [beginNewSession, location.key, projectRouteActive, routeNewSession])
 
   /** 看板上点了一条还没挂载会话的待办。 */
   const launchTodo = useCallback((todo: TodoItem): void => beginNewSession(todo.id), [beginNewSession])

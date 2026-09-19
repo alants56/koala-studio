@@ -113,12 +113,13 @@ projects.json · automations.json · todos.json · 偏好 · 附件"]
 3. **Agent 自管理**：`AcpBridge` 在 `session/new` / `session/load` 时注入 `koala-automations` MCP server，让 Agent 可直接读写自动化与待办。
 4. **项目/资源**：项目管理、Skills/插件/MCP 管理均经 IPC 落到本地 JSON 或 Claude Code 目录。
 5. **待办挂载会话**：看板点待办 → `ProjectChatPage` 递增 `sessionGeneration` → `AgentProvider` 换 key 重挂载 → `connect()` 建出恰好一个会话 → 首条消息发出时 `onFirstPrompt` 把 `todo.sessionId` 写回。
+6. **侧栏新会话**：侧栏点项目名 → 导航带 `?new=` 意图 → `ProjectChatPage` 把它换算成递增 `sessionGeneration` 并清掉该参数 → 同样走换 key 重挂载建出恰好一个会话；因此同一项目重复点击也会开新会话。
 
 > **不变量：新建会话只有「换 key 重挂载」这一条路径。**
 > `AgentProvider` 的 key 是 `project.id : 会话 id : agentRevision : sessionGeneration`。
 > 额外再调一次显式的 `createNewSession` 会在 URL 带 `?session=` 时各建一个会话，
 > 孤儿化其中一个并白占一个并发名额（上限 `MAX_SESSION_RUNTIMES = 3`）。
-> 看板因此只负责导航 / 递增代数，绝不自己创建会话。
+> 看板与侧栏因此只负责导航 / 递增代数，绝不自己创建会话。
 
 ## 本地数据
 
