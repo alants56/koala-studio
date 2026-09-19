@@ -1,5 +1,8 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type UIEvent, type WheelEvent } from 'react'
+import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ReactElement, type UIEvent, type WheelEvent } from 'react'
+import { ThoughtChain } from '@ant-design/x'
+import type { ChatMessage } from '@/models'
 import { useAgent } from '@/state/AgentContext'
+import { formatTurnDuration } from '@/utils/turn-duration'
 import { ChatMessageItem } from './ChatMessageItem'
 
 const BOTTOM_THRESHOLD_PX = 24
@@ -10,34 +13,73 @@ const OLDER_REVEAL_COUNT = 30
 /** 距当前渲染内容顶部多远时触发补载。 */
 const LOAD_MORE_TRIGGER_PX = 180
 
-/** 把秒数格式化为紧凑的人类可读形式：3m 17s / 1h 2m 3s / 12s。 */
-function formatTurnDuration(seconds: number): string {
-  const total = Math.max(0, Math.floor(seconds))
-  const hours = Math.floor(total / 3600)
-  const minutes = Math.floor((total % 3600) / 60)
-  const secs = total % 60
-  if (hours > 0) return `${hours}h ${minutes}m ${secs}s`
-  if (minutes > 0) return `${minutes}m ${secs}s`
-  return `${secs}s`
+/** ACP 工具类别 → 摘要里用的中文动作短语。 */
+const TOOL_KIND_ACTIONS: Record<string, string> = {
+  read: '读取文件',
+  edit: '修改文件',
+  delete: '删除文件',
+  move: '移动文件',
+  search: '搜索代码',
+  execute: '运行命令',
+  fetch: '获取网页',
+  think: '思考',
+  switch_mode: '切换模式'
 }
 
-/** 当前 turn 执行时间摘要：位于用户气泡下方、agent 回复上方。 */
-function TurnDurationSummary({ working, startedAt, seconds }: { working: boolean; startedAt?: number; seconds?: number }): ReactElement {
-  const [now, setNow] = useState(0)
+/** 用这一组步骤做过的事生成摘要，同类别只保留一次，例如「已读取文件、运行命令」。 */
+function summarizeActivity(messages: ChatMessage[]): string {
+  const actions: string[] = []
+  const seen = new Set<string>()
+  for (const message of messages) {
+    const action = message.kind === 'thinking'
+      ? '思考'
+      : TOOL_KIND_ACTIONS[message.toolKind ?? ''] ?? '调用工具'
+    if (seen.has(action)) continue
+    seen.add(action)
+    actions.push(action)
+  }
+  return actions.length > 0 ? `已${actions.join('、')}` : '执行过程'
+}
 
-  useEffect(() => {
-    if (!working || startedAt == null) return
-    const update = (): void => setNow(Math.max(0, Date.now() - startedAt))
-    update()
-    const timer = window.setInterval(update, 1000)
-    return () => window.clearInterval(timer)
-  }, [working, startedAt])
-
-  const elapsed = working && startedAt != null ? Math.floor(now / 1000) : seconds ?? 0
+/** 一轮结束后收拢起来的思考 + 工具调用：默认折叠，展开后是逐条明细。
+ *  分组头不带成功 / 失败图标，也不做红色强调——保持中性。有工具失败时默认展开，
+ *  让用户直接看到是哪一步出错，而不是靠颜色喊。 */
+function ActivityGroupMessage({ messages, cwd }: { messages: ChatMessage[]; cwd?: string }): ReactElement {
+  const failed = messages.some((message) => message.toolStatus === 'failed')
 
   return (
-    <div className="chat-turn-summary" role="status" aria-live="polite">
-      <span className="chat-turn-summary-label">用时 {formatTurnDuration(elapsed)}</span>
+    <ThoughtChain
+      className="chat-activity-message chat-activity-group mr-auto"
+      defaultExpandedKeys={failed ? ['group'] : []}
+      line={false}
+      items={[
+        {
+          key: 'group',
+          icon: false,
+          title: (
+            <span>
+              {summarizeActivity(messages)}
+              <span className="chat-activity-group-meta"> · {messages.length} 步</span>
+            </span>
+          ),
+          collapsible: true,
+          content: (
+            <div className="chat-activity-group-list">
+              {messages.map((message) => <ChatMessageItem key={message.id} message={message} cwd={cwd} />)}
+            </div>
+          )
+        }
+      ]}
+    />
+  )
+}
+
+/** 已完成 turn 的执行时间：位于该轮用户气泡下方、agent 回复上方。
+ *  进行中那一轮的实时用时在输入区（「停止」左侧），不在这里重复。 */
+function TurnDurationSummary({ seconds }: { seconds: number }): ReactElement {
+  return (
+    <div className="chat-turn-summary">
+      <span className="chat-turn-summary-label">用时 {formatTurnDuration(seconds)}</span>
       <span className="chat-turn-summary-arrow" aria-hidden="true">›</span>
     </div>
   )
@@ -70,15 +112,10 @@ function ChatThreadMessages(): ReactElement {
   const lastUserIndex = messages.findLastIndex((message) => message.role === 'user')
   const working = state.status === 'working'
 
-  // 为每个用户消息计算该轮总耗时，展示在其所属 agent 回复上方。
-  // - 已收尾的轮次：用助手消息的 finishedAt − 用户消息 createdAt 精确计算（存的是真实结束时间）。
-  // - 进行中 / 刚结束的最近一轮：finishedAt 尚为空，退回用 state 的 turn 计时兜底。
-  interface TurnSummaryProps {
-    working: boolean
-    startedAt?: number
-    seconds?: number
-  }
-  const turnSummaries = new Map<number, TurnSummaryProps>()
+  // 为每个已收尾的用户消息计算该轮总耗时，展示在其所属 agent 回复上方。
+  // - 常规：助手消息的 finishedAt − 用户消息 createdAt（存的是真实结束时间）。
+  // - 刚结束、回复尚无 finishedAt 的最近一轮：退回 state 的 turn 计时兜底。
+  const turnSummaries = new Map<number, number>()
   messages.forEach((message, index) => {
     if (message.role !== 'user') return
     // 该轮消息范围：到下一个用户消息为止（避免把后续轮次的回复算进来）。
@@ -86,10 +123,9 @@ function ChatThreadMessages(): ReactElement {
     const turnMsgs = nextUserIndex === -1 ? messages.slice(index + 1) : messages.slice(index + 1, nextUserIndex)
     const reply = turnMsgs.findLast((item) => item.role === 'assistant' && item.kind !== 'thinking' && item.content)
     if (reply?.finishedAt) {
-      const total = Math.max(0, Math.round((new Date(reply.finishedAt).getTime() - new Date(message.createdAt).getTime()) / 1000))
-      turnSummaries.set(index, { working: false, seconds: total })
-    } else if (index === lastUserIndex && (working || state.lastTurnSeconds != null)) {
-      turnSummaries.set(index, { working, startedAt: state.workStartedAt, seconds: state.lastTurnSeconds })
+      turnSummaries.set(index, Math.max(0, Math.round((new Date(reply.finishedAt).getTime() - new Date(message.createdAt).getTime()) / 1000)))
+    } else if (!working && index === lastUserIndex && state.lastTurnSeconds != null) {
+      turnSummaries.set(index, state.lastTurnSeconds)
     }
   })
 
@@ -179,7 +215,63 @@ function ChatThreadMessages(): ReactElement {
     }
   }
 
+  // 一轮结束后，把它中间连续的思考 / 工具调用收拢成一条摘要。
+  // 该轮还在进行时保持逐条展示，让用户看得到实时进度。
+  // 分组内每个下标都指向同一个数组：反向补载可能把分组切在中间，
+  // 渲染时要在它第一条可见的消息处补上，否则整组会凭空消失。
+  const groupByIndex = new Map<number, ChatMessage[]>()
+  {
+    let turnStart = -1
+    let open: ChatMessage[] | undefined
+    messages.forEach((message, index) => {
+      if (message.role === 'user') {
+        turnStart = index
+        open = undefined
+        return
+      }
+      // 助手正文把连续的活动切段，保证收拢后阅读顺序不变。
+      if (message.kind !== 'thinking' && message.kind !== 'tool') {
+        open = undefined
+        return
+      }
+      // 该轮是否已经结束：后面还有用户消息，或者它已经是最后一轮且当前不在生成中。
+      // 不能用 finishedAt / lastTurnSeconds 判断——历史会话回放的消息不带 finishedAt，
+      // 助手回复为空时两边都没有，会导致收拢永远不生效。
+      if (turnStart < 0 || (turnStart === lastUserIndex && working)) return
+      open ??= []
+      open.push(message)
+      groupByIndex.set(index, open)
+    })
+  }
+
   const visibleMessages = startIndex > 0 ? messages.slice(startIndex) : messages
+  const entries: ReactElement[] = []
+  const renderedGroups = new Set<ChatMessage[]>()
+  visibleMessages.forEach((message, offset) => {
+    const index = startIndex + offset
+    const group = groupByIndex.get(index)
+    if (group) {
+      if (renderedGroups.has(group)) return
+      renderedGroups.add(group)
+      entries.push(
+        <Fragment key={group[0].id}>
+          <ActivityGroupMessage messages={group} cwd={cwd} />
+        </Fragment>
+      )
+      return
+    }
+    const seconds = turnSummaries.get(index)
+    entries.push(
+      <Fragment key={message.id}>
+        <ChatMessageItem
+          message={message}
+          cwd={cwd}
+          streaming={working && message.role === 'assistant' && message.id === latestMessageId}
+        />
+        {seconds != null && <TurnDurationSummary seconds={seconds} />}
+      </Fragment>
+    )
+  })
 
   return (
     <section
@@ -200,22 +292,7 @@ function ChatThreadMessages(): ReactElement {
             加载更早消息（{startIndex}）
           </button>
         )}
-        {visibleMessages.map((message, offset) => {
-          const index = startIndex + offset
-          const summary = turnSummaries.get(index)
-          return (
-            <Fragment key={message.id}>
-              <ChatMessageItem
-                message={message}
-                cwd={cwd}
-                streaming={working && message.role === 'assistant' && message.id === latestMessageId}
-              />
-              {summary && (
-                <TurnDurationSummary working={summary.working} startedAt={summary.startedAt} seconds={summary.seconds} />
-              )}
-            </Fragment>
-          )
-        })}
+        {entries}
       </div>
     </section>
   )

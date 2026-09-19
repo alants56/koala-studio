@@ -6,6 +6,7 @@ import type { AutomationsApi } from '../shared/automations'
 import type { TodosApi } from '../shared/todos'
 import type { AttachmentsApi } from '../shared/attachments'
 import type { FileActionsApi } from '../shared/files'
+import type { GitApi } from '../shared/git'
 import type { WorkspaceApi } from '../shared/workspace'
 
 const acp: AcpApi = {
@@ -93,6 +94,15 @@ const workspace: WorkspaceApi = {
   getDefaultWorkspace: () => ipcRenderer.invoke('workspace:get-default')
 }
 
+const git: GitApi = {
+  status: (cwd) => ipcRenderer.invoke('git:status', cwd),
+  diff: (cwd) => ipcRenderer.invoke('git:diff', cwd),
+  checkout: (cwd, branch) => ipcRenderer.invoke('git:checkout', cwd, branch),
+  createBranch: (cwd, branch) => ipcRenderer.invoke('git:create-branch', cwd, branch),
+  commit: (cwd, message, options) => ipcRenderer.invoke('git:commit', cwd, message, options),
+  generateCommitMessage: (cwd) => ipcRenderer.invoke('git:generate-commit-message', cwd)
+}
+
 contextBridge.exposeInMainWorld('acp', acp)
 contextBridge.exposeInMainWorld('projects', projects)
 contextBridge.exposeInMainWorld('claude', claude)
@@ -101,3 +111,4 @@ contextBridge.exposeInMainWorld('todos', todos)
 contextBridge.exposeInMainWorld('attachments', attachments)
 contextBridge.exposeInMainWorld('files', files)
 contextBridge.exposeInMainWorld('workspace', workspace)
+contextBridge.exposeInMainWorld('git', git)

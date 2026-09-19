@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import {
+  DeleteOutlined,
   DownOutlined,
+  EditOutlined,
   FolderOpenOutlined,
   FolderOutlined,
   LoadingOutlined,
   MessageOutlined,
+  MoreOutlined,
+  ProjectOutlined,
   UpOutlined
 } from '@ant-design/icons'
-import { Skeleton } from 'antd'
+import { App, Button, Dropdown, Skeleton } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { AcpSessionInfo, AgentState, Project } from '@/models'
+import { RenameProjectModal } from '@/components/projects/RenameProjectModal'
 import { useAgentSelection } from '@/state/AgentSelectionContext'
 import { useProjects } from '@/state/ProjectsContext'
 import { subscribeSessionActivity } from '@/utils/session-events'
+import { readableIpcError } from '@/utils/ipc-error'
 
 const DEFAULT_VISIBLE_COUNT = 5
 
@@ -27,10 +33,12 @@ interface ProjectNavigationProps {
 
 /** 侧栏项目树：沿用项目页排序，并为每个可见项目展示最近的会话。 */
 export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactElement | null {
-  const { projects, loading, defaultWorkspace } = useProjects()
+  const { projects, loading, defaultWorkspace, deleteProject } = useProjects()
   const { revision: agentRevision, currentAgent } = useAgentSelection()
+  const { modal, message } = App.useApp()
   const location = useLocation()
   const navigate = useNavigate()
+  const [renamingProject, setRenamingProject] = useState<Project>()
   const [showAllProjects, setShowAllProjects] = useState(false)
   const [expandedSessionLists, setExpandedSessionLists] = useState<Set<string>>(() => new Set())
   const [sessionLists, setSessionLists] = useState<Record<string, SessionListState>>({})
@@ -241,75 +249,130 @@ export function ProjectNavigation({ collapsed }: ProjectNavigationProps): ReactE
     void navigate('/projects')
   }
 
+  const openBoard = (project: Project): void => {
+    void navigate(`/projects/${encodeURIComponent(project.id)}?view=board`)
+  }
+
+  const removeProject = (project: Project): void => {
+    modal.confirm({
+      title: '删除项目',
+      content: `确定删除「${project.name}」吗？此操作无法恢复。`,
+      okText: '删除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await deleteProject(project.id)
+        } catch (error) {
+          void message.error(readableIpcError(error, '删除项目失败'))
+          throw error
+        }
+        // 删掉的正是当前打开的项目时，留在原地只会看到 404。
+        if (activeProjectId === project.id) void navigate('/projects')
+      }
+    })
+  }
+
   return (
-    <nav className="koala-project-navigation" aria-label="项目和会话">
-      <div className="koala-project-tree">
-        {loading ? (
-          <Skeleton className="koala-project-tree-loading" active paragraph={{ rows: 4 }} title={false} />
-        ) : projectRows.length === 0 ? (
-          <button type="button" className="koala-project-empty" onClick={openProjects}>新建第一个项目</button>
-        ) : projectRows.map(({ project, state, sessions, showAllSessions }) => {
-          const projectRouteActive = activeProjectId === project.id
-          const projectSelected = projectRouteActive && !effectiveActiveSessionId
-          const hasMoreSessions = (state?.sessions.length ?? 0) > DEFAULT_VISIBLE_COUNT
-
-          return (
-            <div className="koala-project-branch" key={project.id}>
-              <button
-                type="button"
-                className={`koala-project-row${projectSelected ? ' is-active' : ''}`}
-                onClick={() => openProject(project)}
-                title={project.name}
-              >
-                {projectSelected ? <FolderOpenOutlined /> : <FolderOutlined />}
-                <span>{project.name}</span>
-              </button>
-
-              <div className="koala-session-tree">
-                {!state || state.status === 'loading' ? (
-                  <span className="koala-session-status">正在读取会话...</span>
-                ) : state.status === 'error' ? (
-                  <span className="koala-session-status">会话读取失败</span>
-                ) : state.sessions.length === 0 ? (
-                  <span className="koala-session-status">暂无会话</span>
-                ) : (
-                  <>
-                    {sessions.map((session) => {
-                      const streaming = streamingSessionIds.has(session.sessionId)
-                      const sessionTitle = session.title || '未命名会话'
-                      return (
-                        <button
-                          type="button"
-                          className={`koala-session-row${projectRouteActive && effectiveActiveSessionId === session.sessionId ? ' is-active' : ''}${streaming ? ' is-streaming' : ''}`}
-                          key={session.sessionId}
-                          onClick={() => void navigate(`/projects/${encodeURIComponent(project.id)}?session=${encodeURIComponent(session.sessionId)}`)}
-                          title={streaming ? `${sessionTitle}（正在生成）` : sessionTitle}
-                        >
-                          {streaming ? <LoadingOutlined spin /> : <MessageOutlined />}
-                          <span>{sessionTitle}</span>
+    <>
+      <nav className="koala-project-navigation" aria-label="项目和会话">
+        <div className="koala-project-tree">
+          {loading ? (
+            <Skeleton className="koala-project-tree-loading" active paragraph={{ rows: 4 }} title={false} />
+          ) : projectRows.length === 0 ? (
+            <button type="button" className="koala-project-empty" onClick={openProjects}>新建第一个项目</button>
+          ) : projectRows.map(({ project, state, sessions, showAllSessions }) => {
+            const projectRouteActive = activeProjectId === project.id
+            const projectSelected = projectRouteActive && !effectiveActiveSessionId
+            const hasMoreSessions = (state?.sessions.length ?? 0) > DEFAULT_VISIBLE_COUNT
+  
+            return (
+              <div className="koala-project-branch" key={project.id}>
+                <div className={`koala-project-row${projectSelected ? ' is-active' : ''}`}>
+                  <button
+                    type="button"
+                    className="koala-project-open"
+                    onClick={() => openProject(project)}
+                    title={project.name}
+                  >
+                    {projectSelected ? <FolderOpenOutlined /> : <FolderOutlined />}
+                    <span>{project.name}</span>
+                  </button>
+                  <Dropdown
+                    menu={{
+                      items: [
+                        { key: 'board', icon: <ProjectOutlined />, label: '查看项目看板' },
+                        { key: 'rename', icon: <EditOutlined />, label: '重命名' },
+                        { type: 'divider' },
+                        { key: 'delete', icon: <DeleteOutlined />, label: '删除项目', danger: true }
+                      ],
+                      onClick: ({ key, domEvent }) => {
+                        domEvent.stopPropagation()
+                        if (key === 'board') openBoard(project)
+                        if (key === 'rename') setRenamingProject(project)
+                        if (key === 'delete') removeProject(project)
+                      }
+                    }}
+                    trigger={['click']}
+                  >
+                    <Button
+                      className="koala-project-more"
+                      type="text"
+                      size="small"
+                      icon={<MoreOutlined />}
+                      aria-label={`项目「${project.name}」的更多操作`}
+                      onClick={(event) => event.stopPropagation()}
+                    />
+                  </Dropdown>
+                </div>
+  
+                <div className="koala-session-tree">
+                  {!state || state.status === 'loading' ? (
+                    <span className="koala-session-status">正在读取会话...</span>
+                  ) : state.status === 'error' ? (
+                    <span className="koala-session-status">会话读取失败</span>
+                  ) : state.sessions.length === 0 ? (
+                    <span className="koala-session-status">暂无会话</span>
+                  ) : (
+                    <>
+                      {sessions.map((session) => {
+                        const streaming = streamingSessionIds.has(session.sessionId)
+                        const sessionTitle = session.title || '未命名会话'
+                        return (
+                          <button
+                            type="button"
+                            className={`koala-session-row${projectRouteActive && effectiveActiveSessionId === session.sessionId ? ' is-active' : ''}${streaming ? ' is-streaming' : ''}`}
+                            key={session.sessionId}
+                            onClick={() => void navigate(`/projects/${encodeURIComponent(project.id)}?session=${encodeURIComponent(session.sessionId)}`)}
+                            title={streaming ? `${sessionTitle}（正在生成）` : sessionTitle}
+                          >
+                            {streaming ? <LoadingOutlined spin /> : <MessageOutlined />}
+                            <span>{sessionTitle}</span>
+                          </button>
+                        )
+                      })}
+                      {hasMoreSessions && (
+                        <button type="button" className="koala-tree-more koala-session-more" onClick={() => toggleSessions(project.id)}>
+                          {showAllSessions ? <UpOutlined /> : <DownOutlined />}
+                          <span>{showAllSessions ? '收起' : '更多'}</span>
                         </button>
-                      )
-                    })}
-                    {hasMoreSessions && (
-                      <button type="button" className="koala-tree-more koala-session-more" onClick={() => toggleSessions(project.id)}>
-                        {showAllSessions ? <UpOutlined /> : <DownOutlined />}
-                        <span>{showAllSessions ? '收起' : '更多'}</span>
-                      </button>
-                    )}
-                  </>
-                )}
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {projects.length > DEFAULT_VISIBLE_COUNT && (
-        <button type="button" className="koala-tree-more koala-projects-more" onClick={() => setShowAllProjects((value) => !value)}>
-          {showAllProjects ? <UpOutlined /> : <DownOutlined />}
-          <span>{showAllProjects ? '收起' : '更多'}</span>
-        </button>
-      )}
-    </nav>
+            )
+          })}
+        </div>
+  
+        {projects.length > DEFAULT_VISIBLE_COUNT && (
+          <button type="button" className="koala-tree-more koala-projects-more" onClick={() => setShowAllProjects((value) => !value)}>
+            {showAllProjects ? <UpOutlined /> : <DownOutlined />}
+            <span>{showAllProjects ? '收起' : '更多'}</span>
+          </button>
+        )}
+      </nav>
+    <RenameProjectModal open={Boolean(renamingProject)} project={renamingProject} onClose={() => setRenamingProject(undefined)} />
+    </>
   )
 }

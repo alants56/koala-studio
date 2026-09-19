@@ -10,19 +10,24 @@ import { ChatHeader } from './ChatHeader'
  * 复用与正式对话一致的 chat-shell 布局（页头 + 消息区 + 输入区），
  * 用骨架屏模拟真实的消息结构，让加载态与正式会话无缝衔接。
  */
-export function SessionLoadingScreen({ project }: { project: Project }): ReactElement {
-  const { state } = useAgent()
+interface SessionLoadingScreenProps {
+  project: Project
+  /** 新建会话：由项目页换一代 AgentProvider，加载动画随之被替换。 */
+  onStartNewConversation: () => void
+}
+
+export function SessionLoadingScreen({ project, onStartNewConversation }: SessionLoadingScreenProps): ReactElement {
+  const { state, cwd } = useAgent()
   const navigate = useNavigate()
   const agentName = state.currentAgent === 'pi' ? 'Pi' : 'Claude'
 
-  const handleNewConversation = (): void => {
-    // 历史会话详情回到项目页将创建新会话，加载动画随之被替换。
-    void navigate(`/projects/${encodeURIComponent(project.id)}`)
+  const handleOpenBoard = (): void => {
+    void navigate(`/projects/${encodeURIComponent(project.id)}?view=board`)
   }
 
   return (
     <div className="chat-shell chat-loading-screen" role="status" aria-live="polite">
-      <ChatHeader project={project} state={state} onNewConversation={handleNewConversation} />
+      <ChatHeader project={project} state={state} cwd={cwd} onNewConversation={onStartNewConversation} onOpenBoard={handleOpenBoard} />
 
       <div className="chat-thread chat-loading-thread flex flex-1 flex-col overflow-y-auto">
         {/* 助手正文骨架 */}

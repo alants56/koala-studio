@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { Alert, App, Tooltip } from 'antd'
+import { Alert, Tooltip } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { Project } from '@/models'
 import { useAgent } from '@/state/AgentContext'
@@ -15,35 +15,30 @@ function formatTokens(n: number): string {
   return String(n)
 }
 
+interface ChatViewProps {
+  project: Project
+  /** 新建会话：由项目页换一代 AgentProvider，重挂载时的连接会建出恰好一个会话。 */
+  onStartNewConversation: () => void
+}
+
 /** 单个项目的协作会话视图：小圆点状态 + 对话线程 + 输入区。 */
-export function ChatView({ project }: { project: Project }): ReactElement {
-  const { state, sessionLoading, connect, createNewSession } = useAgent()
-  const { message } = App.useApp()
+export function ChatView({ project, onStartNewConversation }: ChatViewProps): ReactElement {
+  const { state, cwd, sessionLoading, connect } = useAgent()
   const location = useLocation()
   const navigate = useNavigate()
 
   const connecting = state.status === 'disconnected' || state.status === 'connecting'
 
-  const handleNewConversation = async (): Promise<void> => {
-    const projectPath = `/projects/${encodeURIComponent(project.id)}`
-
-    // 历史会话详情回到项目页会由路由创建新会话；项目页本身则需直接重置会话。
-    if (new URLSearchParams(location.search).has('session')) {
-      void navigate(projectPath)
-      return
-    }
-
-    try {
-      await createNewSession()
-      void navigate(projectPath, { replace: true })
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '新建对话失败')
-    }
+  /** 只替换 view，保留 session：从看板回来还停在同一个会话上，且不会触发 AgentProvider 重挂载。 */
+  const handleOpenBoard = (): void => {
+    const params = new URLSearchParams(location.search)
+    params.set('view', 'board')
+    void navigate({ pathname: location.pathname, search: params.toString() })
   }
 
   // 加载历史会话期间整页只展示加载动画，回放完成后再显示聊天界面
   if (sessionLoading) {
-    return <SessionLoadingScreen project={project} />
+    return <SessionLoadingScreen project={project} onStartNewConversation={onStartNewConversation} />
   }
 
   // 连接期间整页只展示加载动画，连接完成后再显示聊天界面
@@ -56,8 +51,10 @@ export function ChatView({ project }: { project: Project }): ReactElement {
       <ChatHeader
         project={project}
         state={state}
+        cwd={cwd}
         onConnect={() => void connect()}
-        onNewConversation={() => void handleNewConversation()}
+        onNewConversation={onStartNewConversation}
+        onOpenBoard={handleOpenBoard}
       />
 
       {state.status === 'error' && (

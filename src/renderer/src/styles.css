@@ -31,39 +31,55 @@
   font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
   font-synthesis: none;
 
-  /* Koala Studio palette: graphite, cool paper, soft-blue accent */
-  --primary: #5273cf;
-  --primary-active: #4460ae;
-  --primary-disabled: #d3dbf2;
-  --ink: #17191d;
-  --body: #3d424b;
-  --body-strong: #252a32;
-  --muted: #737a86;
-  --muted-soft: #9aa1ad;
-  --hairline: #dfe3e8;
-  --hairline-soft: #e8ebef;
-  --canvas: #ffffff;
-  --surface-soft: #eef1f5;
-  --surface-card: #e7ebf0;
-  --surface-cream-strong: #dfe4eb;
-  --surface-dark: #17191d;
-  --surface-dark-elevated: #242830;
-  --surface-dark-soft: #1e2229;
+  /* Koala Studio palette: neutral zinc grayscale, minimal accent */
+  --primary: #18181b;
+  --primary-active: #09090b;
+  --primary-disabled: #d4d4d8;
+  --ink: #18181b;
+  --body: #52525b;
+  --body-strong: #27272a;
+  --muted: #71717a;
+  --muted-soft: #a1a1aa;
+  --hairline: #e4e4e7;
+  --hairline-soft: #f4f4f5;
+  --canvas: #fafafa;
+  --surface-soft: #f4f4f5;
+  --surface-card: #ffffff;
   --on-primary: #ffffff;
-  --on-dark: #f7f8fa;
-  --on-dark-soft: #aab1bd;
-  --accent-teal: #4f9dba;
-  --accent-amber: #c79545;
-  --success: #3f9b68;
-  --warning: #b47d22;
-  --error: #c0444b;
-  /* RGB channels of primary, used to build alpha tints */
-  --primary-rgb: 82 115 207;
+  --accent-teal: #14b8a6;
+  --accent-teal-text: #0f766e;
+  --accent-amber: #f59e0b;
+  --accent-amber-text: #b45309;
+  --accent-violet: #8b5cf6;
+  --accent-violet-text: #6d28d9;
+  --success: #22c55e;
+  --success-text: #15803d;
+  --warning: #eab308;
+  --warning-text: #a16207;
+  --error: #ef4444;
+  --error-text: #b91c1c;
+  /* RGB channels of the accent colors, used to build alpha tints */
+  --primary-rgb: 24 24 27;
+  --accent-teal-rgb: 20 184 166;
+  --accent-amber-rgb: 245 158 11;
+  --accent-violet-rgb: 139 92 246;
+  --success-rgb: 34 197 94;
+  --warning-rgb: 234 179 8;
+  --error-rgb: 239 68 68;
   --chat-user-bubble: var(--primary);
   --chat-user-text: #ffffff;
+
+  /* Design system tokens */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 2px 4px rgb(0 0 0 / 0.06);
+  --shadow-lg: 0 4px 8px rgb(0 0 0 / 0.08);
 }
 
-/* 全屏加载动画（连接 / 加载会话）统一采用舒适蓝，与用户消息气泡一致。 */
+/* 全屏加载动画（连接 / 加载会话）与用户消息气泡保持一致。 */
 .chat-loading-screen .ant-spin-dot-item {
   background-color: var(--chat-user-bubble) !important;
 }
@@ -100,7 +116,7 @@
   height: 30px;
   place-items: center;
   flex: 0 0 auto;
-  border-radius: 9px;
+  border-radius: 6px;
   background: var(--surface-soft);
   color: var(--primary);
 }
@@ -117,26 +133,26 @@
 .chat-loading-user-bubble {
   width: min(360px, 58%);
   height: 52px;
-  border-radius: 15px 15px 4px 15px;
+  border-radius: 8px;
   background: var(--chat-user-bubble);
   opacity: 0.7;
-  box-shadow: 0 8px 18px rgb(27 42 88 / 16%);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
 }
 
 .chat-loading-activity {
   width: min(680px, 82%);
   margin: 2px 0 12px;
   padding: 9px 11px;
-  border-left: 2px solid rgb(var(--primary-rgb) / 30%);
+  border-left: 2px solid rgb(var(--primary-rgb) / 20%);
   border-radius: 4px;
-  background: linear-gradient(90deg, rgb(var(--primary-rgb) / 8%), transparent 82%);
+  background: rgb(var(--primary-rgb) / 4%);
 }
 
 .chat-loading-activity::before {
   display: block;
   width: 46%;
   height: 10px;
-  border-radius: 5px;
+  border-radius: 4px;
   background: var(--surface-soft);
   content: '';
 }
@@ -144,9 +160,9 @@
 .chat-loading-composer {
   height: 46px;
   border: 1px solid var(--hairline);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--canvas) 92%, var(--surface-soft));
-  box-shadow: 0 16px 34px rgb(32 44 70 / 11%), inset 0 1px rgb(255 255 255 / 86%);
+  border-radius: 8px;
+  background: var(--canvas);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
 }
 
 .chat-loading-note {
@@ -210,11 +226,8 @@ input {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 34%), transparent 32%),
-    var(--surface-soft) !important;
-  border-inline-end: 1px solid rgb(30 28 24 / 8%);
-  box-shadow: 10px 0 28px rgb(35 29 22 / 3%);
+  background: var(--surface-card) !important;
+  border-inline-end: 1px solid var(--hairline);
 }
 
 .koala-sider .ant-layout-sider-children {
@@ -224,51 +237,50 @@ input {
   box-sizing: border-box;
   flex-direction: column;
   overflow: hidden;
-  padding-top: 24px;
+  padding-top: 16px;
 }
 
 .koala-brand {
   display: flex;
   position: relative;
   align-items: center;
-  height: 56px;
+  height: 48px;
   flex: 0 0 auto;
-  padding: 0 18px;
+  padding: 0 12px;
   color: var(--ink);
   -webkit-app-region: drag;
 }
 
 .koala-brand::after {
   position: absolute;
-  right: 18px;
+  right: 12px;
   bottom: 0;
-  left: 18px;
+  left: 12px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgb(91 78 63 / 14%), transparent);
+  background: var(--hairline);
   content: '';
 }
 
 .koala-brand-mark {
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   place-items: center;
   flex: 0 0 auto;
   color: var(--on-primary);
-  background: linear-gradient(145deg, #7089d9, var(--primary));
-  border-radius: 10px;
-  box-shadow: 0 7px 16px rgb(var(--primary-rgb) / 22%), inset 0 1px 0 rgb(255 255 255 / 32%);
-  font-size: 15px;
-  font-weight: 750;
+  background: var(--primary);
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 650;
   letter-spacing: 0;
 }
 
 .koala-brand-copy {
   display: flex;
   min-width: 0;
-  margin-left: 10px;
+  margin-left: 8px;
   flex-direction: column;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 
 .koala-brand-toggle {
@@ -278,8 +290,8 @@ input {
 }
 
 .koala-brand-toggle:hover {
-  color: var(--primary-active) !important;
-  background: rgb(var(--primary-rgb) / 10%) !important;
+  color: var(--ink) !important;
+  background: var(--surface-soft) !important;
 }
 
 .koala-brand--collapsed {
@@ -289,7 +301,7 @@ input {
 .koala-brand--collapsed .koala-brand-mark,
 .koala-brand--collapsed .koala-brand-toggle {
   position: absolute;
-  inset: 12px auto auto 24px;
+  inset: 12px auto auto 12px;
   width: 32px;
   height: 32px;
   margin: 0;
@@ -318,20 +330,20 @@ input {
 }
 
 .koala-brand-name {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .koala-brand-caption {
-  margin-top: 3px;
+  margin-top: 2px;
   color: var(--muted);
   font-size: 11px;
 }
 
 .koala-nav {
   flex: 0 0 auto;
-  padding: 14px 10px 10px;
-  background: var(--surface-soft) !important;
+  padding: 8px 12px;
+  background: var(--surface-card) !important;
 }
 
 .koala-nav.ant-menu-inline {
@@ -341,19 +353,20 @@ input {
 .koala-nav .ant-menu-item {
   height: 36px;
   position: relative;
-  margin-block: 4px;
+  margin-block: 2px;
   margin-inline: 0;
   width: 100%;
-  border-radius: 9px;
-  color: var(--muted);
-  font-weight: 610;
-  transition: color 160ms ease, background-color 160ms ease, transform 160ms ease;
+  border-radius: 4px;
+  color: var(--body);
+  font-size: 13px;
+  font-weight: 500;
+  transition: color 140ms ease, background-color 140ms ease;
 }
 
 .koala-nav .ant-menu-item::after {
   position: absolute;
   top: 8px;
-  right: 7px;
+  right: 0;
   bottom: 8px;
   width: 2px;
   border: 0;
@@ -361,23 +374,22 @@ input {
   background: var(--primary);
   content: '';
   opacity: 0;
-  transform: scaleY(.5);
-  transition: opacity 160ms ease, transform 160ms ease;
+  transform: scaleY(.6);
+  transition: opacity 140ms ease, transform 140ms ease;
 }
 
 .koala-nav .ant-menu-item:hover {
-  color: var(--body-strong);
-  background: rgb(255 255 255 / 42%);
+  color: var(--ink);
+  background: var(--canvas);
 }
 
 .koala-nav .ant-menu-item:active {
-  transform: translateX(1px) scale(.99);
+  transform: translateY(1px);
 }
 
 .koala-nav .ant-menu-item-selected {
-  color: var(--primary-active) !important;
-  background: rgb(var(--primary-rgb) / 12%) !important;
-  box-shadow: inset 0 0 0 1px rgb(var(--primary-rgb) / 8%);
+  color: var(--ink) !important;
+  background: rgb(var(--primary-rgb) / 6%) !important;
 }
 
 .koala-nav .ant-menu-item-selected::after {
@@ -386,17 +398,17 @@ input {
 }
 
 .koala-nav .ant-menu-item .anticon {
-  font-size: 17px;
+  font-size: 15px;
 }
 
 .koala-sider:not(.ant-layout-sider-collapsed) .koala-nav .ant-menu-item {
-  padding-inline: 9px !important;
+  padding-inline: 8px !important;
 }
 
 .koala-project-navigation {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 5px 10px 14px;
+  padding: 8px 8px 12px;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -404,7 +416,7 @@ input {
   scrollbar-width: thin;
 }
 
-.koala-project-row,
+.koala-project-open,
 .koala-session-row,
 .koala-tree-more,
 .koala-project-empty {
@@ -416,15 +428,15 @@ input {
   text-align: left;
 }
 
-.koala-project-row:hover,
+.koala-project-open:hover,
 .koala-session-row:hover,
 .koala-project-empty:hover,
 .koala-tree-more:hover {
-  background: rgb(255 255 255 / 48%);
-  color: var(--primary-active);
+  background: var(--surface-soft);
+  color: var(--ink);
 }
 
-.koala-project-row:focus-visible,
+.koala-project-open:focus-visible,
 .koala-session-row:focus-visible,
 .koala-project-empty:focus-visible,
 .koala-tree-more:focus-visible {
@@ -442,37 +454,76 @@ input {
   min-width: 0;
 }
 
-.koala-project-row,
+.koala-project-open,
 .koala-session-row,
 .koala-tree-more {
   display: flex;
   width: 100%;
   align-items: center;
   gap: 8px;
-  border-radius: 8px;
+  border-radius: 6px;
   transition: color 150ms ease, background-color 150ms ease, transform 150ms ease;
 }
 
+/* 项目行 = 「打开项目」按钮 + 「⋯」菜单。hover / 选中态放在整行上，菜单按钮才会一起高亮。 */
 .koala-project-row {
+  display: flex;
   height: 32px;
-  padding: 0 9px;
+  align-items: center;
+  border-radius: 6px;
+  padding-right: 2px;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.koala-project-row:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.koala-project-open {
+  height: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 0 0 0 9px;
   font-size: 13px;
   font-weight: 620;
 }
 
+/* 底色由整行负责，按钮自身不叠一层。 */
+.koala-project-open:hover { background: transparent; }
+
 .koala-project-row.is-active,
 .koala-session-row.is-active {
-  background: rgb(var(--primary-rgb) / 12%);
+  background: rgb(var(--primary-rgb) / 8%);
   color: var(--primary-active);
   box-shadow: inset 2px 0 0 var(--primary);
 }
 
-.koala-project-row .anticon {
+.koala-project-open .anticon {
   flex: 0 0 auto;
   font-size: 15px;
 }
 
-.koala-project-row span:last-child,
+.koala-project-more {
+  width: 22px !important;
+  height: 22px !important;
+  flex: 0 0 auto;
+  color: var(--muted-soft) !important;
+  opacity: 0;
+  pointer-events: none;
+  transition: color 150ms ease, opacity 150ms ease;
+}
+
+.koala-project-row:hover .koala-project-more,
+.koala-project-row:focus-within .koala-project-more {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.koala-project-more:hover,
+.koala-project-more:focus-visible { color: var(--body-strong) !important; }
+
+.koala-project-open span:last-child,
 .koala-session-row span:last-child {
   min-width: 0;
   overflow: hidden;
@@ -492,7 +543,7 @@ input {
   bottom: 4px;
   left: 0;
   width: 1px;
-  background: linear-gradient(var(--hairline), transparent);
+  background: var(--hairline);
   content: '';
 }
 
@@ -550,7 +601,7 @@ input {
 .koala-project-empty {
   width: 100%;
   padding: 9px 10px;
-  border-radius: 7px;
+  border-radius: 6px;
   color: var(--muted-soft);
   font-size: 12px;
 }
@@ -570,7 +621,7 @@ input {
   margin-top: auto;
   margin-inline: 10px;
   padding: 10px 0 12px;
-  border-top: 1px solid rgb(91 78 63 / 12%);
+  border-top: 1px solid var(--hairline);
   color: var(--muted-soft);
   font-size: 11px;
 }
@@ -583,7 +634,7 @@ input {
   justify-content: flex-start;
   gap: 8px;
   padding: 0 9px;
-  border-radius: 9px;
+  border-radius: 6px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
@@ -593,7 +644,7 @@ input {
 .koala-agent-trigger.ant-btn:hover,
 .koala-agent-trigger.ant-btn:focus-visible,
 .koala-agent-trigger.ant-btn:active {
-  background: rgb(255 255 255 / 52%);
+  background: var(--canvas);
   color: var(--primary-active);
 }
 
@@ -621,24 +672,13 @@ input {
   opacity: 0.6;
 }
 
-.agent-switching-screen {
-  display: flex;
-  height: 100%;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 14px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
 .koala-content-wrap {
   height: 100%;
   min-width: 0;
   min-height: 0;
   box-sizing: border-box;
   overflow: hidden;
-  background: #fff;
+  background: var(--canvas);
   padding: 0;
 }
 
@@ -647,8 +687,8 @@ input {
   min-height: 0;
   overflow: auto;
   border: 1px solid var(--hairline);
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgb(var(--primary-rgb) / 6%);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 4%);
 }
 
 .koala-route-pane {
@@ -663,36 +703,37 @@ input {
 .page-frame {
   margin: 0 auto;
   max-width: 1480px;
+  padding: 24px 28px;
 }
 
 .page-header {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 36px;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .page-title {
   margin: 0 !important;
   color: var(--ink) !important;
-  font-size: 28px !important;
-  font-weight: 720 !important;
-  letter-spacing: 0 !important;
-  line-height: 1.15 !important;
+  font-size: 18px !important;
+  font-weight: 620 !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.3 !important;
 }
 
 .page-subtitle {
   display: block;
-  margin-top: 7px;
+  margin-top: 4px;
   color: var(--muted) !important;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .page-actions {
   display: flex;
   flex: 0 0 auto;
-  gap: 10px;
+  gap: 8px;
 }
 
 .project-grid .ant-col {
@@ -701,83 +742,95 @@ input {
 
 .project-card {
   width: 100%;
-  min-height: 212px;
+  min-height: 140px;
   overflow: hidden;
   border: 1px solid var(--hairline) !important;
-  border-radius: 10px !important;
+  border-radius: var(--radius-md) !important;
   box-shadow: none !important;
-  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
 .project-card:hover {
-  border-color: rgb(var(--primary-rgb) / 45%) !important;
-  box-shadow: 0 12px 24px rgb(var(--primary-rgb) / 12%) !important;
-  transform: translateY(-2px);
+  border-color: var(--muted) !important;
+  box-shadow: var(--shadow-sm) !important;
+  transform: translateY(-0.5px);
 }
 
 .project-card:active {
-  transform: translateY(-1px);
+  transform: translateY(0);
 }
 
 /* 拖动排序状态 */
 .project-card-dragging {
-  opacity: 0.45;
+  opacity: 0.4;
   border-style: dashed;
 }
 
 .project-card-dragging:hover,
 .project-card-dragging:active {
-  transform: translateY(-2px);
+  transform: none;
 }
 
 .project-card-drop-target {
-  border-color: rgb(var(--primary-rgb) / 60%) !important;
-  box-shadow: 0 0 0 2px rgb(var(--primary-rgb) / 18%) !important;
+  border-color: var(--primary) !important;
+  background: rgb(var(--primary-rgb) / 2%) !important;
 }
 
 .project-card .ant-card-body {
   display: flex;
   height: 100%;
   flex-direction: column;
-  padding: 20px !important;
+  padding: 14px !important;
 }
 
-.project-card-top {
+.project-card-skeleton {
+  display: flex;
+  width: 100%;
+  min-height: 140px;
+  flex-direction: column;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  background: var(--surface-card);
+}
+
+.project-card-head {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.project-card-identity {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .project-card-avatar {
-  border-radius: 9px !important;
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%);
-  font-weight: 700;
+  flex: 0 0 auto;
+  border-radius: var(--radius-md) !important;
+  font-size: 13px;
+  font-weight: 620;
 }
 
-.project-card-title {
+.project-card-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.project-card-name {
   display: block;
+  margin-bottom: 2px;
   color: var(--ink) !important;
-  font-size: 15px;
-  font-weight: 670;
+  font-size: 13px;
+  font-weight: 620;
+  line-height: 1.4;
 }
 
 .project-card-date,
 .project-card-path {
   color: var(--muted) !important;
-  font-size: 12px;
+  font-family: "Koala Mono", monospace;
+  font-size: 11px;
 }
 
 .project-card-date {
   display: block;
-  margin-top: 5px;
 }
 
 .project-card-more {
@@ -785,23 +838,36 @@ input {
 }
 
 .project-card-description {
-  margin: 20px 0 16px !important;
+  margin: 0 0 10px !important;
   color: var(--body) !important;
-  font-size: 13px;
-  line-height: 1.65 !important;
+  font-size: 12px;
+  line-height: 1.5 !important;
 }
 
-.project-card-meta {
-  margin-top: auto;
+.project-card-tags {
+  margin-bottom: 8px;
 }
 
 .project-tag {
+  height: 20px;
   margin-inline-end: 0 !important;
-  border: 1px solid var(--primary-disabled) !important;
-  border-radius: 5px !important;
-  color: var(--primary-active) !important;
+  padding-inline: 7px;
+  border: 1px solid var(--hairline) !important;
+  border-radius: 3px !important;
+  color: var(--muted) !important;
   background: var(--surface-soft) !important;
   font-size: 11px;
+  font-weight: 560;
+  line-height: 18px;
+}
+
+.project-card-path {
+  display: block;
+}
+
+.project-card-path .anticon {
+  margin-right: 5px;
+  font-size: 10px;
 }
 
 .empty-state {
@@ -812,12 +878,13 @@ input {
   border-color: var(--primary);
   background: var(--primary);
   box-shadow: none;
-  font-weight: 600;
+  font-weight: 620;
+  transition: background-color 140ms ease, border-color 140ms ease, transform 100ms ease;
 }
 
 .koala-content .ant-btn-primary:not(:disabled):hover {
-  border-color: var(--primary-active);
-  background: var(--primary-active);
+  border-color: var(--ink);
+  background: var(--ink);
 }
 
 .koala-content .ant-btn:active {
@@ -826,25 +893,25 @@ input {
 
 .claude-resources-page {
   min-height: 100%;
-  padding: 46px 52px 56px;
+  padding: 24px 28px 40px;
 }
 
 .resource-heading {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: 16px;
 }
 
 .resource-eyebrow {
   display: flex;
   align-items: center;
   gap: 7px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   color: var(--primary-active);
   font-family: "Koala Mono", monospace;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0;
 }
 
@@ -852,8 +919,8 @@ input {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  margin-top: 32px;
-  padding-bottom: 20px;
+  margin-top: 16px;
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--hairline-soft);
 }
 
@@ -864,7 +931,7 @@ input {
   min-height: 68px;
   padding: 12px 14px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 6px;
   color: var(--body);
   background: transparent;
   cursor: pointer;
@@ -892,14 +959,14 @@ input {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  border-radius: 7px;
+  border-radius: 6px;
 }
 
 .resource-counter-icon { width: 34px; height: 34px; font-size: 16px; }
 .resource-symbol { width: 38px; height: 38px; margin: 2px 1px 0 2px; font-size: 17px; }
-.skill { color: #2d7e73; background: #dff1eb; }
-.plugin { color: #a05c36; background: #f6e1d2; }
-.mcp { color: #6756a5; background: #e8e4f4; }
+.skill { color: var(--accent-teal-text); background: rgb(var(--accent-teal-rgb) / 14%); }
+.plugin { color: var(--accent-amber-text); background: rgb(var(--accent-amber-rgb) / 16%); }
+.mcp { color: var(--accent-violet-text); background: rgb(var(--accent-violet-rgb) / 14%); }
 
 .resource-toolbar {
   display: flex;
@@ -913,7 +980,7 @@ input {
 
 .resource-row {
   border: 1px solid var(--hairline) !important;
-  border-radius: 8px !important;
+  border-radius: 6px !important;
   box-shadow: none !important;
 }
 
@@ -939,18 +1006,19 @@ input {
 .koala-content .ant-select-selector {
   border-color: var(--hairline) !important;
   box-shadow: none !important;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
 .koala-content .ant-input:hover,
 .koala-content .ant-select-selector:hover {
-  border-color: rgb(var(--primary-rgb) / 45%) !important;
+  border-color: var(--body) !important;
 }
 
 .koala-content .ant-input:not(.ant-input-borderless):focus,
 .koala-content .ant-input-focused:not(.ant-input-borderless),
 .koala-content .ant-select-focused .ant-select-selector {
   border-color: var(--primary) !important;
-  box-shadow: 0 0 0 3px rgb(var(--primary-rgb) / 12%) !important;
+  box-shadow: 0 0 0 2px rgb(var(--primary-rgb) / 8%) !important;
 }
 
 .chat-shell {
@@ -968,29 +1036,59 @@ input {
   justify-content: space-between;
   gap: 8px;
   border-bottom: 1px solid var(--hairline);
-  padding: 4px clamp(24px, 4vw, 44px);
-  background: rgb(255 255 255 / 88%);
-  backdrop-filter: blur(18px);
+  padding: 12px clamp(20px, 4vw, 40px);
+  background: var(--surface-card);
+}
+
+/* 顶栏左组：状态圆点 + 项目标题 + 「新对话」。 */
+.chat-header-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
 }
 
 .chat-project-title {
   color: var(--ink) !important;
-  font-size: 15px !important;
-  font-weight: 720 !important;
-  letter-spacing: -0.015em;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
 }
 
-.chat-project-path {
-  display: block;
-  max-width: 680px;
-  overflow: hidden;
-  color: var(--muted) !important;
-  margin-top: 3px;
-  font-family: "Koala Mono", monospace;
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* 「新对话」现在是顶栏左侧的主操作，跟右侧图标按钮拉开一点距离。 */
+.chat-header-new.ant-btn {
+  height: 26px;
+  margin-left: 4px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  padding-inline: 8px;
 }
+
+.chat-header-new.ant-btn:hover,
+.chat-header-new.ant-btn:focus-visible {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.chat-header-new .anticon { font-size: 14px; }
+
+/* 顶栏右侧只留图标，文案走 Tooltip。 */
+.chat-header-icon-button.ant-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--muted);
+  padding: 0;
+}
+
+.chat-header-icon-button.ant-btn:hover,
+.chat-header-icon-button.ant-btn:focus-visible {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.chat-header-icon-button .anticon { font-size: 14px; }
 
 .koala-content:has(.chat-shell) {
   border: 0;
@@ -1001,7 +1099,7 @@ input {
 .chat-token-usage {
   display: block;
   color: var(--muted);
-  padding: 6px clamp(24px, 4vw, 44px) 8px;
+  padding: 6px clamp(20px, 4vw, 40px) 8px;
   font-family: "Koala Mono", monospace;
   font-size: 10px;
   cursor: default;
@@ -1035,7 +1133,7 @@ input {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  box-shadow: 0 0 0 3px rgb(var(--primary-rgb) / 10%);
+  box-shadow: 0 0 0 2px var(--surface-soft);
 }
 
 .chat-thread {
@@ -1067,33 +1165,44 @@ input {
 }
 
 .chat-thread .ant-bubble {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .chat-thread .ant-bubble-content {
-  font-size: 14px;
-  line-height: 1.75;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .chat-assistant-message {
-  max-width: min(780px, 84%) !important;
+  max-width: min(720px, 82%) !important;
 }
 
 .chat-assistant-message .ant-bubble-content {
-  padding: 6px 0 !important;
+  padding: 8px 0 !important;
   color: var(--body) !important;
 }
 
 .chat-user-message {
   position: relative;
-  margin: 8px 0 22px;
+  margin: 12px 0 24px;
 }
 
 .chat-user-message .ant-bubble-content {
-  padding: 12px 16px !important;
-  border-radius: 15px 15px 4px 15px !important;
-  box-shadow: 0 8px 18px rgb(27 42 88 / 16%);
-  line-height: 1.65;
+  padding: 10px 14px !important;
+  border-radius: 8px 8px 2px 8px !important;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
+  line-height: 1.6;
+  min-width: 0;
+}
+
+/* 用户消息常含无空格长串（绝对路径、会话 uuid）。x-markdown 只设了 break-word，
+   这不会缩小 min-content，气泡会被撑过 max-width。用 anywhere 让这类长串可断行。
+   选择器带上 .chat-user-message 是为了在层叠中压过 x-markdown 自身的 p/li/pre 规则。 */
+.chat-user-message .chat-markdown p,
+.chat-user-message .chat-markdown li,
+.chat-user-message .chat-markdown pre,
+.chat-user-message .chat-markdown code {
+  overflow-wrap: anywhere;
 }
 
 .chat-user-message > button {
@@ -1119,8 +1228,9 @@ input {
   width: min(680px, 82%);
   margin: 2px 0 12px;
   padding: 8px 11px 7px;
-  border-left: 2px solid rgb(var(--primary-rgb) / 30%);
-  background: linear-gradient(90deg, rgb(var(--primary-rgb) / 6%), transparent 82%);
+  border-left: 2px solid rgb(var(--primary-rgb) / 20%);
+  border-radius: 3px;
+  background: rgb(var(--primary-rgb) / 3%);
 }
 
 .chat-activity-message .ant-thought-chain-item-header {
@@ -1132,6 +1242,31 @@ input {
   padding-top: 5px;
   font-size: 12px;
   line-height: 1.65;
+}
+
+/* 收拢后的活动摘要：始终与思考 / 工具行同色，出错也不做红色强调。
+   分组头没有图标（icon: false），所以只给标题上色。 */
+.chat-activity-group .ant-thought-chain-item-header {
+  color: rgba(108, 106, 100, 0.95);
+}
+
+.chat-activity-group-meta {
+  color: var(--muted-soft);
+}
+
+/* 明细列表：去掉逐条的卡片底色和左边线，避免分组里再套一层同样的样式。 */
+.chat-activity-group-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-activity-group-list .chat-activity-message {
+  width: 100%;
+  margin: 0;
+  border-left: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .chat-markdown {
@@ -1164,7 +1299,7 @@ input {
 
 .chat-markdown blockquote {
   margin-left: 0;
-  border-inline-start: 2px solid rgb(var(--primary-rgb) / 42%);
+  border-inline-start: 2px solid rgb(var(--primary-rgb) / 30%);
   padding-inline-start: 13px;
   color: var(--muted);
 }
@@ -1172,15 +1307,15 @@ input {
 .chat-markdown pre {
   margin: 1em 0;
   border: 1px solid var(--hairline);
-  border-radius: 10px;
+  border-radius: 6px;
   background: var(--surface-soft);
-  box-shadow: inset 0 1px rgb(255 255 255 / 55%);
+  box-shadow: none;
   padding: 10px 12px;
 }
 
 .chat-markdown :not(pre) > code {
   border-radius: 4px;
-  background: rgb(var(--primary-rgb) / 9%);
+  background: rgb(var(--primary-rgb) / 7%);
   color: var(--primary-active);
   padding: 0.12em 0.32em;
   font-size: 0.9em;
@@ -1197,13 +1332,13 @@ input {
   font-family: "Koala Mono", "JetBrains Mono", monospace;
   font-size: 0.9em;
   color: var(--primary-active);
-  background: rgb(var(--primary-rgb) / 9%);
+  background: rgb(var(--primary-rgb) / 7%);
   cursor: pointer;
 }
 
 .chat-file-ref:hover {
-  border-color: rgb(var(--primary-rgb) / 35%);
-  background: rgb(var(--primary-rgb) / 14%);
+  border-color: rgb(var(--primary-rgb) / 25%);
+  background: rgb(var(--primary-rgb) / 10%);
 }
 
 .file-open-with-app-icon {
@@ -1274,15 +1409,32 @@ input {
 }
 
 .chat-markdown-inverse a {
-  color: #ffd9c9;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* 反色气泡内的代码。x-markdown 在根节点上取 --text-color（此处为 --on-primary），
+   而 pre / 行内 code 的底色与文字色仍沿用为浅色正文设计的取值，
+   结果是 pre 白底白字、行内 code 深底深字，两者都不可读。这里一并反色。 */
+/* 类名重复一次以抬高特异度：暗色模式的 `.chat-markdown pre`（本文件更靠后）与它同特异度，
+   会把它压回 --canvas 底色，而文字仍是 --on-primary，结果同样不可读。 */
+.chat-markdown-inverse.chat-markdown pre {
+  border-color: rgb(255 255 255 / 22%);
+  background: rgb(255 255 255 / 12%);
+}
+
+.chat-markdown-inverse :not(pre) > code {
+  color: var(--on-primary);
+  background: rgb(255 255 255 / 18%);
 }
 
 .chat-composer-wrap {
   position: relative;
   width: min(980px, 100%);
   margin: 0 auto;
-  padding: 8px clamp(24px, 5vw, 52px) 24px;
-  background: linear-gradient(180deg, transparent, rgb(255 255 255 / 96%) 22%);
+  padding: 12px clamp(20px, 5vw, 40px) 20px;
+  background: transparent;
 }
 
 .chat-file-input {
@@ -1295,68 +1447,60 @@ input {
   inset: 0 20px 18px;
   display: grid;
   place-items: center;
-  border: 1px dashed var(--primary);
-  border-radius: 10px;
-  background: rgb(var(--primary-rgb) / 8%);
-  backdrop-filter: blur(6px);
+  border: 2px dashed var(--primary);
+  border-radius: 6px;
+  background: var(--surface-soft);
   color: var(--primary);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 500;
   pointer-events: none;
 }
 
 .chat-composer-wrap .ant-sender {
   border: 1px solid var(--hairline);
-  border-top: 0;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--canvas) 92%, var(--surface-soft));
-  box-shadow: 0 16px 34px rgb(32 44 70 / 11%), inset 0 1px rgb(255 255 255 / 86%);
-  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  border-radius: 6px;
+  background: var(--surface-card);
+  box-shadow: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
 .chat-composer-wrap .ant-sender:focus-within {
-  border-color: rgb(var(--primary-rgb) / 48%);
-  border-top-width: 1px;
-  border-top-style: solid;
-  box-shadow: 0 18px 38px rgb(var(--primary-rgb) / 14%), 0 0 0 4px rgb(var(--primary-rgb) / 7%), inset 0 1px rgb(255 255 255 / 72%);
-  transform: translateY(-1px);
+  border-color: var(--body);
+  box-shadow: 0 0 0 1px var(--body);
 }
 
 /* 权限触发器获得焦点时，不要把整个输入框伪装成输入态。 */
 .chat-composer-wrap .ant-sender:has(.ant-sender-input:focus) {
   border-color: var(--primary);
-  border-top-width: 1px;
-  border-top-style: solid;
-  box-shadow: 0 0 0 3px rgb(var(--primary-rgb) / 10%), 0 12px 28px rgb(var(--primary-rgb) / 8%);
+  box-shadow: 0 0 0 1px var(--primary);
 }
 
 .chat-composer-footer {
   width: 100%;
   justify-content: flex-start;
-  color: var(--muted-soft);
+  color: var(--muted);
 }
 
 .chat-queue-list {
   display: grid;
   gap: 6px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .chat-queue-item {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  min-height: 44px;
-  padding: 5px 7px 5px 13px;
+  min-height: 40px;
+  padding: 8px 8px 8px 12px;
   border: 1px solid var(--hairline);
-  border-radius: 10px;
-  background: var(--canvas);
-  box-shadow: 0 5px 16px rgb(var(--primary-rgb) / 4%);
+  border-radius: 6px;
+  background: var(--surface-card);
 }
 
 .chat-queue-item-icon {
-  margin-right: 11px;
-  color: var(--muted-soft);
+  margin-right: 10px;
+  color: var(--muted);
   font-size: 14px;
 }
 
@@ -1364,15 +1508,15 @@ input {
   overflow: hidden;
   color: var(--ink);
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .chat-queue-steer.ant-btn,
 .chat-queue-remove.ant-btn {
-  height: 32px;
-  border-radius: 7px;
+  height: 28px;
+  border-radius: 4px;
   color: var(--muted);
 }
 
@@ -1399,7 +1543,8 @@ input {
   transform: translateY(1px);
 }
 
-/* 当前 turn 执行时间摘要：位于用户气泡下方、agent 回复上方。 */
+/* 已完成 turn 的执行时间：位于该轮用户气泡下方、agent 回复上方。
+   进行中那一轮的实时用时在输入区，不在这里重复。 */
 .chat-turn-summary {
   display: inline-flex;
   align-items: center;
@@ -1428,23 +1573,33 @@ input {
   line-height: 1;
 }
 
-/* 忙碌时输入框右侧的「排队 + 停止」动作。 */
+/* 忙碌时输入框右侧的「用时 + 排队 + 停止」动作。 */
 .chat-busy-actions {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
+/* 运行中那一轮的实时用时，紧挨「停止」左侧，与它同一行对齐。 */
+.chat-busy-elapsed {
+  color: var(--muted);
+  font-family: "Koala Mono", monospace;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .chat-busy-send.ant-btn,
 .chat-busy-stop.ant-btn {
   height: 30px;
-  border-radius: 7px;
+  border-radius: 6px;
   font-size: 12px;
   padding-inline: 10px;
 }
 
 .chat-busy-send.ant-btn {
-  box-shadow: 0 4px 12px rgb(var(--primary-rgb) / 25%);
+  box-shadow: 0 1px 3px rgb(var(--primary-rgb) / 15%);
 }
 
 .chat-busy-stop.ant-btn {
@@ -1453,13 +1608,13 @@ input {
 
 .chat-busy-stop.ant-btn:hover,
 .chat-busy-stop.ant-btn:focus-visible {
-  background: rgb(198 69 69 / 10%);
+  background: rgb(var(--error-rgb) / 10%);
   color: var(--error);
 }
 
 .chat-attachment-trigger.ant-btn {
   height: 30px;
-  border-radius: 7px;
+  border-radius: 6px;
   color: var(--muted);
   font-size: 12px;
   padding-inline: 9px;
@@ -1471,12 +1626,442 @@ input {
   color: var(--ink);
 }
 
+/* 输入区底部的 Git 分支入口与弹层。 */
+.chat-git-trigger.ant-btn {
+  display: inline-flex;
+  max-width: 200px;
+  height: 30px;
+  align-items: center;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  padding-inline: 9px;
+}
+
+.chat-git-trigger.ant-btn:hover,
+.chat-git-trigger.ant-btn:focus-visible {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.chat-git-trigger .anticon {
+  font-size: 13px;
+}
+
+.chat-git-trigger-name {
+  overflow: hidden;
+  font-family: "Koala Mono", monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-branch-panel {
+  width: 288px;
+}
+
+.git-branch-search.ant-input-affix-wrapper {
+  margin-bottom: 8px;
+}
+
+.git-branch-section {
+  padding: 2px 4px 6px;
+  color: var(--muted-soft);
+  font-size: 11px;
+}
+
+.git-branch-list {
+  display: grid;
+  max-height: 264px;
+  gap: 2px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-disabled) transparent;
+}
+
+.git-branch-item {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 18px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 8px;
+  background: transparent;
+  color: var(--body);
+  cursor: pointer;
+  text-align: left;
+}
+
+.git-branch-item:hover,
+.git-branch-item:focus-visible {
+  outline: 0;
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.git-branch-item:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.git-branch-item.is-current {
+  color: var(--ink);
+}
+
+.git-branch-item-icon {
+  color: var(--muted-soft);
+  font-size: 14px;
+}
+
+.git-branch-item-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.git-branch-item-name {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-branch-item.is-current .git-branch-item-name {
+  font-weight: 600;
+}
+
+.git-branch-item-meta {
+  color: var(--muted-soft);
+  font-size: 11px;
+}
+
+.git-branch-item-check {
+  color: var(--primary);
+  font-size: 13px;
+}
+
+.git-branch-empty,
+.git-branch-loading {
+  padding: 14px 8px;
+  color: var(--muted-soft);
+  font-size: 12px;
+  text-align: center;
+}
+
+.git-branch-divider.ant-divider {
+  margin: 6px 0;
+}
+
+.git-branch-create {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px;
+  background: transparent;
+  color: var(--body);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.git-branch-create:hover,
+.git-branch-create:focus-visible {
+  outline: 0;
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.git-branch-create:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.git-branch-create-row {
+  display: flex;
+  gap: 6px;
+}
+
+/* 会话顶栏左上角的 Git 环境信息入口与弹层。 */
+.chat-git-status-trigger.ant-btn {
+  display: inline-flex;
+  height: 26px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  padding-inline: 6px;
+}
+
+.chat-git-status-trigger.ant-btn:hover,
+.chat-git-status-trigger.ant-btn:focus-visible {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.chat-git-status-trigger .anticon {
+  font-size: 14px;
+}
+
+.git-diff-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: "Koala Mono", monospace;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.git-diff-add {
+  color: var(--success-text);
+}
+
+.git-diff-del {
+  color: var(--error-text);
+}
+
+.git-status-panel {
+  display: flex;
+  width: 272px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.git-status-heading {
+  padding: 2px 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.git-status-row {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.git-status-icon {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.git-status-label {
+  color: var(--body-strong);
+}
+
+.git-status-row .git-diff-count,
+.git-status-branch,
+.git-status-empty {
+  margin-inline-start: auto;
+}
+
+.git-status-empty {
+  color: var(--muted-soft);
+}
+
+.git-status-branch {
+  overflow: hidden;
+  max-width: 150px;
+  color: var(--muted);
+  font-family: "Koala Mono", monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-status-sub {
+  padding-inline-start: 22px;
+  color: var(--muted-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.git-status-divider.ant-divider {
+  margin: 8px 0;
+}
+
+/* 面板里的「提交或推送」入口，点击打开提交弹窗。 */
+.git-status-entry {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 6px;
+  background: transparent;
+  color: var(--body-strong);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.git-status-entry:hover,
+.git-status-entry:focus-visible {
+  outline: 0;
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.git-status-entry-label {
+  flex: 1;
+}
+
+.git-status-entry-arrow {
+  color: var(--muted-soft);
+  font-size: 10px;
+}
+
+/* 提交弹窗：说明输入 + 选项 + 提交/推送操作行。 */
+.git-commit-dialog .ant-modal-content {
+  border-radius: 16px;
+  padding: 20px 20px 16px;
+}
+
+.git-commit-branch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.git-commit-branch-icon {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* 让下拉贴合分支名，箭头紧跟其后，而不是被固定宽度推开。 */
+.git-commit-branch-select.ant-select {
+  min-width: 0;
+  width: auto;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.git-commit-branch-select .ant-select-selector {
+  padding-inline: 0;
+}
+
+.git-commit-branch-select .ant-select-selection-item {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.git-commit-message.ant-input {
+  padding: 8px 0 0;
+  border: 0;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.7;
+  resize: none;
+}
+
+/* 弹窗打开时会自动聚焦到这里，antd 的 borderless 焦点描边像一圈边框；
+   文本框本身有光标提示焦点，去掉描边以贴合设计稿的干净观感。 */
+.git-commit-message.ant-input,
+.git-commit-message.ant-input:focus,
+.git-commit-message.ant-input-focused {
+  outline: none;
+  box-shadow: none;
+}
+
+.git-commit-message.ant-input::placeholder {
+  color: var(--muted-soft);
+}
+
+.git-commit-divider.ant-divider {
+  margin: 12px 0;
+}
+
+.git-commit-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 2px 8px;
+}
+
+.git-commit-option .ant-checkbox-wrapper {
+  color: var(--body-strong);
+  font-size: 13px;
+}
+
+.git-commit-action {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--body-strong);
+  cursor: pointer;
+  font-size: 14px;
+  text-align: left;
+}
+
+.git-commit-action .anticon {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.git-commit-action:hover:not(:disabled),
+.git-commit-action:focus-visible:not(:disabled) {
+  outline: 0;
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.git-commit-action.is-primary:not(:disabled) {
+  background: var(--surface-soft);
+  font-weight: 600;
+}
+
+.git-commit-action:disabled {
+  color: var(--muted-soft);
+  cursor: default;
+}
+
+.git-commit-action-label {
+  flex: 1;
+}
+
+.git-commit-action-hint {
+  color: var(--muted-soft);
+  font-family: "Koala Mono", monospace;
+  font-size: 11px;
+}
+
+.git-commit-loading {
+  padding: 8px 0;
+  color: var(--muted-soft);
+  text-align: center;
+}
+
+.git-commit-hint {
+  padding-top: 8px;
+  color: var(--muted-soft);
+  font-size: 11px;
+  text-align: center;
+}
+
 .chat-attachment-send.ant-btn {
   display: grid;
   width: 32px;
   height: 32px;
   place-items: center;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--primary);
   color: var(--on-primary);
 }
@@ -1509,7 +2094,7 @@ input {
   display: block;
   width: 100%;
   max-height: 260px;
-  border-radius: 8px;
+  border-radius: 6px;
   object-fit: cover;
 }
 
@@ -1526,7 +2111,7 @@ input {
   align-items: center;
   gap: 7px;
   border: 1px solid var(--hairline);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--surface-soft);
   color: var(--ink);
   cursor: pointer;
@@ -1576,7 +2161,7 @@ input {
   align-items: center;
   gap: 7px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--surface-soft);
   box-shadow: none !important;
   color: var(--ink);
@@ -1620,7 +2205,7 @@ input {
   gap: 12px;
   align-items: center;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   cursor: pointer;
   padding: 10px 9px;
@@ -1676,7 +2261,7 @@ input {
   align-items: center;
   gap: 5px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--surface-soft);
   box-shadow: none !important;
   color: var(--muted);
@@ -1721,7 +2306,7 @@ input {
   gap: 8px;
   align-items: center;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   cursor: pointer;
   padding: 8px 9px;
@@ -1747,11 +2332,6 @@ input {
 .chat-effort-option-check {
   color: var(--primary);
   font-size: 14px;
-}
-
-.chat-permission-label {
-  color: inherit;
-  font-size: 11px;
 }
 
 .chat-permission-trigger.ant-btn {
@@ -1794,7 +2374,7 @@ input {
 .chat-permission-option {
   width: 100%;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -1851,21 +2431,17 @@ input {
   color: var(--primary);
 }
 
-.chat-composer-attribution {
-  color: var(--muted-soft);
-}
-
 /* 自动化：规则列表与运行详情共处的操作台。 */
 .automations-page {
   min-height: 100%;
-  padding: 36px 42px 40px;
+  padding: 24px 28px 32px;
 }
 
 .automation-header {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: 16px;
 }
 
 .automation-kicker {
@@ -1875,22 +2451,22 @@ input {
   color: var(--primary-active);
   font-family: "Koala Mono", monospace;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .automation-header h1 {
-  margin: 7px 0 0;
+  margin: 4px 0 0;
   color: var(--ink);
-  font-size: 25px;
-  font-weight: 730;
-  letter-spacing: 0;
-  line-height: 1.22;
+  font-size: 18px;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
 }
 
 .automation-header p {
-  margin: 7px 0 0;
+  margin: 4px 0 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .automation-health {
@@ -1898,9 +2474,9 @@ input {
   grid-template-columns: repeat(3, minmax(132px, 1fr)) minmax(220px, 1.35fr);
   align-items: stretch;
   gap: 0;
-  margin: 28px 0 20px;
+  margin: 16px 0 14px;
   border: 1px solid var(--hairline);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--surface-soft);
 }
 
@@ -1924,13 +2500,13 @@ input {
 .automation-health-icon {
   width: 31px;
   height: 31px;
-  border-radius: 7px;
+  border-radius: 6px;
   font-size: 15px;
 }
 
 .automation-health-icon.is-active { color: var(--primary-active); background: rgb(var(--primary-rgb) / 12%); }
-.automation-health-icon.is-success { color: #337e48; background: #dff0df; }
-.automation-health-icon.is-alert { color: #ad3737; background: #f7e2e1; }
+.automation-health-icon.is-success { color: var(--success-text); background: rgb(var(--success-rgb) / 14%); }
+.automation-health-icon.is-alert { color: var(--error-text); background: rgb(var(--error-rgb) / 12%); }
 .automation-health-icon.is-neutral { color: var(--muted); background: var(--surface-card); }
 
 .automation-health-item div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
@@ -1951,7 +2527,7 @@ input {
   height: 7px;
   border-radius: 50%;
   background: var(--success);
-  box-shadow: 0 0 0 3px rgb(93 184 114 / 14%);
+  box-shadow: 0 0 0 3px rgb(var(--success-rgb) / 14%);
 }
 
 .automation-workspace {
@@ -1960,7 +2536,7 @@ input {
   grid-template-columns: minmax(0, 1.38fr) minmax(300px, 0.82fr);
   overflow: hidden;
   border: 1px solid var(--hairline);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--canvas);
 }
 
@@ -2012,8 +2588,8 @@ input {
 .automation-row.is-selected { background: rgb(var(--primary-rgb) / 8%); box-shadow: inset 3px 0 0 var(--primary); }
 
 .automation-row-name { display: flex; min-width: 0; align-items: center; gap: 10px; }
-.automation-row-icon { width: 32px; height: 32px; border-radius: 7px; color: #417d75; background: #dff0eb; font-size: 15px; }
-.automation-row-icon.is-problem { color: #aa3838; background: #f5e1e0; }
+.automation-row-icon { width: 32px; height: 32px; border-radius: 6px; color: var(--accent-teal-text); background: rgb(var(--accent-teal-rgb) / 14%); font-size: 15px; }
+.automation-row-icon.is-problem { color: var(--error-text); background: rgb(var(--error-rgb) / 12%); }
 .automation-row-name div, .automation-trigger, .automation-last-run { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
 .automation-row-name strong { overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 670; text-overflow: ellipsis; white-space: nowrap; }
 .automation-row-name span:not(.automation-row-icon), .automation-trigger small, .automation-last-run small { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
@@ -2032,7 +2608,7 @@ input {
 
 .automation-detail-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 20px 20px 0; }
 .automation-detail-title { display: flex; min-width: 0; align-items: flex-start; gap: 10px; }
-.automation-detail-icon { width: 31px; height: 31px; border-radius: 7px; color: var(--primary-active); background: rgb(var(--primary-rgb) / 12%); font-size: 15px; }
+.automation-detail-icon { width: 31px; height: 31px; border-radius: 6px; color: var(--primary-active); background: rgb(var(--primary-rgb) / 12%); font-size: 15px; }
 .automation-detail-title h2 { margin: 0; color: var(--ink); font-size: 17px; font-weight: 710; line-height: 1.35; }
 .automation-detail-title p { display: -webkit-box; margin: 4px 0 0; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .automation-detail-top > .ant-btn { color: var(--muted); }
@@ -2048,12 +2624,12 @@ input {
 .automation-detail-tabs .ant-segmented-item-label { padding: 8px 4px 9px; font-size: 12px; }
 
 .automation-workflow { padding: 20px; }
-.workflow-node { display: flex; align-items: center; gap: 11px; padding: 12px; border: 1px solid var(--hairline); border-radius: 7px; background: var(--canvas); }
+.workflow-node { display: flex; align-items: center; gap: 11px; padding: 12px; border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas); }
 .workflow-node.trigger { border-color: rgb(var(--primary-rgb) / 38%); }
-.workflow-node.action { border-color: #c5dfd4; }
+.workflow-node.action { border-color: rgb(var(--accent-teal-rgb) / 30%); }
 .workflow-icon { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 6px; color: var(--primary-active); background: rgb(var(--primary-rgb) / 11%); font-size: 14px; }
-.workflow-node.condition .workflow-icon { color: #91712c; background: #f6ecd5; }
-.workflow-node.action .workflow-icon { color: #397d70; background: #dff0eb; }
+.workflow-node.condition .workflow-icon { color: var(--warning-text); background: rgb(var(--warning-rgb) / 16%); }
+.workflow-node.action .workflow-icon { color: var(--accent-teal-text); background: rgb(var(--accent-teal-rgb) / 14%); }
 .workflow-node div { display: flex; min-width: 0; flex: 1; flex-direction: column; }
 .workflow-node small { color: var(--muted-soft); font-size: 10px; }
 .workflow-node strong { margin-top: 1px; color: var(--ink); font-size: 13px; font-weight: 660; }
@@ -2098,7 +2674,7 @@ input {
 
 .automation-result-meta { display: flex; align-items: center; gap: 14px; padding: 1px 0 14px; border-bottom: 1px solid var(--hairline); color: var(--muted); font-family: "Koala Mono", monospace; font-size: 11px; }
 .automation-result-meta .ant-badge-status-text { color: var(--body-strong); font-family: inherit; font-size: 11px; }
-.automation-result-content { max-height: min(62vh, 660px); min-height: 240px; margin-top: 16px; overflow: auto; border: 1px solid var(--hairline); border-radius: 7px; background: var(--canvas); }
+.automation-result-content { max-height: min(62vh, 660px); min-height: 240px; margin-top: 16px; overflow: auto; border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas); }
 .automation-result-content.is-text { padding: 20px; background: var(--surface-soft); }
 .automation-result-content pre { margin: 0; color: var(--body-strong); font-family: "Koala Mono", monospace; font-size: 12px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
 .automation-result-content.is-markdown { padding: 22px 24px; }
@@ -2145,123 +2721,14 @@ input {
   .automation-detail { border-top: 1px solid var(--hairline); border-left: 0; }
 }
 
-/* 工作台：日程、待办与工作状态。 */
-.workbench-page {
-  min-height: 100%;
-  padding: 34px 42px 42px;
-}
-
+/* 工作台看板的共有控件（新建类型、待办勾选、重点标记）。 */
 .workbench-kicker {
   display: block;
-  color: var(--primary);
-  font-family: "Koala Mono", "JetBrains Mono", monospace;
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1.3;
-}
-
-.schedule-panel {
-  display: grid;
-  grid-template-columns: 126px minmax(0, 1fr);
-  min-height: 224px;
-  border-bottom: 1px solid var(--hairline);
-  padding-bottom: 30px;
-}
-
-.schedule-date {
-  display: flex;
-  flex-direction: column;
-  padding: 3px 27px 0 0;
-  border-right: 1px solid var(--hairline);
-}
-
-.schedule-date span,
-.schedule-date small,
-.schedule-count {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.schedule-date strong {
-  margin: 4px 0;
-  color: var(--ink);
-  font-family: "Koala Mono", "JetBrains Mono", monospace;
-  font-size: 52px;
-  font-weight: 560;
-  line-height: 1;
-}
-
-.schedule-content {
-  min-width: 0;
-  padding-left: 30px;
-}
-
-.workbench-section-heading,
-.todos-heading-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.workbench-section-heading h1,
-.status-panel h2 {
-  margin: 5px 0 0;
-  color: var(--ink);
-  font-size: 22px;
-  font-weight: 720;
-  letter-spacing: 0;
-  line-height: 1.2;
-}
-
-.schedule-count {
-  padding-top: 19px;
-  font-family: "Koala Mono", "JetBrains Mono", monospace;
-}
-
-.schedule-track {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  min-height: 66px;
-  margin-top: 18px;
-}
-
-.schedule-empty {
-  align-self: center;
-  margin: 0;
-  color: var(--muted-soft);
-  font-size: 13px;
-}
-
-.schedule-item {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: auto minmax(0, 1fr) 22px;
-  align-items: center;
-  gap: 10px;
-  border-left: 2px solid var(--primary);
-  padding: 9px 6px 9px 11px;
-  background: var(--surface-soft);
-}
-
-.schedule-item time {
   color: var(--primary-active);
   font-family: "Koala Mono", "JetBrains Mono", monospace;
-  font-size: 12px;
-}
-
-.schedule-item > span,
-.todo-item-label,
-.status-focus li {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.schedule-item > span {
-  color: var(--body-strong);
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .workspace-icon-button,
@@ -2278,7 +2745,7 @@ input {
 .workspace-icon-button {
   width: 28px;
   height: 28px;
-  border-radius: 5px;
+  border-radius: 4px;
   font-size: 13px;
 }
 
@@ -2288,110 +2755,6 @@ input {
 .workspace-icon-button:active,
 .todo-check:active,
 .todo-important:active { transform: translateY(1px); }
-
-.schedule-delete { visibility: hidden; }
-.schedule-item:hover .schedule-delete,
-.schedule-delete:focus-visible { visibility: visible; }
-
-.schedule-add,
-.todo-add {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 28px;
-  gap: 8px;
-  margin-top: 16px;
-}
-
-.schedule-add input,
-.todo-add input {
-  min-width: 0;
-  height: 31px;
-  border: 0;
-  border-bottom: 1px solid var(--hairline);
-  outline: 0;
-  background: transparent;
-  color: var(--ink);
-  font-size: 13px;
-}
-
-.schedule-add input::placeholder,
-.todo-add input::placeholder { color: var(--muted-soft); }
-.schedule-add input:focus,
-.todo-add input:focus { border-color: var(--primary); }
-
-.schedule-time-input {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border-bottom: 1px solid var(--hairline);
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.schedule-time-input input {
-  width: 59px;
-  border: 0;
-  font-family: "Koala Mono", "JetBrains Mono", monospace;
-  font-size: 12px;
-}
-
-.workspace-add {
-  background: var(--surface-card);
-  color: var(--primary-active);
-}
-
-.workspace-add:hover:not(:disabled) {
-  background: var(--primary);
-  color: var(--on-primary);
-}
-
-.workspace-add:disabled { cursor: default; opacity: 0.45; }
-
-.workspace-bottom-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(250px, 0.85fr);
-  gap: 44px;
-  padding-top: 26px;
-}
-
-.todos-heading-row { align-items: end; }
-
-.todo-filters {
-  display: flex;
-  gap: 4px;
-}
-
-.todo-filters button {
-  border: 0;
-  border-radius: 5px;
-  padding: 5px 8px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.todo-filters button:hover { color: var(--ink); }
-.todo-filters .todo-filter-active { background: var(--surface-card); color: var(--primary-active); }
-
-.todo-add {
-  grid-template-columns: minmax(0, 1fr) 28px;
-  margin-top: 21px;
-}
-
-.todo-list {
-  margin: 15px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.todo-item {
-  display: grid;
-  min-height: 47px;
-  grid-template-columns: 21px minmax(0, 1fr) 26px 28px;
-  align-items: center;
-  gap: 9px;
-  border-bottom: 1px solid var(--hairline-soft);
-}
 
 .todo-check {
   width: 17px;
@@ -2403,10 +2766,6 @@ input {
 }
 
 .todo-check:hover { border-color: var(--primary); }
-.todo-item-done .todo-check { border-color: var(--primary); background: var(--primary); }
-
-.todo-item-label { color: var(--body-strong); font-size: 14px; }
-.todo-item-done .todo-item-label { color: var(--muted-soft); text-decoration: line-through; text-decoration-color: var(--primary); }
 
 .todo-important {
   width: 26px;
@@ -2415,290 +2774,10 @@ input {
 }
 
 .todo-important-active { color: var(--primary) !important; }
-.todo-delete { visibility: hidden; }
-.todo-item:hover .todo-delete,
-.todo-delete:focus-visible { visibility: visible; }
 
-.todo-empty {
-  display: flex;
-  min-height: 128px;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  color: var(--muted-soft);
-  font-size: 13px;
-}
-
-.status-panel {
-  min-height: 260px;
-  border-left: 1px solid var(--hairline);
-  padding-left: 30px;
-}
-
-.status-panel h2 { font-size: 18px; }
-
-.status-overview {
-  display: flex;
-  align-items: baseline;
-  margin-top: 31px;
-}
-
-.status-overview strong {
-  color: var(--ink);
-  font-family: "Koala Mono", "JetBrains Mono", monospace;
-  font-size: 38px;
-  font-weight: 560;
-  line-height: 1;
-}
-
-.status-overview span,
-.status-overview b {
-  margin-left: 7px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 400;
-}
-
-.status-overview b { margin-left: 3px; font-family: "Koala Mono", "JetBrains Mono", monospace; }
-
-.status-lines {
-  display: grid;
-  gap: 7px;
-  margin-top: 23px;
-  padding: 12px 0;
-  border-top: 1px solid var(--hairline-soft);
-  border-bottom: 1px solid var(--hairline-soft);
-}
-
-.status-lines div { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
-.status-lines b { color: var(--body-strong); font-family: "Koala Mono", "JetBrains Mono", monospace; font-weight: 560; }
-
-.status-focus { margin-top: 21px; }
-.status-focus > span { color: var(--muted); font-size: 11px; }
-.status-focus p { margin: 8px 0 0; color: var(--muted-soft); font-size: 12px; line-height: 1.5; }
-.status-focus ul { display: grid; gap: 6px; margin: 9px 0 0; padding: 0; list-style: none; }
-.status-focus li { color: var(--body-strong); font-size: 12px; }
-
-@media (max-width: 1180px) {
-  .workbench-page { padding-inline: 32px; }
-  .schedule-track { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .workspace-bottom-grid { gap: 30px; }
-}
-
-/* 紧凑月历：日程只占工作台顶部，待办保持主要视觉面积。 */
-.calendar-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(310px, 0.85fr);
-  min-height: 178px;
-  border-bottom: 1px solid var(--hairline);
-  padding-bottom: 19px;
-}
-
-.calendar-frame {
-  min-width: 0;
-  border-right: 1px solid var(--hairline);
-  padding-right: 30px;
-}
-
-.calendar-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.calendar-heading h1 {
-  margin: 5px 0 0;
-  color: var(--ink);
-  font-size: 22px;
-  font-weight: 720;
-  line-height: 1.2;
-}
-
-.calendar-nav {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--body-strong);
-  font-family: "Koala Mono", "JetBrains Mono", monospace;
-  font-size: 12px;
-}
-
-.calendar-weekdays,
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-}
-
-.calendar-weekdays {
-  margin-top: 10px;
-  color: var(--muted-soft);
-  font-size: 10px;
-  text-align: center;
-}
-
-.calendar-grid { gap: 2px; margin-top: 4px; }
-
-.calendar-day {
-  position: relative;
-  height: 17px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--body);
-  cursor: pointer;
-  font-family: "Koala Mono", "JetBrains Mono", monospace;
-  font-size: 11px;
-}
-
-.calendar-day:hover { background: var(--surface-soft); }
-.calendar-day-outside { color: var(--muted-soft); opacity: 0.45; }
-.calendar-day-today { color: var(--primary-active); font-weight: 700; }
-.calendar-day-selected { background: var(--primary) !important; color: var(--on-primary) !important; }
-
-.calendar-day-scheduled::after {
-  position: absolute;
-  bottom: 1px;
-  left: 50%;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--primary);
-  content: "";
-  transform: translateX(-50%);
-}
-
-.calendar-day-selected::after { background: var(--on-primary); }
-
-.calendar-agenda {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  padding-left: 30px;
-}
-
-.agenda-heading {
-  display: flex;
-  justify-content: space-between;
-  color: var(--body-strong);
-  font-size: 13px;
-  font-weight: 620;
-}
-
-.agenda-heading b {
-  color: var(--muted);
-  font-family: "Koala Mono", "JetBrains Mono", monospace;
-  font-size: 11px;
-  font-weight: 500;
-}
-
-.agenda-list {
-  min-height: 67px;
-  margin-top: 8px;
-}
-
-.agenda-list > p {
-  margin: 15px 0 0;
-  color: var(--muted-soft);
-  font-size: 12px;
-}
-
-.agenda-item {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: 39px minmax(0, 1fr) 26px;
-  align-items: center;
-  gap: 8px;
-  min-height: 26px;
-}
-
-.agenda-item time {
-  color: var(--primary-active);
-  font-family: "Koala Mono", "JetBrains Mono", monospace;
-  font-size: 11px;
-}
-
-.agenda-item > span {
-  overflow: hidden;
-  color: var(--body-strong);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agenda-delete { visibility: hidden; }
-.agenda-item:hover .agenda-delete,
-.agenda-delete:focus-visible { visibility: visible; }
-
-.agenda-add {
-  display: grid;
-  grid-template-columns: 58px minmax(0, 1fr) 28px;
-  gap: 7px;
-  margin-top: auto;
-}
-
-.agenda-add input {
-  min-width: 0;
-  height: 29px;
-  border: 0;
-  border-bottom: 1px solid var(--hairline);
-  outline: 0;
-  background: transparent;
-  color: var(--ink);
-  font-size: 12px;
-}
-
-.agenda-add input::placeholder { color: var(--muted-soft); }
-.agenda-add input:focus { border-color: var(--primary); }
-.agenda-add input[type="time"] { font-family: "Koala Mono", "JetBrains Mono", monospace; font-size: 11px; }
-
-.todo-add {
-  grid-template-columns: minmax(0, 1fr) 178px 28px;
-}
-
-.todo-add select {
-  min-width: 0;
-  height: 31px;
-  border: 0;
-  border-bottom: 1px solid var(--hairline);
-  outline: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.todo-add select:focus { border-color: var(--primary); color: var(--ink); }
-.todo-add select:disabled { color: var(--muted-soft); cursor: not-allowed; }
-
-.todo-session-trigger {
-  display: inline-flex;
-  min-width: 0;
-  height: 31px;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  border-bottom: 1px solid var(--hairline);
-  padding: 0;
-  overflow: hidden;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 12px;
-  text-align: left;
-}
-
-.todo-session-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.todo-session-trigger:hover,
-.todo-session-trigger-linked { border-color: var(--primary); color: var(--primary-active); }
-
-.todo-association-dialog { display: grid; gap: 20px; padding-top: 4px; }
-.todo-association-dialog label { display: grid; gap: 7px; color: var(--body-strong); font-size: 13px; font-weight: 600; }
-.todo-association-dialog select { width: 100%; height: 36px; border: 1px solid var(--hairline); border-radius: 5px; padding: 0 9px; background: var(--surface-card); color: var(--body-strong); font-size: 13px; }
-.todo-association-dialog select:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
-.todo-association-dialog select:disabled { color: var(--muted-soft); cursor: not-allowed; }
 .todo-association-actions { display: flex; align-items: center; justify-content: space-between; padding-top: 5px; }
 .todo-association-actions > div { display: flex; gap: 8px; }
-.todo-association-actions button { height: 32px; border-radius: 5px; padding: 0 12px; cursor: pointer; font-size: 12px; }
+.todo-association-actions button { height: 32px; border-radius: 4px; padding: 0 12px; cursor: pointer; font-size: 12px; }
 .todo-association-clear,
 .todo-association-cancel { border: 1px solid var(--hairline); background: transparent; color: var(--muted); }
 .todo-association-clear:hover,
@@ -2709,20 +2788,10 @@ input {
 .todo-edit-dialog { display: grid; gap: 20px; padding-top: 4px; }
 .todo-edit-dialog label { display: grid; gap: 7px; color: var(--body-strong); font-size: 13px; font-weight: 600; }
 .todo-edit-dialog input,
-.todo-edit-dialog select { width: 100%; height: 36px; box-sizing: border-box; border: 1px solid var(--hairline); border-radius: 5px; padding: 0 9px; background: var(--surface-card); color: var(--body-strong); font-size: 13px; }
+.todo-edit-dialog select { width: 100%; height: 36px; box-sizing: border-box; border: 1px solid var(--hairline); border-radius: 4px; padding: 0 9px; background: var(--surface-card); color: var(--body-strong); font-size: 13px; }
 .todo-edit-dialog input:focus,
 .todo-edit-dialog select:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
 .todo-edit-dialog select:disabled { color: var(--muted-soft); cursor: not-allowed; }
-.todo-edit-dialog .todo-edit-completion { display: inline-flex; width: max-content; grid-template-columns: 16px auto; align-items: center; gap: 8px; color: var(--body); font-weight: 500; cursor: pointer; }
-.todo-edit-completion input { width: 16px; height: 16px; margin: 0; border: 0; padding: 0; background: transparent; accent-color: var(--primary); }
-
-.todo-item {
-  grid-template-columns: 21px minmax(0, 1fr) 28px 26px 28px;
-  min-height: 58px;
-}
-
-.todo-edit { color: var(--muted-soft); }
-.todo-edit:hover { color: var(--primary-active); }
 
 .todo-copy {
   display: flex;
@@ -2752,13 +2821,6 @@ input {
 .todo-project-link:hover { color: var(--primary); text-decoration: underline; }
 .todo-project-link:active { transform: translateY(1px); }
 
-@media (max-width: 1180px) {
-  .calendar-panel { grid-template-columns: minmax(0, 1fr) 300px; }
-  .calendar-frame { padding-right: 24px; }
-  .calendar-agenda { padding-left: 24px; }
-  .todo-add { grid-template-columns: minmax(0, 1fr) 142px 28px; }
-}
-
 @media (max-width: 760px) {
   html,
   body,
@@ -2770,18 +2832,13 @@ input {
   .koala-nav .ant-menu-item { padding-inline: 20px !important; }
   .koala-project-navigation { display: none; }
   .koala-sider-foot { align-items: center; justify-content: center; padding-inline: 0; }
-  .workbench-page { padding-inline: 18px; }
-  .calendar-panel { grid-template-columns: minmax(0, 1fr); gap: 19px; }
-  .calendar-frame { border-right: 0; border-bottom: 1px solid var(--hairline); padding: 0 0 18px; }
-  .calendar-agenda { min-height: 154px; padding-left: 0; }
-  .workspace-bottom-grid { grid-template-columns: minmax(0, 1fr); gap: 25px; }
-  .status-panel { min-height: 0; border-top: 1px solid var(--hairline); border-left: 0; padding-top: 22px; padding-left: 0; }
-  .todo-add { grid-template-columns: minmax(0, 1fr) 122px 28px; }
   .chat-header { padding-inline: 16px; }
   .chat-thread { padding: 24px 16px 20px !important; }
   .chat-composer-wrap { padding-inline: 16px; }
   .chat-assistant-message,
   .chat-activity-message { max-width: 92% !important; width: 92%; }
+  /* 窄屏下分组占 92%，明细行要撑满分组而不是再缩一档。 */
+  .chat-activity-group-list .chat-activity-message { max-width: none !important; width: 100% !important; }
   .chat-user-message { max-width: 88% !important; }
   .chat-queue-item { grid-template-columns: auto minmax(0, 1fr) auto auto; padding-left: 10px; }
   .chat-queue-item-icon { margin-right: 8px; }
@@ -2795,9 +2852,9 @@ input {
   padding: 6px;
   overflow-y: auto;
   border: 1px solid var(--hairline);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--canvas);
-  box-shadow: 0 14px 40px rgb(20 20 19 / 12%);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 8%);
   scrollbar-gutter: stable;
 }
 
@@ -2843,12 +2900,12 @@ input {
 }
 
 .chat-command-option-mcp .chat-command-option-icon {
-  border-color: rgb(232 165 90 / 35%);
+  border-color: rgb(var(--accent-amber-rgb) / 35%);
   color: var(--accent-amber);
 }
 
 .chat-command-option-extension .chat-command-option-icon {
-  border-color: rgb(93 184 166 / 35%);
+  border-color: rgb(var(--accent-teal-rgb) / 35%);
   color: var(--accent-teal);
 }
 
@@ -2901,15 +2958,15 @@ input {
 }
 
 .chat-command-option-mcp .chat-command-source-badge {
-  border-color: rgb(232 165 90 / 35%);
-  color: #b66d22;
-  background: rgb(232 165 90 / 8%);
+  border-color: rgb(var(--accent-amber-rgb) / 35%);
+  color: var(--accent-amber-text);
+  background: rgb(var(--accent-amber-rgb) / 10%);
 }
 
 .chat-command-option-extension .chat-command-source-badge {
-  border-color: rgb(93 184 166 / 35%);
-  color: #327f72;
-  background: rgb(93 184 166 / 8%);
+  border-color: rgb(var(--accent-teal-rgb) / 35%);
+  color: var(--accent-teal-text);
+  background: rgb(var(--accent-teal-rgb) / 10%);
 }
 
 .chat-command-option-description {
@@ -2937,7 +2994,7 @@ input {
   border: 1px solid var(--hairline);
   border-radius: 8px;
   background: var(--canvas);
-  box-shadow: 0 14px 40px rgb(20 20 19 / 12%);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 8%);
 }
 
 .chat-permission-request-header {
@@ -2992,16 +3049,16 @@ input {
 
 .chat-permission-request-option-allow_once,
 .chat-permission-request-option-allow_always {
-  border-color: rgb(93 184 166 / 35%);
-  color: #327f72;
-  background: rgb(93 184 166 / 8%);
+  border-color: rgb(var(--accent-teal-rgb) / 35%);
+  color: var(--accent-teal-text);
+  background: rgb(var(--accent-teal-rgb) / 10%);
 }
 
 .chat-permission-request-option-allow_once:hover,
 .chat-permission-request-option-allow_always:hover {
-  border-color: #327f72;
-  color: #327f72;
-  background: rgb(93 184 166 / 15%);
+  border-color: var(--accent-teal-text);
+  color: var(--accent-teal-text);
+  background: rgb(var(--accent-teal-rgb) / 16%);
 }
 
 .chat-permission-request-option-reject_once,
@@ -3018,224 +3075,39 @@ input {
   background: var(--surface-soft);
 }
 
-.chat-history-drawer .ant-drawer-header {
-  min-height: 68px;
-  padding: 18px 20px 16px;
-  border-bottom: 1px solid var(--hairline-soft);
-}
-
-.chat-history-drawer .ant-drawer-body {
-  padding: 12px;
-  background: var(--canvas);
-}
-
-.chat-history-drawer-title {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  color: var(--ink);
-  font-size: 16px;
-  font-weight: 680;
-}
-
-.chat-history-count {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 560;
-}
-
-.chat-history-list.ant-conversations {
-  gap: 4px;
-  max-height: calc(100vh - 94px);
-  padding: 0;
-}
-
-.chat-history-list.ant-conversations .ant-conversations-item {
-  height: auto;
-  min-height: 68px;
-  gap: 10px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 8px;
-}
-
-.chat-history-list.ant-conversations .ant-conversations-item:hover {
-  background: var(--surface-soft);
-}
-
-.chat-history-list.ant-conversations .ant-conversations-item-active {
-  border-color: var(--primary-disabled);
-  background: rgb(var(--primary-rgb) / 10%);
-  box-shadow: inset 2px 0 0 var(--primary);
-}
-
-.chat-history-list.ant-conversations .ant-conversations-icon {
-  align-self: flex-start;
-  margin: 15px 0 0 12px;
-  color: var(--muted-soft);
-  font-size: 15px;
-}
-
-.chat-history-list.ant-conversations .ant-conversations-item-active .ant-conversations-icon {
-  color: var(--primary);
-}
-
-.chat-history-list.ant-conversations .ant-conversations-label {
-  min-width: 0;
-  white-space: normal;
-}
-
-.chat-history-session {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 5px;
-  padding: 12px 12px 11px 0;
-}
-
-.chat-history-session-heading {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-}
-
-.chat-history-session-title {
-  overflow: hidden;
-  color: var(--body-strong);
-  font-size: 13px;
-  font-weight: 630;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chat-history-session-current {
-  flex: 0 0 auto;
-  color: var(--primary-active);
-  font-size: 11px;
-  font-weight: 620;
-}
-
-.chat-history-session-time {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.3;
-}
-
-.chat-history-empty {
-  padding: 68px 0;
-}
-
-.chat-history-skeleton {
-  padding: 10px 8px;
-}
-
-.workbench-intro {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
-  gap: 32px;
-  padding: 8px 0 38px;
-}
-
-.workbench-lede {
-  max-width: 620px;
-  margin: 16px 0 0 !important;
-  color: var(--muted) !important;
-  font-size: 15px;
-  line-height: 1.75 !important;
-}
-
-.workbench-aside {
-  align-self: end;
-  border-left: 2px solid var(--primary);
-  padding: 4px 0 4px 18px;
-}
-
-.workbench-aside-label {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.workbench-aside-value {
-  display: block;
-  margin-top: 4px;
-  color: var(--ink);
-  font-size: 24px;
-  font-weight: 690;
-}
-
-.workbench-section-title {
-  margin: 0 0 16px !important;
-  color: var(--ink) !important;
-  font-size: 16px !important;
-  font-weight: 660 !important;
-}
-
-.recent-projects {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.recent-project {
-  display: flex;
-  min-height: 116px;
-  flex-direction: column;
-  justify-content: space-between;
-  border: 1px solid var(--hairline);
-  border-radius: 10px;
-  padding: 16px;
-  color: inherit;
-  text-decoration: none;
-  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
-}
-
-.recent-project:hover {
-  border-color: rgb(var(--primary-rgb) / 45%);
-  box-shadow: 0 10px 20px rgb(var(--primary-rgb) / 10%);
-  transform: translateY(-2px);
-}
-
-.recent-project:active {
-  transform: translateY(-1px);
-}
-
-.recent-project-name {
-  color: var(--ink);
-  font-weight: 650;
-}
-
-.recent-project-detail {
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
 @media (prefers-color-scheme: dark) {
+  /* 暗色模式复用同一套语义 token，组件样式无需逐个覆写。 */
+  :root {
+    --ink: #fafafa;
+    --body: #d4d4d8;
+    --body-strong: #f4f4f5;
+    --muted: #a1a1aa;
+    --muted-soft: #71717a;
+    --hairline: #3f3f46;
+    --hairline-soft: #2a2a2f;
+    --canvas: #18181b;
+    --surface-soft: #3f3f46;
+    --surface-card: #27272a;
+    --primary: #fafafa;
+    --primary-active: #e4e4e7;
+    --primary-disabled: #52525b;
+    --primary-rgb: 250 250 250;
+    --on-primary: #18181b;
+    --chat-user-bubble: #52525b;
+    --chat-user-text: #fafafa;
+    --accent-teal-text: #5eead4;
+    --accent-amber-text: #fcd34d;
+    --accent-violet-text: #c4b5fd;
+    --success-text: #4ade80;
+    --warning-text: #fde047;
+    --error-text: #f87171;
+  }
+
   :root,
   body,
   .koala-shell {
-    color: var(--on-dark);
-    background: var(--surface-dark);
-  }
-
-  .koala-sider {
-    background:
-      linear-gradient(180deg, rgb(255 255 255 / 3%), transparent 32%),
-      var(--surface-dark-soft) !important;
-    border-color: var(--surface-dark-elevated);
-    box-shadow: 10px 0 28px rgb(0 0 0 / 14%);
-  }
-
-  .koala-nav.ant-menu {
-    background: var(--surface-dark-soft);
-  }
-
-  .koala-brand::after {
-    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 12%), transparent);
+    color: var(--ink);
+    background: var(--canvas);
   }
 
   .koala-nav .ant-menu-item:hover,
@@ -3246,196 +3118,30 @@ input {
   .koala-agent-trigger.ant-btn:hover,
   .koala-agent-trigger.ant-btn:focus-visible,
   .koala-agent-trigger.ant-btn:active {
-    background: rgb(255 255 255 / 7%);
-  }
-
-  .koala-sider-foot {
-    border-color: rgb(255 255 255 / 11%);
-  }
-
-  .koala-brand,
-  .koala-brand-name,
-  .page-title,
-  .project-card-title,
-  .chat-project-title,
-  .workbench-aside-value,
-  .workbench-section-title,
-  .recent-project-name {
-    color: var(--on-dark) !important;
-  }
-
-  .koala-brand-caption,
-  .page-subtitle,
-  .project-card-date,
-  .project-card-path,
-  .chat-project-path,
-  .workbench-aside-label,
-  .recent-project-detail {
-    color: var(--on-dark-soft) !important;
-  }
-
-  .koala-project-row,
-  .koala-session-row,
-  .koala-tree-more,
-  .koala-project-empty,
-  .koala-session-status {
-    color: var(--on-dark-soft);
-  }
-
-  .koala-session-tree::before {
-    background: linear-gradient(var(--surface-dark-elevated), transparent);
-  }
-
-  .koala-content {
-    border-color: var(--surface-dark-elevated);
-    background: var(--surface-dark-elevated) !important;
-    box-shadow: none;
-  }
-
-  .project-card,
-  .recent-project {
-    border-color: var(--surface-dark-elevated) !important;
-    background: var(--surface-dark-elevated) !important;
-  }
-
-  .project-card-description,
-  .workbench-lede {
-    color: var(--on-dark-soft) !important;
-  }
-
-  .project-tag {
-    border-color: rgb(var(--primary-rgb) / 35%) !important;
-    color: var(--primary) !important;
-    background: rgb(var(--primary-rgb) / 12%) !important;
-  }
-
-  .chat-header {
-    border-color: var(--surface-dark-elevated);
-  }
-
-  .chat-shell {
-    background: var(--surface-dark);
-  }
-
-  :root {
-    --chat-user-bubble: #4a2d26;
-    --chat-user-text: #f6eae5;
-  }
-
-  .chat-assistant-message .ant-bubble-content {
-    color: var(--on-dark) !important;
-  }
-
-  .chat-activity-message {
-    border-left-color: rgb(var(--primary-rgb) / 38%);
-    background: linear-gradient(90deg, rgb(var(--primary-rgb) / 10%), transparent 82%);
-  }
-
-  .chat-markdown h1,
-  .chat-markdown h2,
-  .chat-markdown h3 {
-    color: var(--on-dark);
+    background: rgb(var(--primary-rgb) / 6%);
   }
 
   .chat-markdown pre {
-    border-color: var(--surface-dark-elevated);
-    background: var(--surface-dark-soft);
-    box-shadow: none;
-  }
-
-  .chat-markdown :not(pre) > code {
-    color: #e7a18c;
-    background: rgb(var(--primary-rgb) / 16%);
-  }
-
-  .chat-token-usage {
-    color: var(--on-dark-soft);
-  }
-
-  .chat-status {
-    border-color: var(--surface-dark-elevated);
-    color: var(--on-dark-soft);
-  }
-
-  .chat-composer-wrap .ant-sender {
-    border-color: var(--surface-dark-elevated);
-    background: var(--surface-dark-elevated);
-    box-shadow: none;
-  }
-
-  .chat-queue-item {
-    border-color: var(--surface-dark-elevated);
-    background: var(--surface-dark-elevated);
-    box-shadow: none;
-  }
-
-  .chat-queue-item-text {
-    color: var(--on-dark);
-  }
-
-  .chat-queue-item-icon,
-  .chat-queue-steer.ant-btn,
-  .chat-queue-remove.ant-btn {
-    color: var(--on-dark-soft);
-  }
-
-  .chat-queue-steer.ant-btn:hover,
-  .chat-queue-steer.ant-btn:focus-visible,
-  .chat-queue-remove.ant-btn:hover,
-  .chat-queue-remove.ant-btn:focus-visible {
-    background: var(--surface-dark-soft);
-    color: var(--on-dark);
+    background: var(--canvas);
   }
 
   .chat-command-menu {
-    border-color: var(--surface-dark-elevated);
-    background: var(--surface-dark-soft);
+    background: var(--surface-card);
     box-shadow: 0 14px 40px rgb(0 0 0 / 24%);
-  }
-
-  .chat-command-option {
-    color: var(--on-dark-soft);
-  }
-
-  .chat-command-option-active {
-    background: var(--surface-dark-elevated);
-  }
-
-  .chat-command-option-icon {
-    border-color: var(--surface-dark-elevated);
-    color: var(--on-dark-soft);
-    background: var(--surface-dark-soft);
   }
 
   .chat-command-option-mcp .chat-command-option-icon,
   .chat-command-option-mcp .chat-command-source-badge {
-    border-color: rgb(232 165 90 / 45%);
+    border-color: rgb(var(--accent-amber-rgb) / 45%);
     color: var(--accent-amber);
-    background: rgb(232 165 90 / 10%);
+    background: rgb(var(--accent-amber-rgb) / 12%);
   }
 
   .chat-command-option-extension .chat-command-option-icon,
   .chat-command-option-extension .chat-command-source-badge {
-    border-color: rgb(93 184 166 / 45%);
+    border-color: rgb(var(--accent-teal-rgb) / 45%);
     color: var(--accent-teal);
-    background: rgb(93 184 166 / 10%);
-  }
-
-  .chat-command-option-name {
-    color: var(--on-dark);
-  }
-
-  .chat-command-option-hint,
-  .chat-command-option-description,
-  .chat-command-empty {
-    color: var(--on-dark-soft);
-  }
-
-  .chat-permission-trigger.ant-btn,
-  .chat-permission-trigger.ant-btn:hover,
-  .chat-permission-trigger.ant-btn:focus-visible {
-    background: var(--surface-dark-soft);
-    color: var(--on-dark-soft);
+    background: rgb(var(--accent-teal-rgb) / 12%);
   }
 
   .chat-permission-trigger-bypass.ant-btn,
@@ -3445,82 +3151,12 @@ input {
     color: var(--primary);
   }
 
-  .chat-model-trigger.ant-btn,
-  .chat-model-trigger.ant-btn:hover,
-  .chat-model-trigger.ant-btn:focus-visible,
-  .chat-model-trigger.ant-btn:active {
-    background: var(--surface-dark-soft);
-    color: var(--on-dark);
-  }
-
-  .chat-model-option:hover,
-  .chat-model-option:focus-visible {
-    background: var(--surface-dark-elevated);
-  }
-
-  .chat-model-option-title {
-    color: var(--on-dark);
-  }
-
-  .chat-model-option-description {
-    color: var(--on-dark-soft);
-  }
-
-  .chat-effort-trigger.ant-btn,
-  .chat-effort-trigger.ant-btn:hover,
-  .chat-effort-trigger.ant-btn:focus-visible,
-  .chat-effort-trigger.ant-btn:active {
-    background: var(--surface-dark-soft);
-    color: var(--on-dark-soft);
-  }
-
-  .chat-effort-option:hover,
-  .chat-effort-option:focus-visible {
-    background: var(--surface-dark-elevated);
-  }
-
-  .chat-effort-option-title {
-    color: var(--on-dark);
-  }
-
-  .chat-permission-select.ant-select {
-    background: var(--surface-dark-elevated);
-  }
-
-  .chat-history-drawer .ant-drawer-header {
-    border-color: var(--surface-dark-elevated);
-  }
-
-  .chat-history-drawer .ant-drawer-body {
-    background: var(--surface-dark-elevated);
-  }
-
-  .chat-history-drawer-title,
-  .chat-history-session-title {
-    color: var(--on-dark);
-  }
-
-  .chat-history-count,
-  .chat-history-session-time {
-    color: var(--on-dark-soft);
-  }
-
-  .chat-history-list.ant-conversations .ant-conversations-item:hover {
-    background: rgb(var(--primary-rgb) / 8%);
-  }
-
-  .chat-history-list.ant-conversations .ant-conversations-item-active {
-    border-color: rgb(var(--primary-rgb) / 40%);
-    background: rgb(var(--primary-rgb) / 14%);
-  }
-
-  .chat-history-list.ant-conversations .ant-conversations-icon {
-    color: var(--on-dark-soft);
-  }
-
-  .chat-history-list.ant-conversations .ant-conversations-item-active .ant-conversations-icon,
-  .chat-history-session-current {
-    color: var(--primary);
+  .chat-queue-steer.ant-btn:hover,
+  .chat-queue-steer.ant-btn:focus-visible,
+  .chat-queue-remove.ant-btn:hover,
+  .chat-queue-remove.ant-btn:focus-visible {
+    background: var(--surface-soft);
+    color: var(--ink);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -3542,24 +3178,25 @@ input {
   box-sizing: border-box;
   flex-direction: column;
   overflow: hidden;
-  padding: 34px 36px 30px;
+  padding: 24px 28px 20px;
 }
 
 .kanban-header {
   display: flex;
-  min-height: 54px;
+  min-height: 46px;
   flex: 0 0 auto;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
+  gap: 16px;
 }
 
 .kanban-heading h1 {
-  margin: 5px 0 0;
+  margin: 4px 0 0;
   color: var(--ink);
-  font-size: 24px;
-  font-weight: 720;
-  line-height: 1.2;
+  font-size: 18px;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
 }
 
 .kanban-title-row {
@@ -3583,6 +3220,60 @@ input {
   text-align: right;
 }
 
+.kanban-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+/* 已完成待办的显示开关：默认收起，打开才回到看板上。 */
+.kanban-completed-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-right: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 未归属项目的待办提示：项目看板只看本项目的待办，这里给一个一键收编的入口。 */
+.kanban-unassigned {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: rgb(var(--primary-rgb) / 5%);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.kanban-unassigned button {
+  border: 0;
+  border-radius: 4px;
+  padding: 4px 10px;
+  background: rgb(var(--primary-rgb) / 12%);
+  color: var(--primary-active);
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 140ms ease;
+}
+
+.kanban-unassigned button:hover:not(:disabled) { background: rgb(var(--primary-rgb) / 20%); }
+.kanban-unassigned button:disabled { cursor: default; opacity: 0.55; }
+
+.workbench-coming-soon {
+  display: grid;
+  height: 100%;
+  place-items: center;
+}
+
 .kanban-board {
   display: grid;
   width: 100%;
@@ -3593,7 +3284,7 @@ input {
   grid-template-rows: minmax(0, 1fr);
   gap: 12px;
   flex: 1 1 auto;
-  margin-top: 18px;
+  margin-top: 14px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
@@ -3608,13 +3299,13 @@ input {
   box-sizing: border-box;
   flex-direction: column;
   border: 1px solid var(--hairline);
-  border-radius: 7px;
-  background: rgb(245 240 232 / 56%);
+  border-radius: 6px;
+  background: rgb(var(--primary-rgb) / 4%);
   transition: border-color 140ms ease, background-color 140ms ease;
 }
 
 .kanban-column-drag-over {
-  border-color: rgb(var(--primary-rgb) / 58%);
+  border-color: var(--primary);
   background: rgb(var(--primary-rgb) / 6%);
 }
 
@@ -3661,8 +3352,8 @@ input {
   height: 29px;
   box-sizing: border-box;
   border: 1px solid var(--primary);
-  border-radius: 5px;
-  outline: 3px solid rgb(var(--primary-rgb) / 10%);
+  border-radius: 4px;
+  outline: 2px solid rgb(var(--primary-rgb) / 10%);
   padding: 0 7px;
   background: var(--canvas);
   color: var(--ink);
@@ -3738,20 +3429,18 @@ input {
 
 .kanban-card {
   position: relative;
-  border: 1px solid var(--hairline-soft);
+  border: 1px solid var(--hairline);
   border-radius: 6px;
   padding: 12px 10px 8px;
-  background: var(--canvas);
-  box-shadow: 0 1px 0 rgb(20 20 19 / 3%);
+  background: var(--surface-card);
   cursor: grab;
-  transition: border-color 140ms ease, box-shadow 140ms ease, opacity 140ms ease, transform 140ms ease;
+  transition: border-color 140ms ease, transform 140ms ease;
 }
 
 .kanban-card + .kanban-card { margin-top: 8px; }
 
 .kanban-card:hover {
-  border-color: rgb(var(--primary-rgb) / 38%);
-  box-shadow: 0 7px 16px rgb(var(--primary-rgb) / 8%);
+  border-color: var(--body);
 }
 
 .kanban-card:active { cursor: grabbing; }
@@ -3813,6 +3502,23 @@ input {
   text-decoration-color: var(--primary);
 }
 
+/* 待办标题本身就是入口：点它跳到会话（已有则进入，没有则新建）。 */
+.kanban-card button.todo-item-open {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.kanban-card button.todo-item-open:hover { color: var(--primary-active); }
+.kanban-card button.todo-item-open:focus-visible {
+  outline: 2px solid rgb(var(--primary-rgb) / 55%);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
 .kanban-card-actions {
   display: flex;
   min-height: 26px;
@@ -3850,7 +3556,7 @@ input {
   align-self: start;
   box-sizing: border-box;
   border: 1px dashed var(--hairline);
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
 }
 
@@ -3870,7 +3576,7 @@ input {
 
 .kanban-column-create:hover {
   border-color: var(--accent-teal);
-  background: rgb(93 184 166 / 7%);
+  background: rgb(var(--accent-teal-rgb) / 10%);
 }
 
 .kanban-column-create > button:hover { color: var(--body-strong); }
@@ -3878,7 +3584,7 @@ input {
 .kanban-column-create-active {
   border-style: solid;
   border-color: var(--accent-teal);
-  background: rgb(93 184 166 / 7%);
+  background: rgb(var(--accent-teal-rgb) / 10%);
 }
 
 .kanban-column-create form {
@@ -3897,7 +3603,7 @@ input {
   height: 34px;
   box-sizing: border-box;
   border: 1px solid var(--hairline);
-  border-radius: 5px;
+  border-radius: 4px;
   outline: 0;
   padding: 0 9px;
   background: var(--canvas);
@@ -3924,7 +3630,7 @@ input {
   align-items: center;
   gap: 7px;
   border: 1px solid var(--hairline);
-  border-radius: 5px;
+  border-radius: 4px;
   padding: 0 11px;
   background: var(--surface-soft);
   color: var(--body-strong);
@@ -3934,7 +3640,7 @@ input {
 .kanban-board-loading .kanban-column { padding: 15px 12px; }
 .kanban-skeleton-title,
 .kanban-skeleton-card {
-  border-radius: 5px;
+  border-radius: 4px;
   background: var(--surface-card);
 }
 .kanban-skeleton-title { width: 84px; height: 15px; margin-bottom: 25px; }
@@ -3953,38 +3659,7 @@ input {
 }
 
 @media (prefers-color-scheme: dark) {
-  .kanban-heading h1,
-  .kanban-column-title-wrap h2,
-  .kanban-card .todo-item-label,
-  .kanban-column-title-input,
-  .kanban-column-create input { color: var(--on-dark); }
-
-  .kanban-title-row > span,
-  .kanban-column-count,
-  .kanban-column-empty { color: var(--on-dark-soft); }
-
-  .kanban-column,
-  .kanban-column-header,
-  .kanban-column-add-todo,
-  .kanban-card { border-color: #36332e; }
-
-  .kanban-column { background: var(--surface-dark-soft); }
-  .kanban-card,
-  .kanban-column-title-input,
-  .kanban-column-create input { background: var(--surface-dark-elevated); }
-
-  .kanban-column-create { border-color: #49453f; }
-
-  .kanban-column-drag-over {
-    border-color: rgb(var(--primary-rgb) / 65%);
-    background: rgb(var(--primary-rgb) / 10%);
-  }
-
   .kanban-card:hover {
-    border-color: rgb(var(--primary-rgb) / 55%);
     box-shadow: 0 8px 18px rgb(0 0 0 / 18%);
   }
-
-  .kanban-skeleton-title,
-  .kanban-skeleton-card { background: var(--surface-dark-elevated); }
 }

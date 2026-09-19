@@ -9,15 +9,15 @@ flowchart TB
     subgraph UI["① 表现层 Presentation · React 19 + Ant Design 6 + Tailwind"]
         direction TB
         P["pages/
-Projects · ProjectChat · Claude · Automations · Workbench"]
+Projects · ProjectChat · Claude · Automations · Workbench(占位)"]
         C["components/
-ChatView·ChatThread·ChatComposer·MarkdownMessage·AppLayout·ProjectCard"]
+ChatView·ChatThread·ChatComposer·MarkdownMessage·AppLayout·ProjectCard·ProjectBoard"]
         S["state/
 AgentContext · ProjectsContext · AgentSelectionContext"]
         R["services/
 window.acp · window.projects(封装 preload API)"]
         Cmd["路由 react-router-dom
-/projects /projects/:id /claude /automations /workbench"]
+/projects /projects/:id(?view=board) /claude /automations /workbench"]
     end
 
     subgraph Preload["② 桥接层 Bridge · contextBridge"]
@@ -112,6 +112,13 @@ projects.json · automations.json · todos.json · 偏好 · 附件"]
 2. **自动化**：`AutomationScheduler` 轮询到期任务 → 执行器拉起独立 Agent 会话完成指令 → 结果写回 `automations.json` 运行记录。
 3. **Agent 自管理**：`AcpBridge` 在 `session/new` / `session/load` 时注入 `koala-automations` MCP server，让 Agent 可直接读写自动化与待办。
 4. **项目/资源**：项目管理、Skills/插件/MCP 管理均经 IPC 落到本地 JSON 或 Claude Code 目录。
+5. **待办挂载会话**：看板点待办 → `ProjectChatPage` 递增 `sessionGeneration` → `AgentProvider` 换 key 重挂载 → `connect()` 建出恰好一个会话 → 首条消息发出时 `onFirstPrompt` 把 `todo.sessionId` 写回。
+
+> **不变量：新建会话只有「换 key 重挂载」这一条路径。**
+> `AgentProvider` 的 key 是 `project.id : 会话 id : agentRevision : sessionGeneration`。
+> 额外再调一次显式的 `createNewSession` 会在 URL 带 `?session=` 时各建一个会话，
+> 孤儿化其中一个并白占一个并发名额（上限 `MAX_SESSION_RUNTIMES = 3`）。
+> 看板因此只负责导航 / 递增代数，绝不自己创建会话。
 
 ## 本地数据
 

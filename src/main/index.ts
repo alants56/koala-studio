@@ -38,6 +38,8 @@ import {
   setPreferredAgentId
 } from './services/preferences-store'
 import { attachmentFilePath, importAttachments } from './services/attachment-store'
+import { checkoutGitBranch, commitGitChanges, createGitBranch, getGitDiffSummary, getGitStatus } from './services/git-service'
+import { generateCommitMessage } from './services/git-commit-message'
 import { getQueuedPromptStore } from './services/queued-prompt-store'
 
 const execFileAsync = promisify(execFile)
@@ -256,6 +258,15 @@ app.whenReady().then(() => {
   ipcMain.handle('files:reveal', (_event, cwd: string, path: string) => {
     shell.showItemInFolder(resolve(cwd, path))
   })
+
+  ipcMain.handle('git:status', (_event, cwd: string) => getGitStatus(cwd))
+  ipcMain.handle('git:diff', (_event, cwd: string) => getGitDiffSummary(cwd))
+  ipcMain.handle('git:checkout', (_event, cwd: string, branch: string) => checkoutGitBranch(cwd, branch))
+  ipcMain.handle('git:create-branch', (_event, cwd: string, branch: string) => createGitBranch(cwd, branch))
+  ipcMain.handle('git:commit', (_event, cwd: string, message: string, options) => commitGitChanges(cwd, message, options))
+  ipcMain.handle('git:generate-commit-message', async (_event, cwd: string) =>
+    // 用主进程里持久化的 Agent 偏好决定由谁来生成，不经过渲染层。
+    generateCommitMessage(cwd, await acpBridge.getCurrentAgent()))
 
   ipcMain.handle('automations:list', (_event, input) => getAutomationStore().list(input))
   ipcMain.handle('automations:get', (_event, id: string) => getAutomationStore().get(id))

@@ -22,6 +22,8 @@ import {
   QuestionCircleOutlined
 } from '@ant-design/icons'
 import { useAgent } from '@/state/AgentContext'
+import { formatTurnDuration } from '@/utils/turn-duration'
+import { GitBranchPicker } from './GitBranchPicker'
 import type { AgentCommand, AgentPermissionOption } from '@shared/acp'
 
 const MAX_ATTACHMENT_COUNT = 10
@@ -198,9 +200,24 @@ const PERMISSION_KIND_LABELS: Record<AgentPermissionOption['kind'], string> = {
   reject_always: '始终拒绝'
 }
 
+/** 运行中每秒刷新的已用秒数；startedAt 缺省时返回 0。 */
+function useElapsedSeconds(startedAt?: number): number {
+  const [now, setNow] = useState(0)
+
+  useEffect(() => {
+    if (startedAt == null) return
+    const update = (): void => setNow(Date.now())
+    update()
+    const timer = window.setInterval(update, 1000)
+    return () => window.clearInterval(timer)
+  }, [startedAt])
+
+  return startedAt == null ? 0 : Math.max(0, Math.floor((now - startedAt) / 1000))
+}
+
 /** 对话输入区：基于 Ant Design X 的 Sender，Enter 发送、加载时显示停止按钮。 */
 export function ChatComposer(): ReactElement {
-  const { state, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission } = useAgent()
+  const { state, cwd, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission } = useAgent()
   const { message } = App.useApp()
   const [prompt, setPrompt] = useState('')
   const [permissionOpen, setPermissionOpen] = useState(false)
@@ -217,6 +234,8 @@ export function ChatComposer(): ReactElement {
 
   const ready = state.status === 'ready'
   const loading = state.status === 'working'
+  /** 运行中显示在「停止」左侧的实时用时；空闲时不走计时器。 */
+  const elapsedSeconds = useElapsedSeconds(loading ? state.workStartedAt : undefined)
   const commands = state.commands ?? EMPTY_COMMANDS
   const commandQuery = prompt.match(/^[/、]([^\s]*)$/)?.[1]
   const filteredCommands = useMemo(
@@ -670,6 +689,7 @@ export function ChatComposer(): ReactElement {
             const hasContent = Boolean(prompt.trim()) || attachmentItems.length > 0
             return (
               <div className="chat-busy-actions">
+                <span className="chat-busy-elapsed">用时 {formatTurnDuration(elapsedSeconds)}</span>
                 {hasContent && (
                   <Button
                     type="primary"
@@ -718,6 +738,7 @@ export function ChatComposer(): ReactElement {
             >
               添加文件
             </Button>
+            <GitBranchPicker cwd={cwd} />
             {modes.length > 0 && state.currentAgent !== 'pi' && (
               <div className="chat-permission-control">
                 <Popover

@@ -112,38 +112,43 @@ export function ProjectsPage(): ReactElement {
   }
 
   return (
-    <div className="page-frame p-12">
+    <div className="page-frame">
       <div className="page-header">
         <div>
           <Typography.Title level={2} className="page-title">项目</Typography.Title>
-          <Typography.Text className="page-subtitle">{projects.length > 0 ? `共 ${projects.length} 个项目，可从任意项目继续协作。` : '创建一个项目，开始与 Koala 协作。'}</Typography.Text>
+          <Typography.Text className="page-subtitle">
+            {projects.length > 0 ? `共 ${projects.length} 个项目` : '创建一个项目，开始与 Koala 协作'}
+          </Typography.Text>
         </div>
-        <Space className="page-actions">
+        <Space size={8} className="page-actions">
           <Input.Search
             allowClear
-            placeholder="搜索项目名称"
+            placeholder="搜索项目"
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
-            style={{ width: 240 }}
+            style={{ width: 160 }}
+            size="small"
           />
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal} size="small">
             新建项目
           </Button>
         </Space>
       </div>
 
       {loading ? (
-        <Row className="project-grid" gutter={[16, 16]}>
+        <Row className="project-grid" gutter={[12, 12]}>
           {Array.from({ length: 4 }).map((_, index) => (
             <Col key={index} xs={24} sm={12} lg={8} xl={6}>
-              <Skeleton active paragraph={{ rows: 4 }} />
+              <div className="project-card-skeleton">
+                <Skeleton active title={{ width: '52%' }} paragraph={{ rows: 3 }} />
+              </div>
             </Col>
           ))}
         </Row>
       ) : displayList.length > 0 ? (
         <Row
           className="project-grid"
-          gutter={[16, 16]}
+          gutter={[12, 12]}
           onDragOver={(event) => event.preventDefault()}
           onDrop={handleDrop}
         >
@@ -170,8 +175,8 @@ export function ProjectsPage(): ReactElement {
           className="empty-state"
           description={
             projects.length === 0
-              ? '还没有项目，点击右上角「新建项目」创建第一个项目。'
-              : `未找到名称包含「${keyword.trim()}」的项目`
+              ? '还没有项目，点击右上角「新建项目」创建第一个'
+              : `未找到「${keyword.trim()}」`
           }
         />
       )}

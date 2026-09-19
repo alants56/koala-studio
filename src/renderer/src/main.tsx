@@ -23,30 +23,69 @@ function ApplicationRoot(): ReactElement {
       theme={{
         algorithm: darkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
-          colorPrimary: '#5273cf',
-          colorInfo: '#5273cf',
-          colorSuccess: '#3f9b68',
-          colorWarning: '#b47d22',
-          colorError: '#c0444b',
-          colorText: darkMode ? '#f7f8fa' : '#17191d',
-          colorTextSecondary: darkMode ? '#aab1bd' : '#737a86',
-          colorBorder: darkMode ? '#242830' : '#dfe3e8',
-          colorBgLayout: darkMode ? '#17191d' : '#ffffff',
-          colorBgContainer: darkMode ? '#242830' : '#ffffff',
-          borderRadius: 8,
-          borderRadiusLG: 12,
+          colorPrimary: darkMode ? '#fafafa' : '#18181b',
+          colorInfo: darkMode ? '#fafafa' : '#18181b',
+          colorSuccess: '#22c55e',
+          colorWarning: '#eab308',
+          colorError: '#ef4444',
+          colorText: darkMode ? '#fafafa' : '#18181b',
+          colorTextSecondary: darkMode ? '#a1a1aa' : '#71717a',
+          colorTextLightSolid: darkMode ? '#18181b' : '#ffffff',
+          colorBorder: darkMode ? '#3f3f46' : '#e4e4e7',
+          colorBgLayout: darkMode ? '#18181b' : '#fafafa',
+          colorBgContainer: darkMode ? '#27272a' : '#ffffff',
+          colorBgElevated: darkMode ? '#27272a' : '#ffffff',
+          fontSize: 13,
+          fontSizeHeading1: 28,
+          fontSizeHeading2: 22,
+          fontSizeHeading3: 16,
+          fontWeightStrong: 600,
+          borderRadius: 6,
+          borderRadiusSM: 4,
+          borderRadiusLG: 8,
+          padding: 12,
+          paddingSM: 8,
+          paddingLG: 16,
+          paddingXS: 4,
+          margin: 12,
+          marginSM: 8,
+          marginLG: 16,
+          boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+          boxShadowSecondary: '0 2px 4px rgb(0 0 0 / 0.06)',
+          controlHeight: 32,
+          controlHeightSM: 28,
           fontFamily: '"Koala Numerals", "Koala Serif", serif',
           fontFamilyCode: '"Koala Mono", "JetBrains Mono", monospace'
         },
         components: {
-          Button: { controlHeight: 34, primaryShadow: 'none' },
-          Input: { activeShadow: '0 0 0 3px rgb(82 115 207 / 12%)' },
-          Menu: {
-            itemHeight: 42,
-            itemSelectedBg: darkMode ? 'rgb(82 115 207 / 14%)' : 'rgb(82 115 207 / 10%)',
-            itemSelectedColor: darkMode ? '#7b93dd' : '#4460ae'
+          Card: {
+            boxShadow: 'none',
+            borderRadiusLG: 6
           },
-          Modal: { borderRadiusLG: 12 }
+          Button: {
+            controlHeight: 32,
+            primaryShadow: 'none',
+            defaultShadow: 'none'
+          },
+          Input: {
+            activeShadow: 'none'
+          },
+          Select: {
+            boxShadow: 'none'
+          },
+          Menu: {
+            itemHeight: 36,
+            itemBorderRadius: 4,
+            itemSelectedBg: darkMode ? 'rgb(250 250 250 / 10%)' : 'rgb(24 24 27 / 6%)',
+            itemSelectedColor: darkMode ? '#fafafa' : '#18181b'
+          },
+          Layout: {
+            siderBg: darkMode ? '#27272a' : '#ffffff',
+            headerBg: darkMode ? '#27272a' : '#ffffff'
+          },
+          Modal: {
+            borderRadiusLG: 8
+          }
         }
       }}
     >

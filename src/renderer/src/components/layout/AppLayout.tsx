@@ -66,8 +66,11 @@ export function AppLayout(): ReactElement {
     }
 
     const switchPromise = setAgent(agentId)
-    if (projectDetailActive && location.search) {
-      void navigate(location.pathname, { replace: true })
+    // 只摘掉 session（它属于上一个 Agent），其余参数保留：否则会把正在看板的用户弹回对话页。
+    const params = new URLSearchParams(location.search)
+    if (projectDetailActive && params.has('session')) {
+      params.delete('session')
+      void navigate({ pathname: location.pathname, search: params.toString() }, { replace: true })
     }
 
     try {
@@ -108,7 +111,8 @@ export function AppLayout(): ReactElement {
       <div className="window-drag-region" aria-hidden="true" />
       <Sider
         className="koala-sider"
-        width={224}
+        width={220}
+        collapsedWidth={56}
         collapsible
         collapsed={collapsed}
         onCollapse={setCollapsed}
@@ -122,7 +126,7 @@ export function AppLayout(): ReactElement {
               <span className="koala-brand-caption">Agent workspace</span>
             </div>
           )}
-          <Tooltip title={collapsed ? '展开侧栏' : '收起侧栏'}>
+          <Tooltip title={collapsed ? '展开' : '收起'}>
             <Button
               className="koala-brand-toggle"
               type="text"

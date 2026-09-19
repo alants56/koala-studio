@@ -33,8 +33,6 @@ interface AgentContextValue {
   listSessions: () => Promise<AcpSessionInfo[]>
   /** 加载历史会话（ACP session/load），替换当前消息并设为当前会话。 */
   loadSession: (sessionId: string) => Promise<void>
-  /** 新建会话（ACP session/new）。 */
-  createNewSession: () => Promise<void>
 }
 
 const AgentContext = createContext<AgentContextValue | null>(null)
@@ -44,10 +42,15 @@ interface AgentProviderProps {
   cwd: string
   /** 从工作台等入口直接打开的历史会话。 */
   initialSessionId?: string
+  /**
+   * 每个会话的首条用户消息成功发出后触发一次。
+   * 用于把「从待办跳进来」这类外部意图绑定到实际产生的会话上——只有真的开始对话才会绑定。
+   */
+  onFirstPrompt?: (sessionId: string, title: string) => void
   children: ReactNode
 }
 
-export function AgentProvider({ cwd, initialSessionId, children }: AgentProviderProps): ReactElement {
+export function AgentProvider({ cwd, initialSessionId, onFirstPrompt, children }: AgentProviderProps): ReactElement {
   const { currentAgent } = useAgentSelection()
   const agentName = currentAgent === 'pi' ? 'Pi' : 'Claude'
   // 进入页面即视为「连接中」，避免首帧先闪现「未连接」
@@ -58,8 +61,19 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
   const generationRef = useRef(0)
   const viewRef = useRef<SessionView | undefined>(undefined)
   const bufferRef = useRef<SessionEvent[] | null>(null)
+  /** 当前会话是否已经发过首条消息；每换一个会话重置一次。 */
+  const firstPromptSentRef = useRef(false)
+  // 放进 ref，避免调用方传内联函数时把 send 的引用也一起换掉。
+  const onFirstPromptRef = useRef(onFirstPrompt)
+
+  useEffect(() => {
+    onFirstPromptRef.current = onFirstPrompt
+  }, [onFirstPrompt])
 
   const publishView = useCallback((view: SessionView) => {
+    if (viewRef.current?.target.sessionId !== view.target.sessionId) {
+      firstPromptSentRef.current = false
+    }
     viewRef.current = view
     setSessionId(view.target.sessionId)
     setState(view.state)
@@ -112,6 +126,11 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
     }
     if (state.status !== 'working') dispatchSessionActivity(activity)
     await acp.prompt({ text, cwd, attachments, target: target() })
+    // 发送失败会抛出，此时不触发：外部意图保留，用户重试仍能绑定。
+    if (!firstPromptSentRef.current) {
+      firstPromptSentRef.current = true
+      onFirstPromptRef.current?.(sessionId, activity.title)
+    }
   }, [cwd, sessionId, state.status, target])
 
   const stop = useCallback(async () => {
@@ -145,7 +164,6 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
   const listSessions = useCallback(async () => acp.listSessions(cwd), [cwd])
 
   const loadSession = useCallback((id: string) => openSession(id), [openSession])
-  const createNewSession = useCallback(() => openSession(), [openSession])
 
   useEffect(() => {
     const receive = (event: SessionEvent): void => {
@@ -172,8 +190,8 @@ export function AgentProvider({ cwd, initialSessionId, children }: AgentProvider
   }, [connect, cwd, currentAgent, publishView])
 
   const value = useMemo<AgentContextValue>(
-    () => ({ state, cwd, messages, sessionLoading, sessionId, connect, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission, listSessions, loadSession, createNewSession }),
-    [state, cwd, messages, sessionLoading, sessionId, connect, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission, listSessions, loadSession, createNewSession]
+    () => ({ state, cwd, messages, sessionLoading, sessionId, connect, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission, listSessions, loadSession }),
+    [state, cwd, messages, sessionLoading, sessionId, connect, send, removeQueuedPrompt, steerQueuedPrompt, stop, setMode, setModel, setEffort, respondPermission, listSessions, loadSession]
   )
 
   return <AgentContext.Provider value={value}>{children}</AgentContext.Provider>

@@ -76,19 +76,17 @@ export function ProjectCard({
       onDragEnd={handleDragEnd}
       onDrop={onDrop}
     >
-      <div className="project-card-top">
-        <div className="project-card-identity">
-          <Avatar className="project-card-avatar" size={40} shape="square" style={{ background: avatarColor(project.name), flexShrink: 0 }}>
-            {project.name.charAt(0).toUpperCase()}
-          </Avatar>
-          <div style={{ minWidth: 0 }}>
-            <Typography.Text className="project-card-title" ellipsis>
-              {project.name}
-            </Typography.Text>
-            <Typography.Text className="project-card-date">
-              {formatDate(project.updatedAt)}
-            </Typography.Text>
-          </div>
+      <div className="project-card-head">
+        <Avatar className="project-card-avatar" size={32} style={{ background: avatarColor(project.name) }}>
+          {project.name.charAt(0).toUpperCase()}
+        </Avatar>
+        <div className="project-card-info">
+          <Typography.Text className="project-card-name" ellipsis>
+            {project.name}
+          </Typography.Text>
+          <Typography.Text className="project-card-date">
+            {formatDate(project.updatedAt)}
+          </Typography.Text>
         </div>
         <Dropdown
           menu={{
@@ -109,13 +107,14 @@ export function ProjectCard({
         </Dropdown>
       </div>
 
-      <Typography.Paragraph className="project-card-description" ellipsis={{ rows: 2 }}>
-        {project.description || '暂无描述'}
-      </Typography.Paragraph>
+      {project.description && (
+        <Typography.Paragraph className="project-card-description" ellipsis={{ rows: 2 }}>
+          {project.description}
+        </Typography.Paragraph>
+      )}
 
-      <div className="project-card-meta">
       {project.tags.length > 0 && (
-        <Space size={[4, 4]} wrap>
+        <Space className="project-card-tags" size={[4, 4]} wrap>
           {project.tags.map((tag) => (
             <Tag className="project-tag" key={tag}>{tag}</Tag>
           ))}
@@ -123,12 +122,11 @@ export function ProjectCard({
       )}
 
       {project.path && (
-        <Typography.Text className="project-card-path" style={{ display: 'block', marginTop: 12 }} ellipsis>
-          <FolderOutlined style={{ marginRight: 6 }} />
+        <Typography.Text className="project-card-path" ellipsis>
+          <FolderOutlined />
           {project.path}
         </Typography.Text>
       )}
-      </div>
     </Card>
   )
 }

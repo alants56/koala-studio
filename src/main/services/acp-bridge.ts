@@ -25,6 +25,7 @@ import {
   readAttachment
 } from './attachment-store'
 import type { ChatAttachment } from '../../shared/attachments'
+import { isHarnessEnvelope } from '../../shared/chat-messages'
 import { piAcpEnvironment } from './pi-runtime'
 import type { QueuedPromptStore, StoredQueuedPrompt } from './queued-prompt-store'
 
@@ -870,6 +871,9 @@ export class AcpBridge extends EventEmitter {
     }
     if (update.sessionUpdate === 'user_message_chunk') {
       if (update.content.type === 'text') {
+        // 上游在实时流式时会跳过非用户输入的 user 条目，回放 session/load 时却原样转发，
+        // 这些内容会以用户气泡形式冒出来。这里按同样的语义丢弃。
+        if (isHarnessEnvelope(update.content.text)) return
         this.emit('message', {
           id: update.messageId ?? crypto.randomUUID(),
           role: 'user',

@@ -1,12 +1,32 @@
-import { useLayoutEffect, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useState, type ReactElement } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Button, Result, Spin } from 'antd'
+import type { TodoItem } from '@shared/todos'
 import { ChatView } from '@/components/chat/ChatView'
+import { ProjectBoard } from '@/components/board/ProjectBoard'
 import { useProjects } from '@/state/ProjectsContext'
 import { AgentProvider } from '@/state/AgentContext'
 import { useAgentSelection } from '@/state/AgentSelectionContext'
 
-/** 项目对话页：进入后自动连接 ACP，并通过 ACP 管理 Claude Code 会话记录。 */
+type ProjectView = 'chat' | 'board'
+
+/** 当前路由目标；被缓存隐藏后要沿用最后一次的值。 */
+interface ProjectTarget {
+  projectId?: string
+  sessionId?: string
+  view: ProjectView
+}
+
+/**
+ * 项目页：对话与看板共存。
+ *
+ * 两个面板始终挂载、用 CSS 切换显隐：对话面板离开可视区后必须继续接收流式消息，
+ * 看板面板则避免每次切会话都丢掉滚动位置和展开状态。看板因此被放在 AgentProvider 之外。
+ *
+ * 「新建会话」只有一条路径——递增 sessionGeneration 让 AgentProvider 换 key 重挂载，
+ * 由它重挂载时的 connect() 建出恰好一个会话。不要再叠加显式的 createNewSession，
+ * 两条路径同时生效时会各建一个会话，孤儿化其中一个并白占一个并发名额。
+ */
 export function ProjectChatPage(): ReactElement {
   const { projectId } = useParams<{ projectId: string }>()
   const [searchParams] = useSearchParams()
@@ -15,19 +35,58 @@ export function ProjectChatPage(): ReactElement {
   const { getProject, loading, defaultWorkspace } = useProjects()
   const { revision: agentRevision } = useAgentSelection()
   const project = projectId ? getProject(projectId) : undefined
-  const routeSessionId = searchParams.get('session') || undefined
   const projectRouteActive = location.pathname.startsWith('/projects/')
-  const [retainedSessionTarget, setRetainedSessionTarget] = useState<{ projectId?: string; sessionId?: string }>({
-    projectId,
-    sessionId: routeSessionId
-  })
+  const routeSessionId = searchParams.get('session') || undefined
+  const routeView: ProjectView = searchParams.get('view') === 'board' ? 'board' : 'chat'
 
-  // 缓存详情被隐藏后，全局 location 会切到其他一级页面；此时不能改写当前会话目标。
+  const [retainedTarget, setRetainedTarget] = useState<ProjectTarget>({ projectId, sessionId: routeSessionId, view: routeView })
+
+  // 缓存详情被隐藏后，全局 location 会切到其他一级页面；此时不能改写当前会话目标与看板状态。
   useLayoutEffect(() => {
-    if (projectRouteActive) setRetainedSessionTarget({ projectId, sessionId: routeSessionId })
-  }, [location.key, projectId, projectRouteActive, routeSessionId])
+    if (projectRouteActive) setRetainedTarget({ projectId, sessionId: routeSessionId, view: routeView })
+  }, [location.key, projectId, projectRouteActive, routeSessionId, routeView])
 
-  const sessionTarget = projectRouteActive ? { projectId, sessionId: routeSessionId } : retainedSessionTarget
+  const target = projectRouteActive ? { projectId, sessionId: routeSessionId, view: routeView } : retainedTarget
+  const boardActive = target.view === 'board'
+
+  /** 会话代数：+1 即让 AgentProvider 重挂载并新建一个会话。 */
+  const [sessionGeneration, setSessionGeneration] = useState(0)
+  /** 从看板点进来的待办：首条消息发出后挂载到那时实际产生的会话上。 */
+  const [pendingTodoId, setPendingTodoId] = useState<string>()
+
+  // 看板只在首次打开后挂载，避免每次进项目页都白读一次待办列表。
+  const [boardActivated, setBoardActivated] = useState(boardActive)
+  useEffect(() => {
+    if (boardActive) setBoardActivated(true)
+  }, [boardActive])
+
+  // 用户没发消息就转去了某个历史会话：挂载意图作废，否则会在那个会话里挂错待办。
+  useEffect(() => {
+    setPendingTodoId(undefined)
+  }, [routeSessionId])
+
+  /** 丢弃挂载意图，换一代会话，并回到对话面板。 */
+  const beginNewSession = useCallback((todoId?: string): void => {
+    setPendingTodoId(todoId)
+    setSessionGeneration((value) => value + 1)
+    const params = new URLSearchParams(location.search)
+    params.delete('session')
+    params.delete('view')
+    // 从看板点进来时压一条历史，返回键能回到看板；「新对话」则就地重置，不堆历史。
+    void navigate({ pathname: location.pathname, search: params.toString() }, { replace: todoId === undefined })
+  }, [location.pathname, location.search, navigate])
+
+  const startNewConversation = useCallback((): void => beginNewSession(), [beginNewSession])
+
+  /** 看板上点了一条还没挂载会话的待办。 */
+  const launchTodo = useCallback((todo: TodoItem): void => beginNewSession(todo.id), [beginNewSession])
+
+  const handleFirstPrompt = useCallback((sessionId: string, title: string): void => {
+    if (!pendingTodoId) return
+    const todoId = pendingTodoId
+    setPendingTodoId(undefined)
+    void window.todos.update(todoId, { sessionId, sessionTitle: title }).catch(() => undefined)
+  }, [pendingTodoId])
 
   // 项目列表尚未从主进程读取完成时，不能将临时的空列表误判为项目不存在。
   if (loading) {
@@ -49,11 +108,25 @@ export function ProjectChatPage(): ReactElement {
     )
   }
 
-  const initialSessionId = sessionTarget.projectId === project.id ? sessionTarget.sessionId : undefined
+  const initialSessionId = target.projectId === project.id ? target.sessionId : undefined
 
   return (
-    <AgentProvider key={`${project.id}:${initialSessionId ?? 'new'}:${agentRevision}`} cwd={project.path ?? defaultWorkspace} initialSessionId={initialSessionId}>
-      <ChatView project={project} />
-    </AgentProvider>
+    <>
+      <div className={boardActive ? 'koala-route-pane-hidden' : 'koala-route-pane'}>
+        <AgentProvider
+          key={`${project.id}:${initialSessionId ?? 'new'}:${agentRevision}:${sessionGeneration}`}
+          cwd={project.path ?? defaultWorkspace}
+          initialSessionId={initialSessionId}
+          onFirstPrompt={handleFirstPrompt}
+        >
+          <ChatView project={project} onStartNewConversation={startNewConversation} />
+        </AgentProvider>
+      </div>
+      {boardActivated && (
+        <div className={boardActive ? 'koala-route-pane' : 'koala-route-pane-hidden'}>
+          <ProjectBoard key={project.id} project={project} onLaunchTodo={launchTodo} />
+        </div>
+      )}
+    </>
   )
 }
